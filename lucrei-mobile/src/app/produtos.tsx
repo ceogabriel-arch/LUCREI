@@ -1,4 +1,5 @@
 import { Image } from 'expo-image';
+import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
@@ -58,6 +59,13 @@ function ProductRow({
         <Text className="mt-0.5 text-xs text-lucrei-textMuted">
           {product.price != null ? `Preço: ${formatBRL(product.price)}` : 'Sem preço informado'}
         </Text>
+        <Text className="mt-0.5 text-xs" style={{ color: product.profit30d != null ? Colors.success : Colors.textMuted }}>
+          {product.profit30d != null
+            ? `Lucro (30d): ${formatBRL(product.profit30d)}`
+            : product.orders30d > 0
+              ? 'Vendeu, mas sem custo pra calcular lucro'
+              : 'Sem vendas nos últimos 30 dias'}
+        </Text>
       </View>
 
       <View className="flex-row items-center gap-2">
@@ -90,10 +98,15 @@ export default function ProdutosScreen() {
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [shop, setShop] = useState<Shop | null>(null);
   const [products, setProducts] = useState<ShopeeProduct[]>([]);
+  const [search, setSearch] = useState('');
+
+  const filteredProducts = products.filter((p) =>
+    p.name.toLowerCase().includes(search.trim().toLowerCase())
+  );
 
   const load = useCallback(async () => {
     if (state.status !== 'authenticated') return;
-    setLoadState('loading');
+    setLoadState((prev) => (prev === 'ready' ? prev : 'loading'));
     try {
       const { shops } = await getShops(state.token);
       if (shops.length === 0) {
@@ -112,6 +125,12 @@ export default function ProdutosScreen() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
   function handleSaved(shopeeItemId: string, costPrice: number) {
     setProducts((prev) => prev.map((p) => (p.shopeeItemId === shopeeItemId ? { ...p, costPrice } : p)));
@@ -146,21 +165,32 @@ export default function ProdutosScreen() {
       )}
 
       {loadState === 'ready' && shop && (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="mt-5 gap-3 pb-8">
-          {products.length === 0 ? (
-            <Text className="text-sm text-lucrei-textMuted">Nenhum produto ativo encontrado na sua loja.</Text>
-          ) : (
-            products.map((product) => (
-              <ProductRow
-                key={product.shopeeItemId}
-                product={product}
-                token={state.status === 'authenticated' ? state.token : ''}
-                shopId={shop.id}
-                onSaved={handleSaved}
-              />
-            ))
-          )}
-        </ScrollView>
+        <>
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Buscar produto pelo nome..."
+            placeholderTextColor={Colors.textMuted}
+            className="mt-5 rounded-xl border border-lucrei-border bg-lucrei-surface px-4 py-3 text-sm text-lucrei-text"
+          />
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="mt-4 gap-3 pb-8">
+            {products.length === 0 ? (
+              <Text className="text-sm text-lucrei-textMuted">Nenhum produto ativo encontrado na sua loja.</Text>
+            ) : filteredProducts.length === 0 ? (
+              <Text className="text-sm text-lucrei-textMuted">Nenhum produto encontrado pra "{search}".</Text>
+            ) : (
+              filteredProducts.map((product) => (
+                <ProductRow
+                  key={product.shopeeItemId}
+                  product={product}
+                  token={state.status === 'authenticated' ? state.token : ''}
+                  shopId={shop.id}
+                  onSaved={handleSaved}
+                />
+              ))
+            )}
+          </ScrollView>
+        </>
       )}
     </Screen>
   );

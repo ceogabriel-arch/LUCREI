@@ -78,6 +78,9 @@ export type ShopeeProduct = {
   image: string | null;
   price: number | null;
   costPrice: number | null;
+  profit30d: number | null;
+  revenue30d: number | null;
+  orders30d: number;
 };
 
 export function getShopeeProducts(token: string, shopId: string) {

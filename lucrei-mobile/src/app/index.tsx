@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
@@ -15,6 +16,10 @@ import { formatBRL } from '@/lib/format';
 import { connectShopeeStore } from '@/lib/shopee';
 
 type BackendStatus = 'checking' | 'online' | 'offline';
+
+const LOGO_ASPECT = 449 / 153;
+const LOGO_HEIGHT = 30;
+const LOGO_WIDTH = LOGO_HEIGHT * LOGO_ASPECT;
 
 const PERIODS = ['Hoje', '7 dias', '30 dias'] as const;
 const PERIOD_TO_API: Record<(typeof PERIODS)[number], 'today' | '7d' | '30d'> = {
@@ -128,8 +133,12 @@ export default function InicioScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="pb-8">
         <View className="flex-row items-center justify-between">
           <View>
-            <Text className="text-xl font-bold text-lucrei-text">Lucrei</Text>
-            <View className="mt-0.5 flex-row items-center gap-1">
+            <Image
+              source={require('../../assets/images/lucrei-logo.png')}
+              style={{ width: LOGO_WIDTH, height: LOGO_HEIGHT }}
+              contentFit="contain"
+            />
+            <View className="mt-1.5 flex-row items-center gap-1">
               <Text className="text-xs text-lucrei-textMuted">
                 {shops[0]?.shopName ?? 'Nenhuma loja conectada'}
               </Text>
@@ -149,7 +158,7 @@ export default function InicioScreen() {
           />
         </View>
 
-        <View className="mt-5 flex-row self-start rounded-full bg-lucrei-surface p-1">
+        <View className="mt-7 flex-row self-start rounded-full bg-lucrei-surface p-1">
           {PERIODS.map((p) => {
             const active = p === period;
             return (

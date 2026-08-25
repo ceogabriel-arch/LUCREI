@@ -51,6 +51,20 @@ export async function productRoutes(app: FastifyInstance) {
         const costs = await prisma.product.findMany({ where: { shopId: shop.id } });
         const costByItemId = new Map(costs.map((c) => [c.shopeeItemId, c]));
 
+        const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        const lineItems = await prisma.orderLineItem.findMany({
+          where: { order: { shopId: shop.id, orderDate: { gte: since } } },
+        });
+        const statsByItemId = new Map<string, { profit: number; revenue: number; orders: number }>();
+        for (const li of lineItems) {
+          if (!li.shopeeItemId) continue;
+          const stat = statsByItemId.get(li.shopeeItemId) ?? { profit: 0, revenue: 0, orders: 0 };
+          stat.revenue += Number(li.salePrice);
+          stat.orders += 1;
+          if (li.profit !== null) stat.profit += Number(li.profit);
+          statsByItemId.set(li.shopeeItemId, stat);
+        }
+
         const products = await Promise.all(
           baseInfo.map(async (item) => {
             const existing = costByItemId.get(String(item.item_id));
@@ -66,12 +80,17 @@ export async function productRoutes(app: FastifyInstance) {
               }
             }
 
+            const stat = statsByItemId.get(String(item.item_id));
+
             return {
               shopeeItemId: String(item.item_id),
               name: item.item_name,
               image: item.image?.image_url_list?.[0] ?? null,
               price,
               costPrice: existing ? Number(existing.costPrice) : null,
+              profit30d: stat ? stat.profit : null,
+              revenue30d: stat ? stat.revenue : null,
+              orders30d: stat ? stat.orders : 0,
             };
           })
         );
