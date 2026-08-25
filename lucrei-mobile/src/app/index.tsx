@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { DeltaBadge } from '@/components/delta-badge';
@@ -88,6 +89,12 @@ export default function InicioScreen() {
   useEffect(() => {
     loadShops();
   }, [state.status]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadShops();
+    }, [state.status])
+  );
 
   useEffect(() => {
     if (state.status !== 'authenticated' || shops.length === 0) {
