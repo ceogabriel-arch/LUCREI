@@ -3,7 +3,11 @@ import { prisma } from './prisma';
 
 const REFRESH_MARGIN_MS = 5 * 60 * 1000;
 
-export async function getValidAccessToken(shopId: string) {
+type TokenResult = { accessToken: string; shopeeShopId: number };
+
+const inFlightRefreshes = new Map<string, Promise<TokenResult>>();
+
+export async function getValidAccessToken(shopId: string): Promise<TokenResult> {
   const shop = await prisma.shop.findUniqueOrThrow({
     where: { id: shopId },
     include: { oauthToken: true },
@@ -19,17 +23,29 @@ export async function getValidAccessToken(shopId: string) {
     return { accessToken: shop.oauthToken.accessToken, shopeeShopId };
   }
 
-  const refreshed = await refreshAccessToken(shop.oauthToken.refreshToken, shopeeShopId);
-  const now = Date.now();
-  await prisma.shopeeOAuthToken.update({
-    where: { shopId: shop.id },
-    data: {
-      accessToken: refreshed.access_token,
-      refreshToken: refreshed.refresh_token,
-      accessTokenExpiresAt: new Date(now + refreshed.expire_in * 1000),
-      refreshTokenExpiresAt: new Date(now + 30 * 24 * 60 * 60 * 1000),
-    },
-  });
+  const existing = inFlightRefreshes.get(shopId);
+  if (existing) return existing;
 
-  return { accessToken: refreshed.access_token, shopeeShopId };
+  const refreshToken = shop.oauthToken.refreshToken;
+  const refreshPromise = (async (): Promise<TokenResult> => {
+    try {
+      const refreshed = await refreshAccessToken(refreshToken, shopeeShopId);
+      const now = Date.now();
+      await prisma.shopeeOAuthToken.update({
+        where: { shopId: shop.id },
+        data: {
+          accessToken: refreshed.access_token,
+          refreshToken: refreshed.refresh_token,
+          accessTokenExpiresAt: new Date(now + refreshed.expire_in * 1000),
+          refreshTokenExpiresAt: new Date(now + 30 * 24 * 60 * 60 * 1000),
+        },
+      });
+      return { accessToken: refreshed.access_token, shopeeShopId };
+    } finally {
+      inFlightRefreshes.delete(shopId);
+    }
+  })();
+
+  inFlightRefreshes.set(shopId, refreshPromise);
+  return refreshPromise;
 }
