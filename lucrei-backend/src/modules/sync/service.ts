@@ -1,19 +1,12 @@
 import { prisma } from '../../lib/prisma';
+import { getValidAccessToken } from '../../lib/shopee-token';
 import { getEscrowDetail, getOrderDetail, getOrderList } from '../../shopee-client';
 
 const ELIGIBLE_STATUSES = new Set(['COMPLETED']);
 
 export async function syncShopOrders(shopId: string) {
-  const shop = await prisma.shop.findUniqueOrThrow({
-    where: { id: shopId },
-    include: { oauthToken: true },
-  });
-  if (!shop.oauthToken) {
-    throw new Error('Loja sem token de acesso salvo.');
-  }
-
-  const accessToken = shop.oauthToken.accessToken;
-  const shopeeShopId = Number(shop.shopeeShopId);
+  const { accessToken, shopeeShopId } = await getValidAccessToken(shopId);
+  const shop = await prisma.shop.findUniqueOrThrow({ where: { id: shopId } });
 
   const timeTo = Math.floor(Date.now() / 1000);
   const timeFrom = timeTo - 15 * 24 * 60 * 60;
