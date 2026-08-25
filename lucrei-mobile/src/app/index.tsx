@@ -8,7 +8,7 @@ import { Screen } from '@/components/screen';
 import { Sparkline } from '@/components/sparkline';
 import { StatTile } from '@/components/stat-tile';
 import { Colors } from '@/constants/theme';
-import { ApiError } from '@/lib/api';
+import { ApiError, getShops, type Shop } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatBRL } from '@/lib/format';
 import { connectShopeeStore } from '@/lib/shopee';
@@ -45,6 +45,17 @@ export default function InicioScreen() {
   const [backendStatus, setBackendStatus] = useState<BackendStatus>('checking');
   const [period, setPeriod] = useState<(typeof PERIODS)[number]>('30 dias');
   const [connecting, setConnecting] = useState(false);
+  const [shops, setShops] = useState<Shop[]>([]);
+
+  async function loadShops() {
+    if (state.status !== 'authenticated') return;
+    try {
+      const { shops } = await getShops(state.token);
+      setShops(shops);
+    } catch {
+      // silencioso: a tela cai pro estado "nenhuma loja conectada"
+    }
+  }
 
   async function handleConnectShopee() {
     if (state.status !== 'authenticated') return;
@@ -53,6 +64,7 @@ export default function InicioScreen() {
       const result = await connectShopeeStore(state.token);
       if (result.status === 'success') {
         Alert.alert('Loja conectada!', 'Sua loja Shopee foi conectada com sucesso.');
+        await loadShops();
       } else if (result.status === 'error') {
         Alert.alert('Não foi possível conectar', 'Tente novamente em instantes.');
       }
@@ -62,6 +74,10 @@ export default function InicioScreen() {
       setConnecting(false);
     }
   }
+
+  useEffect(() => {
+    loadShops();
+  }, [state.status]);
 
   useEffect(() => {
     const apiUrl = process.env.EXPO_PUBLIC_API_URL;
@@ -81,7 +97,9 @@ export default function InicioScreen() {
           <View>
             <Text className="text-xl font-bold text-lucrei-text">Lucrei</Text>
             <View className="mt-0.5 flex-row items-center gap-1">
-              <Text className="text-xs text-lucrei-textMuted">Loja Principal</Text>
+              <Text className="text-xs text-lucrei-textMuted">
+                {shops[0]?.shopName ?? 'Nenhuma loja conectada'}
+              </Text>
               <Ionicons name="chevron-down" size={12} color={Colors.textMuted} />
             </View>
           </View>
@@ -157,11 +175,13 @@ export default function InicioScreen() {
             <Ionicons name="storefront-outline" size={18} color={Colors.bg} />
           )}
           <Text className="text-base font-semibold text-lucrei-bg">
-            {connecting ? 'Conectando...' : 'Conectar loja Shopee'}
+            {connecting ? 'Conectando...' : shops.length > 0 ? 'Conectar outra loja' : 'Conectar loja Shopee'}
           </Text>
         </Pressable>
         <Text className="mt-3 text-center text-xs text-lucrei-textMuted">
-          Os números acima são um exemplo. Conecte sua loja para ver o seu lucro real.
+          {shops.length > 0
+            ? `Loja conectada: ${shops[0].shopName}. Os números acima ainda são um exemplo — o sync de pedidos vem a seguir.`
+            : 'Os números acima são um exemplo. Conecte sua loja para ver o seu lucro real.'}
         </Text>
       </ScrollView>
     </Screen>

@@ -46,3 +46,11 @@ export function me(token: string) {
     headers: { Authorization: `Bearer ${token}` },
   });
 }
+
+export type Shop = { id: string; shopName: string; status: string; connectedAt: string };
+
+export function getShops(token: string) {
+  return request<{ shops: Shop[] }>('/shopee/shops', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}

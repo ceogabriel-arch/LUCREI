@@ -57,6 +57,7 @@ export default function AppTabs() {
           tabBarIcon: ({ color }) => <TabIcon name="settings" color={color} />,
         }}
       />
+      <Tabs.Screen name="shopee-connected" options={{ href: null }} />
     </Tabs>
   );
 }
