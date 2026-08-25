@@ -4,9 +4,84 @@ import { getEscrowDetail, getOrderDetail, getOrderList } from '../../shopee-clie
 
 const ELIGIBLE_STATUSES = new Set(['COMPLETED']);
 
+async function processOrder(
+  shopDbId: string,
+  shopeeShopId: number,
+  accessToken: string,
+  orderSn: string,
+  orderStatus: string,
+  createTime?: number
+) {
+  const escrow = await getEscrowDetail(accessToken, shopeeShopId, orderSn);
+  const income = escrow.order_income;
+
+  const totalItemValue = income.items.reduce(
+    (sum, li) => sum + li.discounted_price * li.quantity_purchased,
+    0
+  );
+  const netShippingCost = Math.max(income.actual_shipping_fee - income.buyer_paid_shipping_fee, 0);
+  const totalShopeeFee = income.commission_fee + income.service_fee;
+
+  const order = await prisma.order.upsert({
+    where: { shopeeOrderSn: orderSn },
+    update: {
+      orderStatus,
+      buyerPaidShippingFee: income.buyer_paid_shipping_fee,
+      escrowAmount: income.escrow_amount,
+      escrowSyncedAt: new Date(),
+    },
+    create: {
+      shopId: shopDbId,
+      shopeeOrderSn: orderSn,
+      orderStatus,
+      orderDate: createTime ? new Date(createTime * 1000) : new Date(),
+      buyerPaidShippingFee: income.buyer_paid_shipping_fee,
+      escrowAmount: income.escrow_amount,
+      escrowSyncedAt: new Date(),
+    },
+  });
+
+  await prisma.orderLineItem.deleteMany({ where: { orderId: order.id } });
+
+  for (const li of income.items) {
+    const lineValue = li.discounted_price * li.quantity_purchased;
+    const share = totalItemValue > 0 ? lineValue / totalItemValue : 0;
+
+    const product = await prisma.product.findFirst({
+      where: { shopId: shopDbId, shopeeItemId: String(li.item_id) },
+    });
+
+    const shippingFeeAllocated = netShippingCost * share;
+    const shopeeFeeAllocated = totalShopeeFee * share;
+    const productCostSnapshot = product ? Number(product.costPrice) * li.quantity_purchased : null;
+    const profit =
+      productCostSnapshot !== null
+        ? lineValue - shippingFeeAllocated - shopeeFeeAllocated - productCostSnapshot
+        : null;
+
+    await prisma.orderLineItem.create({
+      data: {
+        orderId: order.id,
+        productId: product?.id,
+        quantity: li.quantity_purchased,
+        salePrice: lineValue,
+        shippingFeeAllocated,
+        shopeeFeeAllocated,
+        productCostSnapshot: productCostSnapshot ?? undefined,
+        profit: profit ?? undefined,
+      },
+    });
+  }
+}
+
+export async function syncOneOrder(shopId: string, orderSn: string, orderStatus: string) {
+  const { accessToken, shopeeShopId } = await getValidAccessToken(shopId);
+  const [detail] = await getOrderDetail(accessToken, shopeeShopId, [orderSn]);
+  await processOrder(shopId, shopeeShopId, accessToken, orderSn, orderStatus, detail?.create_time);
+}
+
 export async function syncShopOrders(shopId: string) {
   const { accessToken, shopeeShopId } = await getValidAccessToken(shopId);
-  const shop = await prisma.shop.findUniqueOrThrow({ where: { id: shopId } });
 
   const timeTo = Math.floor(Date.now() / 1000);
   const timeFrom = timeTo - 15 * 24 * 60 * 60;
@@ -32,68 +107,14 @@ export async function syncShopOrders(shopId: string) {
     }
 
     for (const item of eligible) {
-      const escrow = await getEscrowDetail(accessToken, shopeeShopId, item.order_sn);
-      const income = escrow.order_income;
-
-      const totalItemValue = income.items.reduce(
-        (sum, li) => sum + li.discounted_price * li.quantity_purchased,
-        0
+      await processOrder(
+        shopId,
+        shopeeShopId,
+        accessToken,
+        item.order_sn,
+        item.order_status,
+        createTimeBySn.get(item.order_sn)
       );
-      const netShippingCost = Math.max(income.actual_shipping_fee - income.buyer_paid_shipping_fee, 0);
-      const totalShopeeFee = income.commission_fee + income.service_fee;
-      const createTime = createTimeBySn.get(item.order_sn);
-
-      const order = await prisma.order.upsert({
-        where: { shopeeOrderSn: item.order_sn },
-        update: {
-          orderStatus: item.order_status,
-          buyerPaidShippingFee: income.buyer_paid_shipping_fee,
-          escrowAmount: income.escrow_amount,
-          escrowSyncedAt: new Date(),
-        },
-        create: {
-          shopId: shop.id,
-          shopeeOrderSn: item.order_sn,
-          orderStatus: item.order_status,
-          orderDate: createTime ? new Date(createTime * 1000) : new Date(),
-          buyerPaidShippingFee: income.buyer_paid_shipping_fee,
-          escrowAmount: income.escrow_amount,
-          escrowSyncedAt: new Date(),
-        },
-      });
-
-      await prisma.orderLineItem.deleteMany({ where: { orderId: order.id } });
-
-      for (const li of income.items) {
-        const lineValue = li.discounted_price * li.quantity_purchased;
-        const share = totalItemValue > 0 ? lineValue / totalItemValue : 0;
-
-        const product = await prisma.product.findFirst({
-          where: { shopId: shop.id, shopeeItemId: String(li.item_id) },
-        });
-
-        const shippingFeeAllocated = netShippingCost * share;
-        const shopeeFeeAllocated = totalShopeeFee * share;
-        const productCostSnapshot = product ? Number(product.costPrice) * li.quantity_purchased : null;
-        const profit =
-          productCostSnapshot !== null
-            ? lineValue - shippingFeeAllocated - shopeeFeeAllocated - productCostSnapshot
-            : null;
-
-        await prisma.orderLineItem.create({
-          data: {
-            orderId: order.id,
-            productId: product?.id,
-            quantity: li.quantity_purchased,
-            salePrice: lineValue,
-            shippingFeeAllocated,
-            shopeeFeeAllocated,
-            productCostSnapshot: productCostSnapshot ?? undefined,
-            profit: profit ?? undefined,
-          },
-        });
-      }
-
       ordersSynced++;
     }
 
@@ -101,7 +122,7 @@ export async function syncShopOrders(shopId: string) {
     cursor = page.next_cursor;
   }
 
-  await prisma.shop.update({ where: { id: shop.id }, data: { lastSyncedAt: new Date() } });
+  await prisma.shop.update({ where: { id: shopId }, data: { lastSyncedAt: new Date() } });
 
   return { ordersSeen, ordersSynced };
 }
