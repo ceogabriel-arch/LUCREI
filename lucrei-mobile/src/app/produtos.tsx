@@ -122,9 +122,9 @@ export default function ProdutosScreen() {
   const [search, setSearch] = useState('');
   const [period, setPeriod] = useState<(typeof PERIODS)[number]>('30 dias');
 
-  const filteredProducts = products.filter((p) =>
-    p.name.toLowerCase().includes(search.trim().toLowerCase())
-  );
+  const filteredProducts = products
+    .filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   const load = useCallback(async () => {
     if (state.status !== 'authenticated') return;
