@@ -71,3 +71,25 @@ export function getSummary(token: string, shopId: string, period: 'today' | '7d'
     headers: { Authorization: `Bearer ${token}` },
   });
 }
+
+export type ShopeeProduct = {
+  shopeeItemId: string;
+  name: string;
+  image: string | null;
+  price: number | null;
+  costPrice: number | null;
+};
+
+export function getShopeeProducts(token: string, shopId: string) {
+  return request<{ products: ShopeeProduct[] }>(`/shops/${shopId}/shopee-products`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function saveProductCost(token: string, shopId: string, shopeeItemId: string, name: string, costPrice: number) {
+  return request(`/shops/${shopId}/products`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ shopeeItemId, name, costPrice }),
+  });
+}

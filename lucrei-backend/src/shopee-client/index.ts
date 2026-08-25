@@ -230,6 +230,68 @@ export async function getEscrowDetail(accessToken: string, shopId: number, order
   return body.response!;
 }
 
+type ItemListResponse = {
+  response?: {
+    item: { item_id: number; item_status: string }[];
+    total_count: number;
+    has_next_page: boolean;
+    next_offset: number;
+  };
+  error?: string;
+  message?: string;
+};
+
+export async function getItemList(
+  accessToken: string,
+  shopId: number,
+  opts: { offset: number; pageSize: number }
+) {
+  let url = buildAuthenticatedUrl('/api/v2/product/get_item_list', accessToken, shopId);
+  const params = new URLSearchParams({
+    offset: String(opts.offset),
+    page_size: String(opts.pageSize),
+    item_status: 'NORMAL',
+  });
+  url += `&${params.toString()}`;
+
+  const response = await fetch(url);
+  const body = (await response.json()) as ItemListResponse;
+  if (!response.ok || body.error) {
+    throw new Error(body.message || body.error || 'Falha ao buscar catálogo de produtos na Shopee.');
+  }
+  return body.response!;
+}
+
+type ItemBaseInfoResponse = {
+  response?: {
+    item_list: {
+      item_id: number;
+      item_name: string;
+      item_sku?: string;
+      image?: { image_url_list: string[] };
+      price_info?: { current_price: number }[];
+    }[];
+  };
+  error?: string;
+  message?: string;
+};
+
+export async function getItemBaseInfo(accessToken: string, shopId: number, itemIds: number[]) {
+  let url = buildAuthenticatedUrl('/api/v2/product/get_item_base_info', accessToken, shopId);
+  const params = new URLSearchParams({
+    item_id_list: itemIds.join(','),
+    response_optional_fields: 'item_name,image,price_info',
+  });
+  url += `&${params.toString()}`;
+
+  const response = await fetch(url);
+  const body = (await response.json()) as ItemBaseInfoResponse;
+  if (!response.ok || body.error) {
+    throw new Error(body.message || body.error || 'Falha ao buscar detalhes dos produtos na Shopee.');
+  }
+  return body.response!.item_list;
+}
+
 export function buildAuthenticatedUrl(path: string, accessToken: string, shopId: number) {
   const { partnerId, partnerKey, host } = getConfig();
   const ts = timestamp();
