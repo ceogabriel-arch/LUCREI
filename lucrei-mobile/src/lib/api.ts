@@ -54,3 +54,20 @@ export function getShops(token: string) {
     headers: { Authorization: `Bearer ${token}` },
   });
 }
+
+export type Summary = {
+  revenue: number;
+  cost: number;
+  profit: number;
+  ordersCount: number;
+  avgTicket: number;
+  profitMargin: number;
+  itemsMissingCost: number;
+  trend: number[];
+};
+
+export function getSummary(token: string, shopId: string, period: 'today' | '7d' | '30d') {
+  return request<Summary>(`/shops/${shopId}/summary?period=${period}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}

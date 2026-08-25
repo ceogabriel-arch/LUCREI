@@ -8,7 +8,7 @@ import { Screen } from '@/components/screen';
 import { Sparkline } from '@/components/sparkline';
 import { StatTile } from '@/components/stat-tile';
 import { Colors } from '@/constants/theme';
-import { ApiError, getShops, type Shop } from '@/lib/api';
+import { ApiError, getShops, getSummary, type Shop, type Summary } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatBRL } from '@/lib/format';
 import { connectShopeeStore } from '@/lib/shopee';
@@ -16,6 +16,11 @@ import { connectShopeeStore } from '@/lib/shopee';
 type BackendStatus = 'checking' | 'online' | 'offline';
 
 const PERIODS = ['Hoje', '7 dias', '30 dias'] as const;
+const PERIOD_TO_API: Record<(typeof PERIODS)[number], 'today' | '7d' | '30d'> = {
+  Hoje: 'today',
+  '7 dias': '7d',
+  '30 dias': '30d',
+};
 
 // Exemplo apenas — valores reais chegam quando a loja Shopee for conectada (Fase 2).
 const MOCK_TREND = [18400, 19200, 21000, 20500, 23800, 26100, 27400, 31200, 33600, 35900, 38100, 40250];
@@ -46,6 +51,7 @@ export default function InicioScreen() {
   const [period, setPeriod] = useState<(typeof PERIODS)[number]>('30 dias');
   const [connecting, setConnecting] = useState(false);
   const [shops, setShops] = useState<Shop[]>([]);
+  const [summary, setSummary] = useState<Summary | null>(null);
 
   async function loadShops() {
     if (state.status !== 'authenticated') return;
@@ -78,6 +84,16 @@ export default function InicioScreen() {
   useEffect(() => {
     loadShops();
   }, [state.status]);
+
+  useEffect(() => {
+    if (state.status !== 'authenticated' || shops.length === 0) {
+      setSummary(null);
+      return;
+    }
+    getSummary(state.token, shops[0].id, PERIOD_TO_API[period])
+      .then(setSummary)
+      .catch(() => setSummary(null));
+  }, [state.status, shops, period]);
 
   useEffect(() => {
     const apiUrl = process.env.EXPO_PUBLIC_API_URL;
@@ -144,11 +160,18 @@ export default function InicioScreen() {
           />
           <View className="p-6">
             <Text className="text-sm text-lucrei-textMuted">Você lucrou</Text>
-            <Text className="mt-1 text-5xl font-bold text-lucrei-gold">{formatBRL(40250)}</Text>
-            <DeltaBadge label="+18,7% vs período anterior" direction="up" />
+            <Text className="mt-1 text-5xl font-bold text-lucrei-gold">
+              {formatBRL(summary ? summary.profit : 40250)}
+            </Text>
+            {!summary && <DeltaBadge label="+18,7% vs período anterior" direction="up" />}
+            {summary && summary.itemsMissingCost > 0 && (
+              <Text className="mt-2 text-xs text-lucrei-textMuted">
+                {summary.itemsMissingCost} item(ns) sem custo cadastrado, não entram nesse total.
+              </Text>
+            )}
 
             <View className="mt-5">
-              <Sparkline data={MOCK_TREND} />
+              <Sparkline data={summary ? summary.trend : MOCK_TREND} />
             </View>
           </View>
         </View>
@@ -159,7 +182,16 @@ export default function InicioScreen() {
           showsHorizontalScrollIndicator={false}
           className="-mx-5 mt-3"
           contentContainerClassName="gap-3 px-5">
-          {MOCK_KPIS.map((kpi) => (
+          {(summary
+            ? [
+                { label: 'Faturamento', value: formatBRL(summary.revenue) },
+                { label: 'Custos totais', value: formatBRL(summary.cost), positiveIsGood: false },
+                { label: 'Pedidos', value: String(summary.ordersCount) },
+                { label: 'Ticket médio', value: formatBRL(summary.avgTicket) },
+                { label: 'Margem de lucro', value: `${summary.profitMargin.toFixed(1)}%` },
+              ]
+            : MOCK_KPIS
+          ).map((kpi) => (
             <StatTile key={kpi.label} {...kpi} />
           ))}
         </ScrollView>
@@ -179,9 +211,11 @@ export default function InicioScreen() {
           </Text>
         </Pressable>
         <Text className="mt-3 text-center text-xs text-lucrei-textMuted">
-          {shops.length > 0
-            ? `Loja conectada: ${shops[0].shopName}. Os números acima ainda são um exemplo — o sync de pedidos vem a seguir.`
-            : 'Os números acima são um exemplo. Conecte sua loja para ver o seu lucro real.'}
+          {summary
+            ? `Loja conectada: ${shops[0].shopName}.`
+            : shops.length > 0
+              ? `Loja conectada: ${shops[0].shopName}. Ainda sem pedidos sincronizados nesse período.`
+              : 'Os números acima são um exemplo. Conecte sua loja para ver o seu lucro real.'}
         </Text>
       </ScrollView>
     </Screen>
