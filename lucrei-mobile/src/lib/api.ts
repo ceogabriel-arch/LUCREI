@@ -121,5 +121,6 @@ export function syncOrders(token: string, shopId: string) {
   return request<SyncResult>(`/shops/${shopId}/sync`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
+    body: '{}',
   });
 }
