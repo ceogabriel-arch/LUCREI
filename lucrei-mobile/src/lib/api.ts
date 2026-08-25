@@ -78,13 +78,13 @@ export type ShopeeProduct = {
   image: string | null;
   price: number | null;
   costPrice: number | null;
-  profit30d: number | null;
-  revenue30d: number | null;
-  orders30d: number;
+  profit: number | null;
+  revenue: number | null;
+  orders: number;
 };
 
-export function getShopeeProducts(token: string, shopId: string) {
-  return request<{ products: ShopeeProduct[] }>(`/shops/${shopId}/shopee-products`, {
+export function getShopeeProducts(token: string, shopId: string, period: 'today' | '7d' | '30d') {
+  return request<{ products: ShopeeProduct[] }>(`/shops/${shopId}/shopee-products?period=${period}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
 }

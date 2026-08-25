@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 
 import { prisma } from '../../lib/prisma';
+import { rangeStart, type Period } from '../../lib/period';
 import { getValidAccessToken } from '../../lib/shopee-token';
 import { getItemBaseInfo, getItemList, getModelList } from '../../shopee-client';
 
@@ -27,12 +28,14 @@ export async function productRoutes(app: FastifyInstance) {
     }
   );
 
-  app.get<{ Params: { shopId: string } }>(
+  app.get<{ Params: { shopId: string }; Querystring: { period?: Period } }>(
     '/shops/:shopId/shopee-products',
     { onRequest: [app.authenticate] },
     async (request, reply) => {
       const shop = await requireOwnedShop(request.user.sub, request.params.shopId);
       if (!shop) return reply.status(404).send({ message: 'Loja não encontrada.' });
+
+      const period = request.query.period ?? '30d';
 
       try {
         const { accessToken, shopeeShopId } = await getValidAccessToken(shop.id);
@@ -51,9 +54,8 @@ export async function productRoutes(app: FastifyInstance) {
         const costs = await prisma.product.findMany({ where: { shopId: shop.id } });
         const costByItemId = new Map(costs.map((c) => [c.shopeeItemId, c]));
 
-        const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
         const lineItems = await prisma.orderLineItem.findMany({
-          where: { order: { shopId: shop.id, orderDate: { gte: since } } },
+          where: { order: { shopId: shop.id, orderDate: { gte: rangeStart(period) } } },
         });
         const statsByItemId = new Map<string, { profit: number; revenue: number; orders: number }>();
         for (const li of lineItems) {
@@ -88,9 +90,9 @@ export async function productRoutes(app: FastifyInstance) {
               image: item.image?.image_url_list?.[0] ?? null,
               price,
               costPrice: existing ? Number(existing.costPrice) : null,
-              profit30d: stat ? stat.profit : null,
-              revenue30d: stat ? stat.revenue : null,
-              orders30d: stat ? stat.orders : 0,
+              profit: stat ? stat.profit : null,
+              revenue: stat ? stat.revenue : null,
+              orders: stat ? stat.orders : 0,
             };
           })
         );

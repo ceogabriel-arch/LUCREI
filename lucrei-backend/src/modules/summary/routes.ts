@@ -1,17 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 
 import { prisma } from '../../lib/prisma';
-
-type Period = 'today' | '7d' | '30d';
-
-function rangeStart(period: Period) {
-  const now = new Date();
-  if (period === 'today') {
-    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  }
-  const days = period === '7d' ? 7 : 30;
-  return new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-}
+import { rangeStart, type Period } from '../../lib/period';
 
 export async function summaryRoutes(app: FastifyInstance) {
   app.get<{ Params: { shopId: string }; Querystring: { period?: Period } }>(
