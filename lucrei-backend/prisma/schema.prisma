@@ -122,6 +122,7 @@ model OrderLineItem {
   id                    String   @id @default(cuid())
   orderId               String
   productId             String?
+  shopeeItemId          String?
   quantity              Int
   salePrice             Decimal  @db.Decimal(12, 2)
   shippingFeeAllocated  Decimal  @db.Decimal(12, 2)
@@ -135,6 +136,7 @@ model OrderLineItem {
 
   @@index([orderId])
   @@index([productId])
+  @@index([shopeeItemId])
 }
 
 model CostImportBatch {

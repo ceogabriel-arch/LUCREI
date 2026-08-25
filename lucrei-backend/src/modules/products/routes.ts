@@ -93,6 +93,20 @@ export async function productRoutes(app: FastifyInstance) {
             data: { shopId: shop.id, shopeeItemId, name, costPrice, costSource: 'manual' },
           });
 
+      const affectedLineItems = await prisma.orderLineItem.findMany({
+        where: { shopeeItemId, order: { shopId: shop.id } },
+      });
+
+      for (const li of affectedLineItems) {
+        const productCostSnapshot = costPrice * li.quantity;
+        const profit =
+          Number(li.salePrice) - Number(li.shippingFeeAllocated) - Number(li.shopeeFeeAllocated) - productCostSnapshot;
+        await prisma.orderLineItem.update({
+          where: { id: li.id },
+          data: { productId: product.id, productCostSnapshot, profit },
+        });
+      }
+
       return product;
     }
   );
