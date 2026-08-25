@@ -1,11 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Screen } from '@/components/screen';
 import { Colors } from '@/constants/theme';
-import { ApiError, getOrders, getShops, syncOrders, type Order, type Period, type Shop } from '@/lib/api';
+import { ApiError, getOrders, getShops, syncOrders, type Order, type OrderLineItem, type Period, type Shop } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatBRL } from '@/lib/format';
 
@@ -31,11 +32,80 @@ const STATUS_LABELS: Record<string, string> = {
 
 const dateFormatter = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
-function OrderRow({ order }: { order: Order }) {
+function BreakdownRow({ label, value, isTotal }: { label: string; value: string; isTotal?: boolean }) {
+  return (
+    <View className="flex-row items-center justify-between py-1.5">
+      <Text className={isTotal ? 'text-sm font-semibold text-lucrei-text' : 'text-sm text-lucrei-textMuted'}>
+        {label}
+      </Text>
+      <Text
+        className={isTotal ? 'text-base font-bold' : 'text-sm text-lucrei-text'}
+        style={isTotal ? { color: Colors.gold } : undefined}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function ItemBreakdown({ item }: { item: OrderLineItem }) {
+  return (
+    <View className="rounded-2xl border border-lucrei-border bg-lucrei-surfaceAlt p-4">
+      <Text className="text-sm font-medium text-lucrei-text">
+        {item.productName} {item.quantity > 1 ? `× ${item.quantity}` : ''}
+      </Text>
+      <View className="mt-2 border-t border-lucrei-border pt-2">
+        <BreakdownRow label="Venda" value={formatBRL(item.salePrice)} />
+        <BreakdownRow label="− Frete alocado" value={formatBRL(item.shippingFeeAllocated)} />
+        <BreakdownRow label="− Taxa Shopee" value={formatBRL(item.shopeeFeeAllocated)} />
+        <BreakdownRow
+          label="− Custo do produto"
+          value={item.productCostSnapshot != null ? formatBRL(item.productCostSnapshot) : 'não informado'}
+        />
+        <View className="mt-1 border-t border-lucrei-border pt-2">
+          <BreakdownRow
+            label="Lucro do item"
+            value={item.profit != null ? formatBRL(item.profit) : 'não calculado'}
+            isTotal
+          />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function OrderDetailModal({ order, onClose }: { order: Order | null; onClose: () => void }) {
+  return (
+    <Modal visible={order != null} animationType="slide" transparent onRequestClose={onClose}>
+      <View className="flex-1 justify-end bg-black/60">
+        <SafeAreaView edges={['bottom']} className="max-h-[85%] rounded-t-3xl bg-lucrei-bg">
+          <View className="flex-row items-center justify-between border-b border-lucrei-border px-5 py-4">
+            <View>
+              <Text className="text-base font-semibold text-lucrei-text">{order?.shopeeOrderSn}</Text>
+              <Text className="text-xs text-lucrei-textMuted">Como calculamos o lucro desse pedido</Text>
+            </View>
+            <Pressable onPress={onClose} hitSlop={8}>
+              <Ionicons name="close" size={22} color={Colors.textMuted} />
+            </Pressable>
+          </View>
+
+          <ScrollView contentContainerClassName="gap-3 p-5">
+            {order?.lineItems.map((item) => (
+              <ItemBreakdown key={item.id} item={item} />
+            ))}
+          </ScrollView>
+        </SafeAreaView>
+      </View>
+    </Modal>
+  );
+}
+
+function OrderRow({ order, onPress }: { order: Order; onPress: () => void }) {
   const hasProfit = order.profit !== null;
 
   return (
-    <View className="rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+    <Pressable
+      onPress={onPress}
+      className="rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
       <View className="flex-row items-center justify-between">
         <Text className="text-sm font-medium text-lucrei-text">{order.shopeeOrderSn}</Text>
         <Text className="text-xs text-lucrei-textMuted">{dateFormatter.format(new Date(order.orderDate))}</Text>
@@ -54,11 +124,14 @@ function OrderRow({ order }: { order: Order }) {
         <Text className="text-base font-semibold" style={{ color: hasProfit ? Colors.success : Colors.textMuted }}>
           {hasProfit ? `Lucro: ${formatBRL(order.profit!)}` : 'Custo não informado'}
         </Text>
-        {order.itemsMissingCost > 0 && hasProfit && (
-          <Text className="text-xs text-lucrei-textMuted">{order.itemsMissingCost} item(ns) sem custo</Text>
-        )}
+        <View className="flex-row items-center gap-1">
+          {order.itemsMissingCost > 0 && hasProfit && (
+            <Text className="text-xs text-lucrei-textMuted">{order.itemsMissingCost} item(ns) sem custo</Text>
+          )}
+          <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} />
+        </View>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -69,6 +142,12 @@ export default function PedidosScreen() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [period, setPeriod] = useState<(typeof PERIODS)[number]>('30 dias');
   const [syncing, setSyncing] = useState(false);
+  const [search, setSearch] = useState('');
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+
+  const filteredOrders = orders.filter((o) =>
+    o.shopeeOrderSn.toLowerCase().includes(search.trim().toLowerCase())
+  );
 
   const load = useCallback(async () => {
     if (state.status !== 'authenticated') return;
@@ -103,13 +182,17 @@ export default function PedidosScreen() {
     setSyncing(true);
     try {
       const result = await syncOrders(state.token, shop.id);
-      Alert.alert(
-        'Sincronização concluída',
-        `${result.ordersSeen} pedido(s) encontrado(s), ${result.ordersSynced} sincronizado(s).`
-      );
+      const title = result.ordersSynced > 0 ? 'Novidades por aqui!' : 'Tudo em dia';
+      const message =
+        result.ordersSynced === 0
+          ? 'Nenhum pedido novo encontrado nesse período.'
+          : result.ordersSynced === 1
+            ? '1 pedido foi sincronizado e já está com o lucro calculado.'
+            : `${result.ordersSynced} pedidos foram sincronizados e já estão com o lucro calculado.`;
+      Alert.alert(title, message);
       await load();
     } catch (err) {
-      Alert.alert('Erro', err instanceof ApiError ? err.message : 'Não foi possível sincronizar.');
+      Alert.alert('Não deu certo dessa vez', err instanceof ApiError ? err.message : 'Tenta de novo em instantes.');
     } finally {
       setSyncing(false);
     }
@@ -176,21 +259,36 @@ export default function PedidosScreen() {
       )}
 
       {loadState === 'ready' && (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="mt-4 gap-3 pb-8">
-          {orders.length === 0 ? (
-            <View className="mt-4 items-center gap-3">
-              <Text className="text-sm text-lucrei-textMuted">
-                Nenhum pedido sincronizado nesse período.
-              </Text>
-              <Pressable onPress={handleSync} disabled={syncing} className="rounded-xl bg-lucrei-surface px-4 py-2">
-                <Text className="text-sm text-lucrei-gold">Sincronizar agora</Text>
-              </Pressable>
-            </View>
-          ) : (
-            orders.map((order) => <OrderRow key={order.id} order={order} />)
-          )}
-        </ScrollView>
+        <>
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Buscar pelo ID do pedido..."
+            placeholderTextColor={Colors.textMuted}
+            className="mt-4 rounded-xl border border-lucrei-border bg-lucrei-surface px-4 py-3 text-sm text-lucrei-text"
+          />
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="mt-4 gap-3 pb-8">
+            {orders.length === 0 ? (
+              <View className="mt-4 items-center gap-3">
+                <Text className="text-sm text-lucrei-textMuted">
+                  Nenhum pedido sincronizado nesse período.
+                </Text>
+                <Pressable onPress={handleSync} disabled={syncing} className="rounded-xl bg-lucrei-surface px-4 py-2">
+                  <Text className="text-sm text-lucrei-gold">Sincronizar agora</Text>
+                </Pressable>
+              </View>
+            ) : filteredOrders.length === 0 ? (
+              <Text className="text-sm text-lucrei-textMuted">Nenhum pedido encontrado pra "{search}".</Text>
+            ) : (
+              filteredOrders.map((order) => (
+                <OrderRow key={order.id} order={order} onPress={() => setSelectedOrder(order)} />
+              ))
+            )}
+          </ScrollView>
+        </>
       )}
+
+      <OrderDetailModal order={selectedOrder} onClose={() => setSelectedOrder(null)} />
     </Screen>
   );
 }

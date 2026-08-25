@@ -99,6 +99,17 @@ export function saveProductCost(token: string, shopId: string, shopeeItemId: str
   });
 }
 
+export type OrderLineItem = {
+  id: string;
+  productName: string;
+  quantity: number;
+  salePrice: number;
+  shippingFeeAllocated: number;
+  shopeeFeeAllocated: number;
+  productCostSnapshot: number | null;
+  profit: number | null;
+};
+
 export type Order = {
   id: string;
   shopeeOrderSn: string;
@@ -107,6 +118,7 @@ export type Order = {
   revenue: number;
   profit: number | null;
   itemsMissingCost: number;
+  lineItems: OrderLineItem[];
 };
 
 export function getOrders(token: string, shopId: string, period: Period) {

@@ -17,7 +17,7 @@ export async function orderRoutes(app: FastifyInstance) {
 
       const orders = await prisma.order.findMany({
         where: { shopId: shop.id, orderDate: { gte: rangeStart(period) } },
-        include: { lineItems: true },
+        include: { lineItems: { include: { product: true } } },
         orderBy: { orderDate: 'desc' },
       });
 
@@ -44,6 +44,16 @@ export async function orderRoutes(app: FastifyInstance) {
             revenue,
             profit: itemsMissingCost === order.lineItems.length ? null : profit,
             itemsMissingCost,
+            lineItems: order.lineItems.map((li) => ({
+              id: li.id,
+              productName: li.product?.name ?? `Item ${li.shopeeItemId ?? '?'}`,
+              quantity: li.quantity,
+              salePrice: Number(li.salePrice),
+              shippingFeeAllocated: Number(li.shippingFeeAllocated),
+              shopeeFeeAllocated: Number(li.shopeeFeeAllocated),
+              productCostSnapshot: li.productCostSnapshot !== null ? Number(li.productCostSnapshot) : null,
+              profit: li.profit !== null ? Number(li.profit) : null,
+            })),
           };
         }),
       };
