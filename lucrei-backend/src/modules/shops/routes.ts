@@ -3,33 +3,45 @@ import type { FastifyInstance } from 'fastify';
 import { prisma } from '../../lib/prisma';
 import { exchangeCodeForToken, getAuthorizationUrl, getShopInfo } from '../../shopee-client';
 
+type AuthorizeUrlQuery = {
+  returnUrl?: string;
+};
+
 type CallbackQuery = {
   code?: string;
   shop_id?: string;
   state?: string;
 };
 
+const DEFAULT_RETURN_URL = `${process.env.APP_SCHEME || 'lucreimobile'}://shopee-connected`;
+
 export async function shopRoutes(app: FastifyInstance) {
-  app.get('/shopee/authorize-url', { onRequest: [app.authenticate] }, async (request) => {
-    const state = app.jwt.sign({ sub: request.user.sub }, { expiresIn: '15m' });
-    const url = getAuthorizationUrl(state);
-    return { url };
-  });
+  app.get<{ Querystring: AuthorizeUrlQuery }>(
+    '/shopee/authorize-url',
+    { onRequest: [app.authenticate] },
+    async (request) => {
+      const returnUrl = request.query.returnUrl || DEFAULT_RETURN_URL;
+      const state = app.jwt.sign({ sub: request.user.sub, returnUrl }, { expiresIn: '15m' });
+      const url = getAuthorizationUrl(state);
+      return { url };
+    }
+  );
 
   app.get<{ Querystring: CallbackQuery }>('/shopee/callback', async (request, reply) => {
-    const appScheme = process.env.APP_SCHEME || 'lucreimobile';
     const { code, shop_id: shopIdRaw, state } = request.query;
 
     if (!code || !shopIdRaw || !state) {
-      return reply.redirect(`${appScheme}://shopee-connected?status=error&reason=missing_params`);
+      return reply.redirect(`${DEFAULT_RETURN_URL}?status=error&reason=missing_params`);
     }
 
     let userId: string;
+    let returnUrl: string;
     try {
-      const payload = app.jwt.verify<{ sub: string }>(state);
+      const payload = app.jwt.verify<{ sub: string; returnUrl: string }>(state);
       userId = payload.sub;
+      returnUrl = payload.returnUrl || DEFAULT_RETURN_URL;
     } catch {
-      return reply.redirect(`${appScheme}://shopee-connected?status=error&reason=invalid_state`);
+      return reply.redirect(`${DEFAULT_RETURN_URL}?status=error&reason=invalid_state`);
     }
 
     const shopId = Number(shopIdRaw);
@@ -67,10 +79,10 @@ export async function shopRoutes(app: FastifyInstance) {
         },
       });
 
-      return reply.redirect(`${appScheme}://shopee-connected?status=success`);
+      return reply.redirect(`${returnUrl}?status=success`);
     } catch (err) {
       app.log.error(err);
-      return reply.redirect(`${appScheme}://shopee-connected?status=error&reason=exchange_failed`);
+      return reply.redirect(`${returnUrl}?status=error&reason=exchange_failed`);
     }
   });
 
