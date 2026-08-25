@@ -139,6 +139,97 @@ export async function getShopInfo(accessToken: string, shopId: number) {
   return body;
 }
 
+type OrderListResponse = {
+  response?: {
+    order_list: { order_sn: string; order_status: string }[];
+    more: boolean;
+    next_cursor: string;
+  };
+  error?: string;
+  message?: string;
+};
+
+export async function getOrderList(
+  accessToken: string,
+  shopId: number,
+  opts: { timeFrom: number; timeTo: number; cursor?: string }
+) {
+  let url = buildAuthenticatedUrl('/api/v2/order/get_order_list', accessToken, shopId);
+  const params = new URLSearchParams({
+    time_range_field: 'create_time',
+    time_from: String(opts.timeFrom),
+    time_to: String(opts.timeTo),
+    page_size: '50',
+    cursor: opts.cursor ?? '',
+  });
+  url += `&${params.toString()}`;
+
+  const response = await fetch(url);
+  const body = (await response.json()) as OrderListResponse;
+  if (!response.ok || body.error) {
+    throw new Error(body.message || body.error || 'Falha ao buscar pedidos na Shopee.');
+  }
+  return body.response!;
+}
+
+type OrderDetailResponse = {
+  response?: {
+    order_list: { order_sn: string; create_time: number }[];
+  };
+  error?: string;
+  message?: string;
+};
+
+export async function getOrderDetail(accessToken: string, shopId: number, orderSnList: string[]) {
+  let url = buildAuthenticatedUrl('/api/v2/order/get_order_detail', accessToken, shopId);
+  const params = new URLSearchParams({
+    order_sn_list: orderSnList.join(','),
+    response_optional_fields: 'create_time',
+  });
+  url += `&${params.toString()}`;
+
+  const response = await fetch(url);
+  const body = (await response.json()) as OrderDetailResponse;
+  if (!response.ok || body.error) {
+    throw new Error(body.message || body.error || 'Falha ao buscar detalhe do pedido na Shopee.');
+  }
+  return body.response!.order_list;
+}
+
+type EscrowDetailResponse = {
+  response?: {
+    order_sn: string;
+    order_income: {
+      escrow_amount: number;
+      buyer_paid_shipping_fee: number;
+      actual_shipping_fee: number;
+      commission_fee: number;
+      service_fee: number;
+      items: {
+        item_id: number;
+        model_id: number;
+        item_name: string;
+        quantity_purchased: number;
+        discounted_price: number;
+      }[];
+    };
+  };
+  error?: string;
+  message?: string;
+};
+
+export async function getEscrowDetail(accessToken: string, shopId: number, orderSn: string) {
+  let url = buildAuthenticatedUrl('/api/v2/payment/get_escrow_detail', accessToken, shopId);
+  url += `&${new URLSearchParams({ order_sn: orderSn }).toString()}`;
+
+  const response = await fetch(url);
+  const body = (await response.json()) as EscrowDetailResponse;
+  if (!response.ok || body.error) {
+    throw new Error(body.message || body.error || 'Falha ao buscar detalhe de repasse na Shopee.');
+  }
+  return body.response!;
+}
+
 export function buildAuthenticatedUrl(path: string, accessToken: string, shopId: number) {
   const { partnerId, partnerKey, host } = getConfig();
   const ts = timestamp();
