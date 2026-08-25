@@ -176,7 +176,10 @@ export default function InicioScreen() {
             style={StyleSheet.absoluteFill}
           />
           <View className="p-6">
-            <Text className="text-sm text-lucrei-textMuted">Você lucrou</Text>
+            <View className="flex-row items-center gap-2">
+              <Text className="text-sm text-lucrei-textMuted">Você lucrou</Text>
+              {!stillLoading && summaryLoading && <ActivityIndicator size="small" color={Colors.textMuted} />}
+            </View>
             {stillLoading ? (
               <View className="mt-3 h-[52px] justify-center">
                 <ActivityIndicator color={Colors.gold} />
