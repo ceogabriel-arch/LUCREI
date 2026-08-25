@@ -121,6 +121,24 @@ export async function refreshAccessToken(refreshToken: string, shopId: number) {
   return body;
 }
 
+type ShopInfoResponse = {
+  shop_name: string;
+  region: string;
+  status: string;
+  error?: string;
+  message?: string;
+};
+
+export async function getShopInfo(accessToken: string, shopId: number) {
+  const url = buildAuthenticatedUrl('/api/v2/shop/get_shop_info', accessToken, shopId);
+  const response = await fetch(url);
+  const body = (await response.json()) as ShopInfoResponse;
+  if (!response.ok || body.error) {
+    throw new Error(body.message || body.error || 'Falha ao buscar informações da loja na Shopee.');
+  }
+  return body;
+}
+
 export function buildAuthenticatedUrl(path: string, accessToken: string, shopId: number) {
   const { partnerId, partnerKey, host } = getConfig();
   const ts = timestamp();

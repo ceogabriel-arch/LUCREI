@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 
 import { prisma } from '../../lib/prisma';
-import { exchangeCodeForToken, getAuthorizationUrl } from '../../shopee-client';
+import { exchangeCodeForToken, getAuthorizationUrl, getShopInfo } from '../../shopee-client';
 
 type CallbackQuery = {
   code?: string;
@@ -36,13 +36,15 @@ export async function shopRoutes(app: FastifyInstance) {
 
     try {
       const token = await exchangeCodeForToken(code, shopId);
+      const info = await getShopInfo(token.access_token, shopId);
 
       const shop = await prisma.shop.upsert({
         where: { shopeeShopId: String(shopId) },
-        update: { userId, status: 'active' },
+        update: { userId, status: 'active', shopName: info.shop_name, region: info.region },
         create: {
           shopeeShopId: String(shopId),
-          shopName: `Loja ${shopId}`,
+          shopName: info.shop_name,
+          region: info.region,
           userId,
         },
       });
