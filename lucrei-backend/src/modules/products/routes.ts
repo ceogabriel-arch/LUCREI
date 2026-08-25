@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 
 import { prisma } from '../../lib/prisma';
 import { getValidAccessToken } from '../../lib/shopee-token';
-import { getItemBaseInfo, getItemList } from '../../shopee-client';
+import { getItemBaseInfo, getItemList, getModelList } from '../../shopee-client';
 
 type UpsertProductBody = {
   shopeeItemId: string;
@@ -51,16 +51,30 @@ export async function productRoutes(app: FastifyInstance) {
         const costs = await prisma.product.findMany({ where: { shopId: shop.id } });
         const costByItemId = new Map(costs.map((c) => [c.shopeeItemId, c]));
 
-        const products = baseInfo.map((item) => {
-          const existing = costByItemId.get(String(item.item_id));
-          return {
-            shopeeItemId: String(item.item_id),
-            name: item.item_name,
-            image: item.image?.image_url_list?.[0] ?? null,
-            price: item.price_info?.[0]?.current_price ?? null,
-            costPrice: existing ? Number(existing.costPrice) : null,
-          };
-        });
+        const products = await Promise.all(
+          baseInfo.map(async (item) => {
+            const existing = costByItemId.get(String(item.item_id));
+            let price = item.price_info?.[0]?.current_price ?? null;
+
+            if (price === null && item.has_model) {
+              try {
+                const models = await getModelList(accessToken, shopeeShopId, item.item_id);
+                const prices = models.map((m) => m.price_info[0]?.current_price).filter((p): p is number => p != null);
+                price = prices.length > 0 ? Math.min(...prices) : null;
+              } catch {
+                price = null;
+              }
+            }
+
+            return {
+              shopeeItemId: String(item.item_id),
+              name: item.item_name,
+              image: item.image?.image_url_list?.[0] ?? null,
+              price,
+              costPrice: existing ? Number(existing.costPrice) : null,
+            };
+          })
+        );
 
         return { products };
       } catch (err) {

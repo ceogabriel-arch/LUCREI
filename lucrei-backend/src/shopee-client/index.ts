@@ -270,6 +270,7 @@ type ItemBaseInfoResponse = {
       item_sku?: string;
       image?: { image_url_list: string[] };
       price_info?: { current_price: number }[];
+      has_model?: boolean;
     }[];
   };
   error?: string;
@@ -280,7 +281,7 @@ export async function getItemBaseInfo(accessToken: string, shopId: number, itemI
   let url = buildAuthenticatedUrl('/api/v2/product/get_item_base_info', accessToken, shopId);
   const params = new URLSearchParams({
     item_id_list: itemIds.join(','),
-    response_optional_fields: 'item_name,image,price_info',
+    response_optional_fields: 'item_name,image,price_info,has_model',
   });
   url += `&${params.toString()}`;
 
@@ -290,6 +291,26 @@ export async function getItemBaseInfo(accessToken: string, shopId: number, itemI
     throw new Error(body.message || body.error || 'Falha ao buscar detalhes dos produtos na Shopee.');
   }
   return body.response!.item_list;
+}
+
+type ModelListResponse = {
+  response?: {
+    model: { model_id: number; price_info: { current_price: number }[] }[];
+  };
+  error?: string;
+  message?: string;
+};
+
+export async function getModelList(accessToken: string, shopId: number, itemId: number) {
+  let url = buildAuthenticatedUrl('/api/v2/product/get_model_list', accessToken, shopId);
+  url += `&${new URLSearchParams({ item_id: String(itemId) }).toString()}`;
+
+  const response = await fetch(url);
+  const body = (await response.json()) as ModelListResponse;
+  if (!response.ok || body.error) {
+    throw new Error(body.message || body.error || 'Falha ao buscar variações do produto na Shopee.');
+  }
+  return body.response!.model;
 }
 
 export function buildAuthenticatedUrl(path: string, accessToken: string, shopId: number) {
