@@ -1,5 +1,7 @@
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
+export type Period = 'today' | '7d' | '30d';
+
 export type AuthUser = { id: string; name: string; email: string };
 export type AuthResponse = { token: string; user: AuthUser };
 
@@ -66,7 +68,7 @@ export type Summary = {
   trend: number[];
 };
 
-export function getSummary(token: string, shopId: string, period: 'today' | '7d' | '30d') {
+export function getSummary(token: string, shopId: string, period: Period) {
   return request<Summary>(`/shops/${shopId}/summary?period=${period}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -83,7 +85,7 @@ export type ShopeeProduct = {
   orders: number;
 };
 
-export function getShopeeProducts(token: string, shopId: string, period: 'today' | '7d' | '30d') {
+export function getShopeeProducts(token: string, shopId: string, period: Period) {
   return request<{ products: ShopeeProduct[] }>(`/shops/${shopId}/shopee-products?period=${period}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -94,5 +96,30 @@ export function saveProductCost(token: string, shopId: string, shopeeItemId: str
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify({ shopeeItemId, name, costPrice }),
+  });
+}
+
+export type Order = {
+  id: string;
+  shopeeOrderSn: string;
+  orderStatus: string;
+  orderDate: string;
+  revenue: number;
+  profit: number | null;
+  itemsMissingCost: number;
+};
+
+export function getOrders(token: string, shopId: string, period: Period) {
+  return request<{ orders: Order[] }>(`/shops/${shopId}/orders?period=${period}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export type SyncResult = { ordersSeen: number; ordersSynced: number };
+
+export function syncOrders(token: string, shopId: string) {
+  return request<SyncResult>(`/shops/${shopId}/sync`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
   });
 }
