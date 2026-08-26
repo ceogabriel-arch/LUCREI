@@ -207,7 +207,7 @@ export default function InicioScreen() {
 
             {!stillLoading && (
               <View className="mt-5">
-                <Sparkline data={showingRealData ? summary!.trend : MOCK_TREND} />
+                <Sparkline data={showingRealData ? summary!.trend.map((t) => t.profit) : MOCK_TREND} />
               </View>
             )}
           </View>

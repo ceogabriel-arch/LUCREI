@@ -25,7 +25,9 @@ export async function summaryRoutes(app: FastifyInstance) {
       let revenue = 0;
       let revenueWithKnownCost = 0;
       let profit = 0;
-      let cost = 0;
+      let shippingCost = 0;
+      let shopeeFees = 0;
+      let productCost = 0;
       let itemsMissingCost = 0;
       const profitByDay = new Map<string, number>();
 
@@ -38,7 +40,9 @@ export async function summaryRoutes(app: FastifyInstance) {
           if (li.profit !== null) {
             revenueWithKnownCost += sale;
             profit += Number(li.profit);
-            cost += Number(li.shippingFeeAllocated) + Number(li.shopeeFeeAllocated) + Number(li.productCostSnapshot ?? 0);
+            shippingCost += Number(li.shippingFeeAllocated);
+            shopeeFees += Number(li.shopeeFeeAllocated);
+            productCost += Number(li.productCostSnapshot ?? 0);
             profitByDay.set(day, (profitByDay.get(day) ?? 0) + Number(li.profit));
           } else {
             itemsMissingCost++;
@@ -46,16 +50,20 @@ export async function summaryRoutes(app: FastifyInstance) {
         }
       }
 
+      const cost = shippingCost + shopeeFees + productCost;
       const ordersCount = orders.length;
       const avgTicket = ordersCount > 0 ? revenue / ordersCount : 0;
       const profitMargin = revenueWithKnownCost > 0 ? (profit / revenueWithKnownCost) * 100 : 0;
       const trend = Array.from(profitByDay.entries())
         .sort(([a], [b]) => (a < b ? -1 : 1))
-        .map(([, value]) => value);
+        .map(([date, profit]) => ({ date, profit }));
 
       return {
         revenue,
         cost,
+        shippingCost,
+        shopeeFees,
+        productCost,
         profit,
         ordersCount,
         avgTicket,

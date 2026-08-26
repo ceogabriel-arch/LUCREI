@@ -60,12 +60,15 @@ export function getShops(token: string) {
 export type Summary = {
   revenue: number;
   cost: number;
+  shippingCost: number;
+  shopeeFees: number;
+  productCost: number;
   profit: number;
   ordersCount: number;
   avgTicket: number;
   profitMargin: number;
   itemsMissingCost: number;
-  trend: number[];
+  trend: { date: string; profit: number }[];
 };
 
 export function getSummary(token: string, shopId: string, period: Period) {
