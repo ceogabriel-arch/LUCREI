@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Dimensions, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Screen } from '@/components/screen';
@@ -77,7 +77,10 @@ function OrderDetailModal({ order, onClose }: { order: Order | null; onClose: ()
   return (
     <Modal visible={order != null} animationType="slide" transparent onRequestClose={onClose}>
       <View className="flex-1 justify-end bg-black/60">
-        <SafeAreaView edges={['bottom']} className="max-h-[85%] rounded-t-3xl bg-lucrei-bg">
+        <SafeAreaView
+          edges={['bottom']}
+          style={{ maxHeight: Dimensions.get('window').height * 0.85 }}
+          className="rounded-t-3xl bg-lucrei-bg">
           <View className="flex-row items-center justify-between border-b border-lucrei-border px-5 py-4">
             <View>
               <Text className="text-base font-semibold text-lucrei-text">{order?.shopeeOrderSn}</Text>
@@ -88,7 +91,7 @@ function OrderDetailModal({ order, onClose }: { order: Order | null; onClose: ()
             </Pressable>
           </View>
 
-          <ScrollView contentContainerClassName="gap-3 p-5">
+          <ScrollView style={{ flexShrink: 1 }} contentContainerClassName="gap-3 p-5">
             {order?.lineItems.map((item) => (
               <ItemBreakdown key={item.id} item={item} />
             ))}
@@ -96,6 +99,28 @@ function OrderDetailModal({ order, onClose }: { order: Order | null; onClose: ()
         </SafeAreaView>
       </View>
     </Modal>
+  );
+}
+
+type Toast = { title: string; message: string; tone: 'success' | 'error' };
+
+function ToastBanner({ toast, opacity }: { toast: Toast | null; opacity: Animated.Value }) {
+  if (!toast) return null;
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{ opacity, position: 'absolute', top: 8, left: 0, right: 0, zIndex: 50 }}>
+      <View
+        className="mx-5 rounded-2xl border bg-lucrei-surface p-4"
+        style={{ borderColor: toast.tone === 'success' ? Colors.gold : Colors.danger }}>
+        <Text
+          className="text-sm font-semibold"
+          style={{ color: toast.tone === 'success' ? Colors.gold : Colors.danger }}>
+          {toast.title}
+        </Text>
+        <Text className="mt-1 text-xs text-lucrei-textMuted">{toast.message}</Text>
+      </View>
+    </Animated.View>
   );
 }
 
@@ -144,6 +169,17 @@ export default function PedidosScreen() {
   const [syncing, setSyncing] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
+  const toastOpacity = useRef(new Animated.Value(0)).current;
+
+  function showToast(next: Toast) {
+    setToast(next);
+    Animated.sequence([
+      Animated.timing(toastOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+      Animated.delay(3000),
+      Animated.timing(toastOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+    ]).start(() => setToast(null));
+  }
 
   const filteredOrders = orders.filter((o) =>
     o.shopeeOrderSn.toLowerCase().includes(search.trim().toLowerCase())
@@ -189,10 +225,14 @@ export default function PedidosScreen() {
           : result.ordersSynced === 1
             ? '1 pedido foi sincronizado e já está com o lucro calculado.'
             : `${result.ordersSynced} pedidos foram sincronizados e já estão com o lucro calculado.`;
-      Alert.alert(title, message);
+      showToast({ title, message, tone: 'success' });
       await load();
     } catch (err) {
-      Alert.alert('Não deu certo dessa vez', err instanceof ApiError ? err.message : 'Tenta de novo em instantes.');
+      showToast({
+        title: 'Não deu certo dessa vez',
+        message: err instanceof ApiError ? err.message : 'Tenta de novo em instantes.',
+        tone: 'error',
+      });
     } finally {
       setSyncing(false);
     }
@@ -200,6 +240,8 @@ export default function PedidosScreen() {
 
   return (
     <Screen>
+      <ToastBanner toast={toast} opacity={toastOpacity} />
+
       <View className="flex-row items-center justify-between">
         <View>
           <Text className="text-2xl font-bold text-lucrei-text">Pedidos</Text>
