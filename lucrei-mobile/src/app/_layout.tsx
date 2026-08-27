@@ -8,6 +8,7 @@ import AppTabs from '@/components/app-tabs';
 import { LoginScreen } from '@/components/login-screen';
 import { SignupScreen } from '@/components/signup-screen';
 import { AuthProvider, useAuth } from '@/lib/auth';
+import { SelectedShopProvider } from '@/lib/selected-shop';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -55,7 +56,9 @@ export default function RootLayout() {
     <ThemeProvider value={LucreiTheme}>
       <StatusBar style="light" />
       <AuthProvider>
-        <RootNavigator />
+        <SelectedShopProvider>
+          <RootNavigator />
+        </SelectedShopProvider>
       </AuthProvider>
     </ThemeProvider>
   );

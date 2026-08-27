@@ -6,9 +6,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Screen } from '@/components/screen';
 import { Colors } from '@/constants/theme';
-import { ApiError, getOrders, getShops, syncOrders, type Order, type OrderLineItem, type Period, type Shop } from '@/lib/api';
+import { ApiError, getOrders, syncOrders, type Order, type OrderLineItem, type Period } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatBRL } from '@/lib/format';
+import { useSelectedShop } from '@/lib/selected-shop';
 
 type LoadState = 'loading' | 'no-shop' | 'ready' | 'error';
 
@@ -162,8 +163,8 @@ function OrderRow({ order, onPress }: { order: Order; onPress: () => void }) {
 
 export default function PedidosScreen() {
   const { state } = useAuth();
+  const { selectedShop, loaded: shopsLoaded } = useSelectedShop();
   const [loadState, setLoadState] = useState<LoadState>('loading');
-  const [shop, setShop] = useState<Shop | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [period, setPeriod] = useState<(typeof PERIODS)[number]>('30 dias');
   const [syncing, setSyncing] = useState(false);
@@ -186,22 +187,20 @@ export default function PedidosScreen() {
   );
 
   const load = useCallback(async () => {
-    if (state.status !== 'authenticated') return;
+    if (state.status !== 'authenticated' || !shopsLoaded) return;
+    if (!selectedShop) {
+      setLoadState('no-shop');
+      return;
+    }
     setLoadState((prev) => (prev === 'ready' ? prev : 'loading'));
     try {
-      const { shops } = await getShops(state.token);
-      if (shops.length === 0) {
-        setLoadState('no-shop');
-        return;
-      }
-      setShop(shops[0]);
-      const { orders } = await getOrders(state.token, shops[0].id, PERIOD_TO_API[period]);
+      const { orders } = await getOrders(state.token, selectedShop.id, PERIOD_TO_API[period]);
       setOrders(orders);
       setLoadState('ready');
     } catch {
       setLoadState('error');
     }
-  }, [state, period]);
+  }, [state, shopsLoaded, selectedShop, period]);
 
   useEffect(() => {
     load();
@@ -214,10 +213,10 @@ export default function PedidosScreen() {
   );
 
   async function handleSync() {
-    if (state.status !== 'authenticated' || !shop) return;
+    if (state.status !== 'authenticated' || !selectedShop) return;
     setSyncing(true);
     try {
-      const result = await syncOrders(state.token, shop.id);
+      const result = await syncOrders(state.token, selectedShop.id);
       const title = result.ordersSynced > 0 ? 'Novidades por aqui!' : 'Tudo em dia';
       const message =
         result.ordersSynced === 0

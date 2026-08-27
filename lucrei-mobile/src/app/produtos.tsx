@@ -5,9 +5,10 @@ import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TextInput, View 
 
 import { Screen } from '@/components/screen';
 import { Colors } from '@/constants/theme';
-import { ApiError, getShopeeProducts, getShops, saveProductCost, type Shop, type ShopeeProduct } from '@/lib/api';
+import { ApiError, getShopeeProducts, saveProductCost, type ShopeeProduct } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatBRL } from '@/lib/format';
+import { useSelectedShop } from '@/lib/selected-shop';
 
 type LoadState = 'loading' | 'no-shop' | 'ready' | 'error';
 
@@ -116,8 +117,8 @@ function ProductRow({
 
 export default function ProdutosScreen() {
   const { state } = useAuth();
+  const { selectedShop, loaded: shopsLoaded } = useSelectedShop();
   const [loadState, setLoadState] = useState<LoadState>('loading');
-  const [shop, setShop] = useState<Shop | null>(null);
   const [products, setProducts] = useState<ShopeeProduct[]>([]);
   const [search, setSearch] = useState('');
   const [period, setPeriod] = useState<(typeof PERIODS)[number]>('30 dias');
@@ -127,22 +128,20 @@ export default function ProdutosScreen() {
     .sort((a, b) => a.name.localeCompare(b.name));
 
   const load = useCallback(async () => {
-    if (state.status !== 'authenticated') return;
+    if (state.status !== 'authenticated' || !shopsLoaded) return;
+    if (!selectedShop) {
+      setLoadState('no-shop');
+      return;
+    }
     setLoadState((prev) => (prev === 'ready' ? prev : 'loading'));
     try {
-      const { shops } = await getShops(state.token);
-      if (shops.length === 0) {
-        setLoadState('no-shop');
-        return;
-      }
-      setShop(shops[0]);
-      const { products } = await getShopeeProducts(state.token, shops[0].id, PERIOD_TO_API[period]);
+      const { products } = await getShopeeProducts(state.token, selectedShop.id, PERIOD_TO_API[period]);
       setProducts(products);
       setLoadState('ready');
     } catch {
       setLoadState('error');
     }
-  }, [state, period]);
+  }, [state, shopsLoaded, selectedShop, period]);
 
   useEffect(() => {
     load();
@@ -203,7 +202,7 @@ export default function ProdutosScreen() {
         </View>
       )}
 
-      {loadState === 'ready' && shop && (
+      {loadState === 'ready' && selectedShop && (
         <>
           <TextInput
             value={search}
@@ -223,7 +222,7 @@ export default function ProdutosScreen() {
                   key={product.shopeeItemId}
                   product={product}
                   token={state.status === 'authenticated' ? state.token : ''}
-                  shopId={shop.id}
+                  shopId={selectedShop.id}
                   period={period}
                   onSaved={handleSaved}
                 />

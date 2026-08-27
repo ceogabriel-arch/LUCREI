@@ -8,12 +8,14 @@ import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View
 import { AchievementsCard } from '@/components/achievements-card';
 import { DeltaBadge } from '@/components/delta-badge';
 import { Screen } from '@/components/screen';
+import { ShopPicker } from '@/components/shop-picker';
 import { Sparkline } from '@/components/sparkline';
 import { StatTile } from '@/components/stat-tile';
 import { Colors } from '@/constants/theme';
-import { ApiError, getShops, getSummary, type Shop, type Summary } from '@/lib/api';
+import { ApiError, getSummary, type Summary } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatBRL } from '@/lib/format';
+import { useSelectedShop } from '@/lib/selected-shop';
 import { connectShopeeStore } from '@/lib/shopee';
 
 type BackendStatus = 'checking' | 'online' | 'offline';
@@ -54,26 +56,13 @@ const MOCK_KPIS = [
 
 export default function InicioScreen() {
   const { state } = useAuth();
+  const { shops, selectedShop, loaded: shopsLoaded, refresh: refreshShops } = useSelectedShop();
   const [backendStatus, setBackendStatus] = useState<BackendStatus>('checking');
   const [period, setPeriod] = useState<(typeof PERIODS)[number]>('30 dias');
   const [connecting, setConnecting] = useState(false);
-  const [shops, setShops] = useState<Shop[]>([]);
-  const [shopsLoaded, setShopsLoaded] = useState(false);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [lifetimeProfit, setLifetimeProfit] = useState<number | null>(null);
-
-  async function loadShops() {
-    if (state.status !== 'authenticated') return;
-    try {
-      const { shops } = await getShops(state.token);
-      setShops(shops);
-    } catch {
-      // silencioso: a tela cai pro estado "nenhuma loja conectada"
-    } finally {
-      setShopsLoaded(true);
-    }
-  }
 
   async function handleConnectShopee() {
     if (state.status !== 'authenticated') return;
@@ -82,7 +71,7 @@ export default function InicioScreen() {
       const result = await connectShopeeStore(state.token);
       if (result.status === 'success') {
         Alert.alert('Loja conectada!', 'Sua loja Shopee foi conectada com sucesso.');
-        await loadShops();
+        await refreshShops();
       } else if (result.status === 'error') {
         Alert.alert('Não foi possível conectar', 'Tente novamente em instantes.');
       }
@@ -93,37 +82,33 @@ export default function InicioScreen() {
     }
   }
 
-  useEffect(() => {
-    loadShops();
-  }, [state.status]);
-
   useFocusEffect(
     useCallback(() => {
-      loadShops();
-    }, [state.status])
+      refreshShops();
+    }, [refreshShops])
   );
 
   useEffect(() => {
-    if (state.status !== 'authenticated' || shops.length === 0) {
+    if (state.status !== 'authenticated' || !selectedShop) {
       setSummary(null);
       return;
     }
     setSummaryLoading(true);
-    getSummary(state.token, shops[0].id, PERIOD_TO_API[period])
+    getSummary(state.token, selectedShop.id, PERIOD_TO_API[period])
       .then(setSummary)
       .catch(() => setSummary(null))
       .finally(() => setSummaryLoading(false));
-  }, [state.status, shops, period]);
+  }, [state.status, selectedShop, period]);
 
   useEffect(() => {
-    if (state.status !== 'authenticated' || shops.length === 0) {
+    if (state.status !== 'authenticated' || !selectedShop) {
       setLifetimeProfit(null);
       return;
     }
-    getSummary(state.token, shops[0].id, 'all')
+    getSummary(state.token, selectedShop.id, 'all')
       .then((s) => setLifetimeProfit(s.profit))
       .catch(() => setLifetimeProfit(null));
-  }, [state.status, shops]);
+  }, [state.status, selectedShop]);
 
   const hasShop = shops.length > 0;
   const showingRealData = hasShop && summary !== null;
@@ -150,12 +135,7 @@ export default function InicioScreen() {
               style={{ width: LOGO_WIDTH, height: LOGO_HEIGHT }}
               contentFit="contain"
             />
-            <View className="mt-1.5 flex-row items-center gap-1">
-              <Text className="text-xs text-lucrei-textMuted">
-                {shops[0]?.shopName ?? 'Nenhuma loja conectada'}
-              </Text>
-              <Ionicons name="chevron-down" size={12} color={Colors.textMuted} />
-            </View>
+            <ShopPicker />
           </View>
           <View
             className="h-2 w-2 rounded-full"
@@ -266,9 +246,9 @@ export default function InicioScreen() {
         {!stillLoading && (
           <Text className="mt-3 text-center text-xs text-lucrei-textMuted">
             {showingRealData
-              ? `Loja conectada: ${shops[0].shopName}.`
+              ? `Loja conectada: ${selectedShop!.shopName}.`
               : hasShop
-                ? `Loja conectada: ${shops[0].shopName}. Ainda sem pedidos sincronizados nesse período.`
+                ? `Loja conectada: ${selectedShop!.shopName}. Ainda sem pedidos sincronizados nesse período.`
                 : 'Os números acima são um exemplo. Conecte sua loja para ver o seu lucro real.'}
           </Text>
         )}

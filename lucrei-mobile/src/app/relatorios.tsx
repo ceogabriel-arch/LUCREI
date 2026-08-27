@@ -5,9 +5,10 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-nati
 import { DailyProfitChart } from '@/components/daily-profit-chart';
 import { Screen } from '@/components/screen';
 import { Colors } from '@/constants/theme';
-import { getShopeeProducts, getShops, getSummary, type Period, type Shop, type ShopeeProduct, type Summary } from '@/lib/api';
+import { getShopeeProducts, getSummary, type Period, type ShopeeProduct, type Summary } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatBRL } from '@/lib/format';
+import { useSelectedShop } from '@/lib/selected-shop';
 
 type LoadState = 'loading' | 'no-shop' | 'ready' | 'error';
 
@@ -51,26 +52,24 @@ function ProductRankRow({ product }: { product: ShopeeProduct }) {
 
 export default function RelatoriosScreen() {
   const { state } = useAuth();
+  const { selectedShop, loaded: shopsLoaded } = useSelectedShop();
   const [loadState, setLoadState] = useState<LoadState>('loading');
-  const [shop, setShop] = useState<Shop | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [products, setProducts] = useState<ShopeeProduct[]>([]);
   const [period, setPeriod] = useState<(typeof PERIODS)[number]>('30 dias');
 
   const load = useCallback(async () => {
-    if (state.status !== 'authenticated') return;
+    if (state.status !== 'authenticated' || !shopsLoaded) return;
+    if (!selectedShop) {
+      setLoadState('no-shop');
+      return;
+    }
     setLoadState((prev) => (prev === 'ready' ? prev : 'loading'));
     try {
-      const { shops } = await getShops(state.token);
-      if (shops.length === 0) {
-        setLoadState('no-shop');
-        return;
-      }
-      setShop(shops[0]);
       const apiPeriod = PERIOD_TO_API[period];
       const [summaryRes, productsRes] = await Promise.all([
-        getSummary(state.token, shops[0].id, apiPeriod),
-        getShopeeProducts(state.token, shops[0].id, apiPeriod),
+        getSummary(state.token, selectedShop.id, apiPeriod),
+        getShopeeProducts(state.token, selectedShop.id, apiPeriod),
       ]);
       setSummary(summaryRes);
       setProducts(productsRes.products);
@@ -78,7 +77,7 @@ export default function RelatoriosScreen() {
     } catch {
       setLoadState('error');
     }
-  }, [state, period]);
+  }, [state, shopsLoaded, selectedShop, period]);
 
   useEffect(() => {
     load();
