@@ -43,7 +43,7 @@ export async function authRoutes(app: FastifyInstance) {
       const token = app.jwt.sign({ sub: user.id });
       return reply.status(201).send({
         token,
-        user: { id: user.id, name: user.name, email: user.email },
+        user: { id: user.id, name: user.name, email: user.email, createdAt: user.createdAt },
       });
     }
   );
@@ -67,7 +67,7 @@ export async function authRoutes(app: FastifyInstance) {
       const token = app.jwt.sign({ sub: user.id });
       return reply.send({
         token,
-        user: { id: user.id, name: user.name, email: user.email },
+        user: { id: user.id, name: user.name, email: user.email, createdAt: user.createdAt },
       });
     }
   );
@@ -77,6 +77,6 @@ export async function authRoutes(app: FastifyInstance) {
     if (!user) {
       return reply.status(404).send({ message: 'Usuário não encontrado.' });
     }
-    return reply.send({ id: user.id, name: user.name, email: user.email });
+    return reply.send({ id: user.id, name: user.name, email: user.email, createdAt: user.createdAt });
   });
 }

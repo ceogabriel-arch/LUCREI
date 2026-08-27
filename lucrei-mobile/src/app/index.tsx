@@ -5,6 +5,7 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { AchievementsCard } from '@/components/achievements-card';
 import { DeltaBadge } from '@/components/delta-badge';
 import { Screen } from '@/components/screen';
 import { Sparkline } from '@/components/sparkline';
@@ -60,6 +61,7 @@ export default function InicioScreen() {
   const [shopsLoaded, setShopsLoaded] = useState(false);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
+  const [lifetimeProfit, setLifetimeProfit] = useState<number | null>(null);
 
   async function loadShops() {
     if (state.status !== 'authenticated') return;
@@ -112,6 +114,16 @@ export default function InicioScreen() {
       .catch(() => setSummary(null))
       .finally(() => setSummaryLoading(false));
   }, [state.status, shops, period]);
+
+  useEffect(() => {
+    if (state.status !== 'authenticated' || shops.length === 0) {
+      setLifetimeProfit(null);
+      return;
+    }
+    getSummary(state.token, shops[0].id, 'all')
+      .then((s) => setLifetimeProfit(s.profit))
+      .catch(() => setLifetimeProfit(null));
+  }, [state.status, shops]);
 
   const hasShop = shops.length > 0;
   const showingRealData = hasShop && summary !== null;
@@ -232,6 +244,10 @@ export default function InicioScreen() {
                 : MOCK_KPIS
               ).map((kpi) => <StatTile key={kpi.label} {...kpi} />)}
         </ScrollView>
+
+        {state.status === 'authenticated' && hasShop && lifetimeProfit !== null && (
+          <AchievementsCard totalProfit={lifetimeProfit} accountCreatedAt={state.user.createdAt} />
+        )}
 
         <Pressable
           onPress={handleConnectShopee}

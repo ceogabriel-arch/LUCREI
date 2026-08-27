@@ -1,8 +1,8 @@
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
-export type Period = 'today' | '7d' | '30d';
+export type Period = 'today' | '7d' | '30d' | 'all';
 
-export type AuthUser = { id: string; name: string; email: string };
+export type AuthUser = { id: string; name: string; email: string; createdAt: string };
 export type AuthResponse = { token: string; user: AuthUser };
 
 export class ApiError extends Error {}
