@@ -41,7 +41,12 @@ export function ShopPicker() {
                     }}
                     className="flex-row items-center justify-between rounded-2xl border p-4"
                     style={{ borderColor: active ? Colors.gold : Colors.border }}>
-                    <Text className="text-sm text-lucrei-text">{shop.shopName}</Text>
+                    <View className="flex-1 pr-2">
+                      <Text className="text-sm text-lucrei-text">{shop.shopName}</Text>
+                      {shop.status !== 'active' && (
+                        <Text className="mt-0.5 text-xs text-lucrei-textMuted">Desconectada</Text>
+                      )}
+                    </View>
                     {active && <Ionicons name="checkmark-circle" size={18} color={Colors.gold} />}
                   </Pressable>
                 );

@@ -1,6 +1,13 @@
 import { createContext, type PropsWithChildren, useContext, useEffect, useState } from 'react';
 
-import { ApiError, type AuthUser, login as apiLogin, me as apiMe, signup as apiSignup } from '@/lib/api';
+import {
+  ApiError,
+  type AuthUser,
+  login as apiLogin,
+  me as apiMe,
+  signup as apiSignup,
+  updateName as apiUpdateName,
+} from '@/lib/api';
 import { clearToken, getToken, setToken } from '@/lib/token-storage';
 
 type AuthState =
@@ -15,6 +22,7 @@ type AuthContextValue = {
   login: (email: string, password: string) => Promise<AuthResult>;
   signup: (name: string, email: string, password: string) => Promise<AuthResult>;
   logout: () => Promise<void>;
+  updateName: (name: string) => Promise<AuthResult>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -66,7 +74,20 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setState({ status: 'unauthenticated' });
   }
 
-  return <AuthContext.Provider value={{ state, login, signup, logout }}>{children}</AuthContext.Provider>;
+  async function updateName(name: string): Promise<AuthResult> {
+    if (state.status !== 'authenticated') return { ok: false, message: 'Não autenticado.' };
+    try {
+      const user = await apiUpdateName(state.token, name);
+      setState({ status: 'authenticated', token: state.token, user });
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, message: err instanceof ApiError ? err.message : 'Algo deu errado.' };
+    }
+  }
+
+  return (
+    <AuthContext.Provider value={{ state, login, signup, logout, updateName }}>{children}</AuthContext.Provider>
+  );
 }
 
 export function useAuth() {

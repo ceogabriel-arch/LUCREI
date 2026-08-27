@@ -49,11 +49,41 @@ export function me(token: string) {
   });
 }
 
-export type Shop = { id: string; shopName: string; status: string; connectedAt: string };
+export function updateName(token: string, name: string) {
+  return request<AuthUser>('/auth/me', {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ name }),
+  });
+}
+
+export function changePassword(token: string, currentPassword: string, newPassword: string) {
+  return request<{ ok: true }>('/auth/change-password', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+}
+
+export type Shop = {
+  id: string;
+  shopName: string;
+  status: string;
+  connectedAt: string;
+  disconnectedAt: string | null;
+};
 
 export function getShops(token: string) {
   return request<{ shops: Shop[] }>('/shopee/shops', {
     headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function disconnectShop(token: string, shopId: string) {
+  return request<{ id: string; status: string; disconnectedAt: string }>(`/shops/${shopId}/disconnect`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: '{}',
   });
 }
 
