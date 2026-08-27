@@ -61,7 +61,7 @@ export default function InicioScreen() {
   const [period, setPeriod] = useState<(typeof PERIODS)[number]>('30 dias');
   const [connecting, setConnecting] = useState(false);
   const [summary, setSummary] = useState<Summary | null>(null);
-  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryLoading, setSummaryLoading] = useState(true);
   const [lifetimeProfit, setLifetimeProfit] = useState<number | null>(null);
 
   async function handleConnectShopee() {
@@ -91,13 +91,25 @@ export default function InicioScreen() {
   useEffect(() => {
     if (state.status !== 'authenticated' || !selectedShop) {
       setSummary(null);
+      setSummaryLoading(false);
       return;
     }
+    let cancelled = false;
+    setSummary(null);
     setSummaryLoading(true);
     getSummary(state.token, selectedShop.id, PERIOD_TO_API[period])
-      .then(setSummary)
-      .catch(() => setSummary(null))
-      .finally(() => setSummaryLoading(false));
+      .then((s) => {
+        if (!cancelled) setSummary(s);
+      })
+      .catch(() => {
+        if (!cancelled) setSummary(null);
+      })
+      .finally(() => {
+        if (!cancelled) setSummaryLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [state.status, selectedShop, period]);
 
   useEffect(() => {

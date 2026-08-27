@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
@@ -142,10 +142,6 @@ export default function ProdutosScreen() {
       setLoadState('error');
     }
   }, [state, shopsLoaded, selectedShop, period]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
 
   useFocusEffect(
     useCallback(() => {
