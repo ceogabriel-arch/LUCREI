@@ -52,7 +52,7 @@ export async function shopRoutes(app: FastifyInstance) {
 
       const shop = await prisma.shop.upsert({
         where: { shopeeShopId: String(shopId) },
-        update: { userId, status: 'active', shopName: info.shop_name, region: info.region },
+        update: { userId, status: 'active', disconnectedAt: null, shopName: info.shop_name, region: info.region },
         create: {
           shopeeShopId: String(shopId),
           shopName: info.shop_name,
@@ -89,8 +89,27 @@ export async function shopRoutes(app: FastifyInstance) {
   app.get('/shopee/shops', { onRequest: [app.authenticate] }, async (request) => {
     const shops = await prisma.shop.findMany({
       where: { userId: request.user.sub },
-      select: { id: true, shopName: true, status: true, connectedAt: true },
+      select: { id: true, shopName: true, status: true, connectedAt: true, disconnectedAt: true },
     });
     return { shops };
   });
+
+  app.post<{ Params: { shopId: string } }>(
+    '/shops/:shopId/disconnect',
+    { onRequest: [app.authenticate] },
+    async (request, reply) => {
+      const shop = await prisma.shop.findFirst({
+        where: { id: request.params.shopId, userId: request.user.sub },
+      });
+      if (!shop) return reply.status(404).send({ message: 'Loja não encontrada.' });
+
+      await prisma.shopeeOAuthToken.deleteMany({ where: { shopId: shop.id } });
+      const updated = await prisma.shop.update({
+        where: { id: shop.id },
+        data: { status: 'disconnected', disconnectedAt: new Date() },
+      });
+
+      return { id: updated.id, status: updated.status, disconnectedAt: updated.disconnectedAt };
+    }
+  );
 }

@@ -22,8 +22,27 @@ const signupSchema = {
   },
 } as const;
 
+const updateNameSchema = {
+  type: 'object',
+  required: ['name'],
+  properties: {
+    name: { type: 'string', minLength: 1 },
+  },
+} as const;
+
+const changePasswordSchema = {
+  type: 'object',
+  required: ['currentPassword', 'newPassword'],
+  properties: {
+    currentPassword: { type: 'string', minLength: 1 },
+    newPassword: { type: 'string', minLength: 6 },
+  },
+} as const;
+
 type Credentials = { email: string; password: string };
 type SignupBody = { name: string; email: string; password: string };
+type UpdateNameBody = { name: string };
+type ChangePasswordBody = { currentPassword: string; newPassword: string };
 
 export async function authRoutes(app: FastifyInstance) {
   app.post<{ Body: SignupBody }>(
@@ -79,4 +98,37 @@ export async function authRoutes(app: FastifyInstance) {
     }
     return reply.send({ id: user.id, name: user.name, email: user.email, createdAt: user.createdAt });
   });
+
+  app.patch<{ Body: UpdateNameBody }>(
+    '/auth/me',
+    { onRequest: [app.authenticate], schema: { body: updateNameSchema } },
+    async (request, reply) => {
+      const user = await prisma.user.update({
+        where: { id: request.user.sub },
+        data: { name: request.body.name },
+      });
+      return reply.send({ id: user.id, name: user.name, email: user.email, createdAt: user.createdAt });
+    }
+  );
+
+  app.post<{ Body: ChangePasswordBody }>(
+    '/auth/change-password',
+    { onRequest: [app.authenticate], schema: { body: changePasswordSchema } },
+    async (request, reply) => {
+      const user = await prisma.user.findUnique({ where: { id: request.user.sub } });
+      if (!user) {
+        return reply.status(404).send({ message: 'Usuário não encontrado.' });
+      }
+
+      const valid = await bcrypt.compare(request.body.currentPassword, user.passwordHash);
+      if (!valid) {
+        return reply.status(401).send({ message: 'Senha atual incorreta.' });
+      }
+
+      const passwordHash = await bcrypt.hash(request.body.newPassword, 10);
+      await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+
+      return reply.send({ ok: true });
+    }
+  );
 }

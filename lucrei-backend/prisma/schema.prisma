@@ -59,6 +59,7 @@ model Shop {
   region        String     @default("BR")
   status        ShopStatus @default(active)
   connectedAt   DateTime   @default(now())
+  disconnectedAt DateTime?
   lastSyncedAt  DateTime?
 
   user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
