@@ -94,29 +94,29 @@ export async function syncShopOrders(shopId: string) {
 
   while (hasMore) {
     const page = await getOrderList(accessToken, shopeeShopId, { timeFrom, timeTo, cursor });
-    const eligible = page.order_list.filter((o) => ELIGIBLE_STATUSES.has(o.order_status));
     ordersSeen += page.order_list.length;
 
-    const createTimeBySn = new Map<string, number>();
-    if (eligible.length > 0) {
+    if (page.order_list.length > 0) {
+      // get_order_list nem sempre retorna order_status no item — o status confiável
+      // vem do get_order_detail, então buscamos o detalhe de todos antes de filtrar.
       const details = await getOrderDetail(
         accessToken,
         shopeeShopId,
-        eligible.map((o) => o.order_sn)
+        page.order_list.map((o) => o.order_sn)
       );
-      for (const d of details) createTimeBySn.set(d.order_sn, d.create_time);
-    }
 
-    for (const item of eligible) {
-      await processOrder(
-        shopId,
-        shopeeShopId,
-        accessToken,
-        item.order_sn,
-        item.order_status,
-        createTimeBySn.get(item.order_sn)
-      );
-      ordersSynced++;
+      for (const detail of details) {
+        if (!ELIGIBLE_STATUSES.has(detail.order_status)) continue;
+        await processOrder(
+          shopId,
+          shopeeShopId,
+          accessToken,
+          detail.order_sn,
+          detail.order_status,
+          detail.create_time
+        );
+        ordersSynced++;
+      }
     }
 
     hasMore = page.more;

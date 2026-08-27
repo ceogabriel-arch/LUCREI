@@ -174,7 +174,7 @@ export async function getOrderList(
 
 type OrderDetailResponse = {
   response?: {
-    order_list: { order_sn: string; create_time: number }[];
+    order_list: { order_sn: string; order_status: string; create_time: number }[];
   };
   error?: string;
   message?: string;
