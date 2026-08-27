@@ -36,6 +36,65 @@ function CostBar({ label, value, total, color }: { label: string; value: number;
   );
 }
 
+type AbcClass = 'A' | 'B' | 'C' | 'Z';
+
+const ABC_COLOR: Record<AbcClass, string> = {
+  A: Colors.gold,
+  B: Colors.goldDim,
+  C: Colors.textMuted,
+  Z: Colors.danger,
+};
+
+const ABC_DESCRIPTION: Record<AbcClass, string> = {
+  A: 'Poucos produtos, maior parte do faturamento',
+  B: 'Contribuição intermediária',
+  C: 'Muitos produtos, pouco faturamento',
+  Z: 'Sem nenhuma venda no período',
+};
+
+function classifyAbc(products: ShopeeProduct[]) {
+  const sold = products.filter((p) => p.orders > 0 && (p.revenue ?? 0) > 0);
+  const unsold = products.filter((p) => !(p.orders > 0 && (p.revenue ?? 0) > 0));
+  const sorted = [...sold].sort((a, b) => (b.revenue ?? 0) - (a.revenue ?? 0));
+  const totalRevenue = sorted.reduce((sum, p) => sum + (p.revenue ?? 0), 0);
+
+  let cumulative = 0;
+  const classified = sorted.map((product) => {
+    cumulative += product.revenue ?? 0;
+    const cumPct = totalRevenue > 0 ? cumulative / totalRevenue : 0;
+    const cls: AbcClass = cumPct <= 0.8 ? 'A' : cumPct <= 0.95 ? 'B' : 'C';
+    return { product, cls, revenue: product.revenue ?? 0 };
+  });
+
+  const zClassified = unsold.map((product) => ({ product, cls: 'Z' as AbcClass, revenue: 0 }));
+
+  return [...classified, ...zClassified];
+}
+
+function AbcBadge({ cls }: { cls: AbcClass }) {
+  return (
+    <View
+      className="h-7 w-7 items-center justify-center rounded-full"
+      style={{ backgroundColor: ABC_COLOR[cls] }}>
+      <Text className="text-xs font-bold" style={{ color: cls === 'C' || cls === 'Z' ? Colors.text : Colors.bg }}>
+        {cls}
+      </Text>
+    </View>
+  );
+}
+
+function AbcRow({ item }: { item: { product: ShopeeProduct; cls: AbcClass; revenue: number } }) {
+  return (
+    <View className="flex-row items-center gap-3 rounded-xl border border-lucrei-border bg-lucrei-surface px-3 py-2.5">
+      <AbcBadge cls={item.cls} />
+      <Text className="flex-1 text-sm text-lucrei-text" numberOfLines={1}>
+        {item.product.name}
+      </Text>
+      <Text className="text-sm text-lucrei-textMuted">{formatBRL(item.revenue)}</Text>
+    </View>
+  );
+}
+
 function ProductRankRow({ product }: { product: ShopeeProduct }) {
   const positive = (product.profit ?? 0) >= 0;
   return (
@@ -95,6 +154,12 @@ export default function RelatoriosScreen() {
     .filter((p) => (p.profit ?? 0) < 0)
     .sort((a, b) => (a.profit ?? 0) - (b.profit ?? 0))
     .slice(0, 5);
+
+  const abcItems = classifyAbc(products);
+  const abcCounts = (['A', 'B', 'C', 'Z'] as AbcClass[]).map((cls) => ({
+    cls,
+    count: abcItems.filter((i) => i.cls === cls).length,
+  }));
 
   return (
     <Screen>
@@ -158,6 +223,45 @@ export default function RelatoriosScreen() {
               </Text>
             )}
           </View>
+
+          {abcItems.length > 0 && (
+            <View className="rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+              <Text className="mb-1 text-sm font-medium text-lucrei-text">Curva ABC</Text>
+              <Text className="mb-3 text-xs text-lucrei-textMuted">
+                Classificação dos produtos pela contribuição no faturamento.
+              </Text>
+
+              <View className="mb-3 h-2 flex-row overflow-hidden rounded-full">
+                {abcCounts
+                  .filter((c) => c.count > 0)
+                  .map((c) => (
+                    <View
+                      key={c.cls}
+                      style={{ flex: c.count, backgroundColor: ABC_COLOR[c.cls], height: '100%' }}
+                    />
+                  ))}
+              </View>
+
+              <View className="mb-3 flex-row flex-wrap gap-x-4 gap-y-1.5">
+                {abcCounts
+                  .filter((c) => c.count > 0)
+                  .map((c) => (
+                    <View key={c.cls} className="flex-row items-center gap-1.5">
+                      <View className="h-2 w-2 rounded-full" style={{ backgroundColor: ABC_COLOR[c.cls] }} />
+                      <Text className="text-xs text-lucrei-textMuted">
+                        {c.cls}: {c.count} · {ABC_DESCRIPTION[c.cls]}
+                      </Text>
+                    </View>
+                  ))}
+              </View>
+
+              <View className="gap-2">
+                {abcItems.map((item) => (
+                  <AbcRow key={item.product.shopeeItemId} item={item} />
+                ))}
+              </View>
+            </View>
+          )}
 
           {topProfitable.length > 0 && (
             <View className="rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
