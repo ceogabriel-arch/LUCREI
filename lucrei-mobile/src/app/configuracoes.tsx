@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Screen } from '@/components/screen';
 import { ToastBanner, useToast } from '@/components/toast';
@@ -11,12 +12,49 @@ import { useSelectedShop } from '@/lib/selected-shop';
 
 const dateFormatter = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
-function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
+type MenuKey = 'name' | 'password' | 'shops' | null;
+
+function SettingsModal({
+  title,
+  visible,
+  onClose,
+  children,
+}: {
+  title: string;
+  visible: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
   return (
-    <View className="mt-4 rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
-      <Text className="mb-3 text-sm font-semibold text-lucrei-text">{title}</Text>
-      {children}
-    </View>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View className="flex-1 justify-end bg-black/60">
+        <SafeAreaView edges={['bottom']} style={{ maxHeight: '85%' }} className="rounded-t-3xl bg-lucrei-bg">
+          <View className="flex-row items-center justify-between border-b border-lucrei-border px-5 py-4">
+            <Text className="text-base font-semibold text-lucrei-text">{title}</Text>
+            <Pressable onPress={onClose} hitSlop={8}>
+              <Ionicons name="close" size={22} color={Colors.textMuted} />
+            </Pressable>
+          </View>
+          <ScrollView style={{ flexShrink: 1 }} contentContainerClassName="p-5">
+            {children}
+          </ScrollView>
+        </SafeAreaView>
+      </View>
+    </Modal>
+  );
+}
+
+function MenuRow({ icon, label, onPress }: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      className="mt-3 flex-row items-center gap-3 rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+      <View className="h-9 w-9 items-center justify-center rounded-full bg-lucrei-surfaceAlt">
+        <Ionicons name={icon} size={16} color={Colors.gold} />
+      </View>
+      <Text className="flex-1 text-sm font-medium text-lucrei-text">{label}</Text>
+      <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+    </Pressable>
   );
 }
 
@@ -48,7 +86,7 @@ function NameField() {
         <TextInput
           value={name}
           onChangeText={setName}
-          className="flex-1 rounded-xl border border-lucrei-border bg-lucrei-bg px-4 py-3 text-sm text-lucrei-text"
+          className="flex-1 rounded-xl border border-lucrei-border bg-lucrei-surface px-4 py-3 text-sm text-lucrei-text"
         />
         <Pressable
           onPress={handleSave}
@@ -108,7 +146,7 @@ function PasswordSection() {
         placeholder="Senha atual"
         placeholderTextColor={Colors.textMuted}
         secureTextEntry
-        className="mb-2.5 rounded-xl border border-lucrei-border bg-lucrei-bg px-4 py-3 text-sm text-lucrei-text"
+        className="mb-2.5 rounded-xl border border-lucrei-border bg-lucrei-surface px-4 py-3 text-sm text-lucrei-text"
       />
       <TextInput
         value={newPassword}
@@ -116,7 +154,7 @@ function PasswordSection() {
         placeholder="Nova senha (mín. 6 caracteres)"
         placeholderTextColor={Colors.textMuted}
         secureTextEntry
-        className="mb-2.5 rounded-xl border border-lucrei-border bg-lucrei-bg px-4 py-3 text-sm text-lucrei-text"
+        className="mb-2.5 rounded-xl border border-lucrei-border bg-lucrei-surface px-4 py-3 text-sm text-lucrei-text"
       />
       <TextInput
         value={confirmPassword}
@@ -124,7 +162,7 @@ function PasswordSection() {
         placeholder="Confirmar nova senha"
         placeholderTextColor={Colors.textMuted}
         secureTextEntry
-        className="mb-3 rounded-xl border border-lucrei-border bg-lucrei-bg px-4 py-3 text-sm text-lucrei-text"
+        className="mb-3 rounded-xl border border-lucrei-border bg-lucrei-surface px-4 py-3 text-sm text-lucrei-text"
       />
       <Pressable
         onPress={handleSave}
@@ -171,14 +209,14 @@ function ShopRow({ shop, onDisconnected }: { shop: Shop; onDisconnected: () => v
   }
 
   return (
-    <View className="rounded-xl border border-lucrei-border bg-lucrei-surfaceAlt p-3.5">
+    <View className="rounded-xl border border-lucrei-border bg-lucrei-surface p-3.5">
       <View className="flex-row items-center justify-between">
         <Text className="flex-1 pr-2 text-sm text-lucrei-text" numberOfLines={1}>
           {shop.shopName}
         </Text>
         <View
           className="rounded-full px-2 py-0.5"
-          style={{ backgroundColor: active ? Colors.gold : Colors.surface }}>
+          style={{ backgroundColor: active ? Colors.gold : Colors.surfaceAlt }}>
           <Text className="text-[10px] font-medium" style={{ color: active ? Colors.bg : Colors.textMuted }}>
             {active ? 'Ativa' : 'Desconectada'}
           </Text>
@@ -203,47 +241,59 @@ function ShopRow({ shop, onDisconnected }: { shop: Shop; onDisconnected: () => v
   );
 }
 
+function ShopsList() {
+  const { shops, refresh } = useSelectedShop();
+  return shops.length === 0 ? (
+    <Text className="text-sm text-lucrei-textMuted">Nenhuma loja conectada ainda.</Text>
+  ) : (
+    <View className="gap-2.5">
+      {shops.map((shop) => (
+        <ShopRow key={shop.id} shop={shop} onDisconnected={refresh} />
+      ))}
+    </View>
+  );
+}
+
 export default function ConfiguracoesScreen() {
   const { state, logout } = useAuth();
-  const { shops, refresh } = useSelectedShop();
   const user = state.status === 'authenticated' ? state.user : null;
+  const [openMenu, setOpenMenu] = useState<MenuKey>(null);
 
   return (
     <Screen>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="pb-8">
-        <Text className="text-2xl font-bold text-lucrei-text">Configurações</Text>
-        <Text className="mt-2 text-base text-lucrei-textMuted">
-          Gerencie seu perfil, senha e lojas conectadas.
-        </Text>
+      <Text className="text-2xl font-bold text-lucrei-text">Configurações</Text>
+      <Text className="mt-2 text-base text-lucrei-textMuted">
+        Gerencie seu perfil, senha e lojas conectadas.
+      </Text>
 
-        {user && (
-          <SectionCard title="Perfil">
-            <NameField />
-          </SectionCard>
-        )}
+      {user && (
+        <View className="mt-4 rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+          <Text className="text-base font-semibold text-lucrei-text">{user.name}</Text>
+          <Text className="mt-0.5 text-sm text-lucrei-textMuted">{user.email}</Text>
+        </View>
+      )}
 
-        <SectionCard title="Segurança">
-          <PasswordSection />
-        </SectionCard>
+      <MenuRow icon="person-outline" label="Alterar nome" onPress={() => setOpenMenu('name')} />
+      <MenuRow icon="lock-closed-outline" label="Alterar senha" onPress={() => setOpenMenu('password')} />
+      <MenuRow icon="storefront-outline" label="Lojas conectadas" onPress={() => setOpenMenu('shops')} />
 
-        <SectionCard title="Lojas conectadas">
-          {shops.length === 0 ? (
-            <Text className="text-sm text-lucrei-textMuted">Nenhuma loja conectada ainda.</Text>
-          ) : (
-            <View className="gap-2.5">
-              {shops.map((shop) => (
-                <ShopRow key={shop.id} shop={shop} onDisconnected={refresh} />
-              ))}
-            </View>
-          )}
-        </SectionCard>
+      <Pressable
+        onPress={logout}
+        className="mt-6 items-center rounded-2xl border border-lucrei-border py-4">
+        <Text className="text-base font-semibold text-lucrei-danger">Sair da conta</Text>
+      </Pressable>
 
-        <Pressable
-          onPress={logout}
-          className="mt-6 items-center rounded-2xl border border-lucrei-border py-4">
-          <Text className="text-base font-semibold text-lucrei-danger">Sair da conta</Text>
-        </Pressable>
-      </ScrollView>
+      <SettingsModal title="Alterar nome" visible={openMenu === 'name'} onClose={() => setOpenMenu(null)}>
+        <NameField />
+      </SettingsModal>
+
+      <SettingsModal title="Alterar senha" visible={openMenu === 'password'} onClose={() => setOpenMenu(null)}>
+        <PasswordSection />
+      </SettingsModal>
+
+      <SettingsModal title="Lojas conectadas" visible={openMenu === 'shops'} onClose={() => setOpenMenu(null)}>
+        <ShopsList />
+      </SettingsModal>
     </Screen>
   );
 }
