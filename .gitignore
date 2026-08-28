@@ -1,6 +1,7 @@
-node_modules/
-dist/
-build/
+/lucrei-backend/node_modules/
+/lucrei-mobile/node_modules/
+/lucrei-backend/dist/
+/lucrei-backend/build/
 *.log
 
 # env / secrets
@@ -9,8 +10,8 @@ build/
 !.env.example
 
 # Expo
-.expo/
-web-build/
+/lucrei-mobile/.expo/
+/lucrei-mobile/web-build/
 expo-env.d.ts
 
 # Native
