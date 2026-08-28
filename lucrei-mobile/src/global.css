@@ -11,3 +11,12 @@
   --font-rounded: 'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif;
   --font-serif: Georgia, 'Times New Roman', serif;
 }
+
+/* Só afeta a build web — evita a faixa branca do fundo do navegador
+   aparecendo atrás/abaixo do conteúdo quando a janela é mais alta
+   que o app. Não tem efeito nenhum no app nativo. */
+html,
+body,
+#root {
+  background-color: #0a0a0b;
+}
