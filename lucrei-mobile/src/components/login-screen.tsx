@@ -18,6 +18,7 @@ import { Sparkline } from '@/components/sparkline';
 import { TextField } from '@/components/text-field';
 import { Colors } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
+import { webCapWidth } from '@/lib/responsive';
 
 const LOGO_ASPECT = 449 / 153;
 const LOGO_WIDTH = 220;
@@ -56,7 +57,7 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}>
         <ScrollView
-          contentContainerStyle={{ flexGrow: 1 }}
+          contentContainerStyle={{ flexGrow: 1, ...webCapWidth() }}
           keyboardShouldPersistTaps="handled"
           bounces={false}
           showsVerticalScrollIndicator={false}>

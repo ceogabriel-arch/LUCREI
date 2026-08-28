@@ -4,6 +4,7 @@ import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors } from '@/constants/theme';
+import { webCapWidth } from '@/lib/responsive';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -27,7 +28,7 @@ function CustomTabBar({ state, navigation }: TabBarProps) {
   const visibleRoutes = state.routes.filter((route) => TAB_META[route.name]);
 
   return (
-    <View style={{ paddingBottom: insets.bottom || 12, paddingHorizontal: 14, paddingTop: 4 }}>
+    <View style={{ paddingBottom: insets.bottom || 12, paddingHorizontal: 14, paddingTop: 4, ...webCapWidth() }}>
       <View
         className="flex-row items-center rounded-[28px] border border-lucrei-border bg-lucrei-surface"
         style={{

@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors } from '@/constants/theme';
 import { formatBRL } from '@/lib/format';
+import { webCapWidth } from '@/lib/responsive';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -160,7 +161,7 @@ export function AchievementsCard({
 
       <Modal visible={expanded} animationType="slide" transparent onRequestClose={() => setExpanded(false)}>
         <View className="flex-1 justify-end bg-black/60">
-          <SafeAreaView edges={['bottom']} style={{ maxHeight: '85%' }} className="rounded-t-3xl bg-lucrei-bg">
+          <SafeAreaView edges={['bottom']} style={{ maxHeight: '85%', ...webCapWidth() }} className="rounded-t-3xl bg-lucrei-bg">
             <View className="flex-row items-center justify-between border-b border-lucrei-border px-5 py-4">
               <Text className="text-base font-semibold text-lucrei-text">Conquistas Lucrei</Text>
               <Pressable onPress={() => setExpanded(false)} hitSlop={8}>

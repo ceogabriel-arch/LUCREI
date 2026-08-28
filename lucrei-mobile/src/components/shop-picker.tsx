@@ -4,6 +4,7 @@ import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors } from '@/constants/theme';
+import { webCapWidth } from '@/lib/responsive';
 import { useSelectedShop } from '@/lib/selected-shop';
 
 export function ShopPicker() {
@@ -22,7 +23,7 @@ export function ShopPicker() {
 
       <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
         <View className="flex-1 justify-end bg-black/60">
-          <SafeAreaView edges={['bottom']} style={{ maxHeight: '70%' }} className="rounded-t-3xl bg-lucrei-bg">
+          <SafeAreaView edges={['bottom']} style={{ maxHeight: '70%', ...webCapWidth() }} className="rounded-t-3xl bg-lucrei-bg">
             <View className="flex-row items-center justify-between border-b border-lucrei-border px-5 py-4">
               <Text className="text-base font-semibold text-lucrei-text">Suas lojas</Text>
               <Pressable onPress={() => setOpen(false)} hitSlop={8}>

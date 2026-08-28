@@ -8,6 +8,7 @@ import { ToastBanner, useToast } from '@/components/toast';
 import { Colors } from '@/constants/theme';
 import { ApiError, changePassword as apiChangePassword, disconnectShop, type Shop } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { webCapWidth } from '@/lib/responsive';
 import { useSelectedShop } from '@/lib/selected-shop';
 
 const dateFormatter = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -28,7 +29,7 @@ function SettingsModal({
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View className="flex-1 justify-end bg-black/60">
-        <SafeAreaView edges={['bottom']} style={{ maxHeight: '85%' }} className="rounded-t-3xl bg-lucrei-bg">
+        <SafeAreaView edges={['bottom']} style={{ maxHeight: '85%', ...webCapWidth() }} className="rounded-t-3xl bg-lucrei-bg">
           <View className="flex-row items-center justify-between border-b border-lucrei-border px-5 py-4">
             <Text className="text-base font-semibold text-lucrei-text">{title}</Text>
             <Pressable onPress={onClose} hitSlop={8}>

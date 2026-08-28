@@ -6,6 +6,7 @@ import { PasswordField } from '@/components/password-field';
 import { TextField } from '@/components/text-field';
 import { Colors } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
+import { webCapWidth } from '@/lib/responsive';
 
 type SignupScreenProps = {
   onNavigateToLogin: () => void;
@@ -39,6 +40,7 @@ export function SignupScreen({ onNavigateToLogin }: SignupScreenProps) {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
         <ScrollView
           contentContainerClassName="flex-grow justify-center px-6 py-10"
+          contentContainerStyle={webCapWidth()}
           keyboardShouldPersistTaps="handled">
           <View className="items-center">
             <Text className="text-3xl font-bold text-lucrei-text">Criar conta</Text>

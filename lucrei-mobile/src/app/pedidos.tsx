@@ -10,6 +10,7 @@ import { Colors } from '@/constants/theme';
 import { ApiError, getOrders, syncOrders, type Order, type OrderLineItem, type Period } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatBRL } from '@/lib/format';
+import { webCapWidth } from '@/lib/responsive';
 import { useSelectedShop } from '@/lib/selected-shop';
 
 type LoadState = 'loading' | 'no-shop' | 'ready' | 'error';
@@ -81,7 +82,7 @@ function OrderDetailModal({ order, onClose }: { order: Order | null; onClose: ()
       <View className="flex-1 justify-end bg-black/60">
         <SafeAreaView
           edges={['bottom']}
-          style={{ maxHeight: Dimensions.get('window').height * 0.85 }}
+          style={{ maxHeight: Dimensions.get('window').height * 0.85, ...webCapWidth() }}
           className="rounded-t-3xl bg-lucrei-bg">
           <View className="flex-row items-center justify-between border-b border-lucrei-border px-5 py-4">
             <View>
