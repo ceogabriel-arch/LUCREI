@@ -1,6 +1,9 @@
+import path from 'node:path';
+
 import 'dotenv/config';
 import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
+import staticFiles from '@fastify/static';
 import Fastify from 'fastify';
 
 import { authRoutes } from './modules/auth/routes';
@@ -29,6 +32,14 @@ async function main() {
   });
 
   app.get('/health', async () => ({ status: 'ok' }));
+
+  await app.register(staticFiles, {
+    root: path.join(__dirname, '..', 'public'),
+  });
+
+  for (const route of ['pedidos', 'produtos', 'relatorios', 'configuracoes', 'shopee-connected']) {
+    app.get(`/${route}`, (_req, reply) => reply.sendFile(`${route}.html`));
+  }
 
   await app.register(authRoutes);
   await app.register(shopRoutes);
