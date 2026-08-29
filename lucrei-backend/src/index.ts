@@ -33,6 +33,11 @@ async function main() {
 
   app.get('/health', async () => ({ status: 'ok' }));
 
+  app.get('/debug/egress-ip', async () => {
+    const res = await fetch('https://api.ipify.org?format=json');
+    return res.json();
+  });
+
   await app.register(staticFiles, {
     root: path.join(__dirname, '..', 'public'),
   });
