@@ -8,6 +8,7 @@ import Fastify from 'fastify';
 
 import { authRoutes } from './modules/auth/routes';
 import { orderRoutes } from './modules/orders/routes';
+import { plansRoutes } from './modules/plans/routes';
 import { productRoutes } from './modules/products/routes';
 import { shopRoutes } from './modules/shops/routes';
 import { summaryRoutes } from './modules/summary/routes';
@@ -47,6 +48,7 @@ async function main() {
   await app.register(productRoutes);
   await app.register(summaryRoutes);
   await app.register(orderRoutes);
+  await app.register(plansRoutes);
 
   const port = Number(process.env.PORT ?? 3000);
   await app.listen({ port, host: '0.0.0.0' });

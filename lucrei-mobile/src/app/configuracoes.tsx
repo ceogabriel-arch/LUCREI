@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -6,14 +7,83 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Screen } from '@/components/screen';
 import { ToastBanner, useToast } from '@/components/toast';
 import { Colors } from '@/constants/theme';
-import { ApiError, changePassword as apiChangePassword, disconnectShop, type Shop } from '@/lib/api';
+import { ApiError, changePassword as apiChangePassword, disconnectShop, type AuthUser, type Shop } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { webCapWidth } from '@/lib/responsive';
 import { useSelectedShop } from '@/lib/selected-shop';
 
 const dateFormatter = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
+const STATUS_LABEL: Record<AuthUser['subscriptionStatus'], string> = {
+  trialing: 'Em teste',
+  active: 'Ativo',
+  past_due: 'Pagamento pendente',
+  canceled: 'Cancelado',
+};
+
 type MenuKey = 'name' | 'password' | 'shops' | null;
+
+function PlanSection({ user }: { user: AuthUser }) {
+  const router = useRouter();
+  const { cancelPlan } = useAuth();
+  const [canceling, setCanceling] = useState(false);
+
+  const isCanceled = user.subscriptionStatus === 'canceled';
+
+  function confirmCancel() {
+    Alert.alert(
+      'Cancelar plano?',
+      'Você perde acesso aos recursos do plano ao final do período atual. Você pode assinar novamente quando quiser.',
+      [
+        { text: 'Voltar', style: 'cancel' },
+        { text: 'Cancelar plano', style: 'destructive', onPress: handleCancel },
+      ]
+    );
+  }
+
+  async function handleCancel() {
+    setCanceling(true);
+    const result = await cancelPlan();
+    setCanceling(false);
+    if (!result.ok) {
+      Alert.alert('Erro', result.message);
+    }
+  }
+
+  return (
+    <View className="mt-4 rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+      <View className="flex-row items-center justify-between">
+        <Text className="text-base font-semibold text-lucrei-text">
+          {user.plan ? `Plano ${user.plan.name}` : 'Nenhum plano ativo'}
+        </Text>
+        <View className="rounded-full px-2 py-0.5" style={{ backgroundColor: Colors.surfaceAlt }}>
+          <Text className="text-[10px] font-medium text-lucrei-textMuted">{STATUS_LABEL[user.subscriptionStatus]}</Text>
+        </View>
+      </View>
+
+      <View className="mt-3 flex-row gap-2.5">
+        <Pressable
+          onPress={() => router.push('/planos')}
+          className="flex-1 items-center rounded-xl bg-lucrei-gold py-2.5">
+          <Text className="text-sm font-semibold text-lucrei-bg">{user.plan ? 'Fazer upgrade' : 'Ver planos'}</Text>
+        </Pressable>
+        {user.plan && !isCanceled && (
+          <Pressable
+            onPress={confirmCancel}
+            disabled={canceling}
+            className="flex-1 items-center rounded-xl border border-lucrei-border py-2.5"
+            style={{ opacity: canceling ? 0.5 : 1 }}>
+            {canceling ? (
+              <ActivityIndicator size="small" color={Colors.danger} />
+            ) : (
+              <Text className="text-sm font-semibold text-lucrei-danger">Cancelar plano</Text>
+            )}
+          </Pressable>
+        )}
+      </View>
+    </View>
+  );
+}
 
 function SettingsModal({
   title,
@@ -273,6 +343,8 @@ export default function ConfiguracoesScreen() {
           <Text className="mt-0.5 text-sm text-lucrei-textMuted">{user.email}</Text>
         </View>
       )}
+
+      {user && <PlanSection user={user} />}
 
       <MenuRow icon="person-outline" label="Alterar nome" onPress={() => setOpenMenu('name')} />
       <MenuRow icon="lock-closed-outline" label="Alterar senha" onPress={() => setOpenMenu('password')} />

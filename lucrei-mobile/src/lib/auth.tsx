@@ -3,8 +3,10 @@ import { createContext, type PropsWithChildren, useContext, useEffect, useState 
 import {
   ApiError,
   type AuthUser,
+  cancelPlan as apiCancelPlan,
   login as apiLogin,
   me as apiMe,
+  selectPlan as apiSelectPlan,
   signup as apiSignup,
   updateName as apiUpdateName,
 } from '@/lib/api';
@@ -23,6 +25,8 @@ type AuthContextValue = {
   signup: (name: string, email: string, password: string) => Promise<AuthResult>;
   logout: () => Promise<void>;
   updateName: (name: string) => Promise<AuthResult>;
+  selectPlan: (key: string) => Promise<AuthResult>;
+  cancelPlan: () => Promise<AuthResult>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -85,8 +89,32 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
   }
 
+  async function selectPlan(key: string): Promise<AuthResult> {
+    if (state.status !== 'authenticated') return { ok: false, message: 'Não autenticado.' };
+    try {
+      const user = await apiSelectPlan(state.token, key);
+      setState({ status: 'authenticated', token: state.token, user });
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, message: err instanceof ApiError ? err.message : 'Algo deu errado.' };
+    }
+  }
+
+  async function cancelPlan(): Promise<AuthResult> {
+    if (state.status !== 'authenticated') return { ok: false, message: 'Não autenticado.' };
+    try {
+      const user = await apiCancelPlan(state.token);
+      setState({ status: 'authenticated', token: state.token, user });
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, message: err instanceof ApiError ? err.message : 'Algo deu errado.' };
+    }
+  }
+
   return (
-    <AuthContext.Provider value={{ state, login, signup, logout, updateName }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={{ state, login, signup, logout, updateName, selectPlan, cancelPlan }}>
+      {children}
+    </AuthContext.Provider>
   );
 }
 

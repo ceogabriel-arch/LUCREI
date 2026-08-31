@@ -2,7 +2,16 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export type Period = 'today' | '7d' | '30d' | 'all';
 
-export type AuthUser = { id: string; name: string; email: string; createdAt: string };
+export type SubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'canceled';
+export type UserPlan = { key: string; name: string };
+export type AuthUser = {
+  id: string;
+  name: string;
+  email: string;
+  createdAt: string;
+  subscriptionStatus: SubscriptionStatus;
+  plan: UserPlan | null;
+};
 export type AuthResponse = { token: string; user: AuthUser };
 
 export class ApiError extends Error {}
@@ -164,6 +173,35 @@ export type SyncResult = { ordersSeen: number; ordersSynced: number };
 
 export function syncOrders(token: string, shopId: string) {
   return request<SyncResult>(`/shops/${shopId}/sync`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: '{}',
+  });
+}
+
+export type Plan = {
+  key: string;
+  name: string;
+  salesPerYear: number;
+  priceUpfront: number;
+  priceInstallment: number;
+  installments: number;
+};
+
+export function getPlans() {
+  return request<{ plans: Plan[] }>('/plans');
+}
+
+export function selectPlan(token: string, key: string) {
+  return request<AuthUser>('/plans/select', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ key }),
+  });
+}
+
+export function cancelPlan(token: string) {
+  return request<AuthUser>('/plans/cancel', {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
     body: '{}',

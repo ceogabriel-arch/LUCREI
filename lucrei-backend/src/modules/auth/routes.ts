@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import type { FastifyInstance } from 'fastify';
 
 import { prisma } from '../../lib/prisma';
+import { serializeUser, userWithPlan } from '../plans/serialize-user';
 
 const credentialsSchema = {
   type: 'object',
@@ -57,13 +58,13 @@ export async function authRoutes(app: FastifyInstance) {
       }
 
       const passwordHash = await bcrypt.hash(password, 10);
-      const user = await prisma.user.create({ data: { name, email, passwordHash } });
+      const user = await prisma.user.create({
+        data: { name, email, passwordHash },
+        include: userWithPlan,
+      });
 
       const token = app.jwt.sign({ sub: user.id });
-      return reply.status(201).send({
-        token,
-        user: { id: user.id, name: user.name, email: user.email, createdAt: user.createdAt },
-      });
+      return reply.status(201).send({ token, user: serializeUser(user) });
     }
   );
 
@@ -73,7 +74,7 @@ export async function authRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const { email, password } = request.body;
 
-      const user = await prisma.user.findUnique({ where: { email } });
+      const user = await prisma.user.findUnique({ where: { email }, include: userWithPlan });
       if (!user) {
         return reply.status(401).send({ message: 'E-mail ou senha inválidos.' });
       }
@@ -84,19 +85,16 @@ export async function authRoutes(app: FastifyInstance) {
       }
 
       const token = app.jwt.sign({ sub: user.id });
-      return reply.send({
-        token,
-        user: { id: user.id, name: user.name, email: user.email, createdAt: user.createdAt },
-      });
+      return reply.send({ token, user: serializeUser(user) });
     }
   );
 
   app.get('/auth/me', { onRequest: [app.authenticate] }, async (request, reply) => {
-    const user = await prisma.user.findUnique({ where: { id: request.user.sub } });
+    const user = await prisma.user.findUnique({ where: { id: request.user.sub }, include: userWithPlan });
     if (!user) {
       return reply.status(404).send({ message: 'Usuário não encontrado.' });
     }
-    return reply.send({ id: user.id, name: user.name, email: user.email, createdAt: user.createdAt });
+    return reply.send(serializeUser(user));
   });
 
   app.patch<{ Body: UpdateNameBody }>(
@@ -106,8 +104,9 @@ export async function authRoutes(app: FastifyInstance) {
       const user = await prisma.user.update({
         where: { id: request.user.sub },
         data: { name: request.body.name },
+        include: userWithPlan,
       });
-      return reply.send({ id: user.id, name: user.name, email: user.email, createdAt: user.createdAt });
+      return reply.send(serializeUser(user));
     }
   );
 
