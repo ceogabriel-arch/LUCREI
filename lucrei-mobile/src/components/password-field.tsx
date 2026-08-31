@@ -9,21 +9,23 @@ type PasswordFieldProps = {
   value: string;
   onChangeText: (value: string) => void;
   autoComplete?: 'password' | 'password-new';
+  placeholder?: string;
 };
 
-export function PasswordField({ label, value, onChangeText, autoComplete }: PasswordFieldProps) {
+export function PasswordField({ label, value, onChangeText, autoComplete, placeholder }: PasswordFieldProps) {
   const [visible, setVisible] = useState(false);
 
   return (
     <View className="mb-4">
       <Text className="mb-1.5 text-sm text-lucrei-textMuted">{label}</Text>
-      <View className="flex-row items-center rounded-xl border border-lucrei-border bg-lucrei-surface px-4">
+      <View className="flex-row items-center overflow-hidden rounded-xl border border-lucrei-border bg-lucrei-surface px-4">
         <TextInput
           value={value}
           onChangeText={onChangeText}
           secureTextEntry={!visible}
           autoCapitalize="none"
           autoComplete={autoComplete}
+          placeholder={placeholder}
           placeholderTextColor={Colors.textMuted}
           className="flex-1 py-3 text-base text-lucrei-text"
         />

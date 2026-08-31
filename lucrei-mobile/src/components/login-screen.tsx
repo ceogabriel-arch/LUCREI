@@ -91,7 +91,13 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
                 value={email}
                 onChangeText={setEmail}
               />
-              <PasswordField label="Senha" value={password} onChangeText={setPassword} autoComplete="password" />
+              <PasswordField
+                label="Senha"
+                placeholder="Sua senha"
+                value={password}
+                onChangeText={setPassword}
+                autoComplete="password"
+              />
 
               <Pressable className="mb-2 self-end" hitSlop={8}>
                 <Text className="text-xs font-medium text-lucrei-gold">Esqueci minha senha</Text>

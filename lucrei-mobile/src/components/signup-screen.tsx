@@ -58,9 +58,16 @@ export function SignupScreen({ onNavigateToLogin }: SignupScreenProps) {
               value={email}
               onChangeText={setEmail}
             />
-            <PasswordField label="Senha" value={password} onChangeText={setPassword} autoComplete="password-new" />
+            <PasswordField
+              label="Senha"
+              placeholder="Crie uma senha"
+              value={password}
+              onChangeText={setPassword}
+              autoComplete="password-new"
+            />
             <PasswordField
               label="Confirmar senha"
+              placeholder="Repita a senha"
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               autoComplete="password-new"
