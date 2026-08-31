@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/prisma';
 import { getValidAccessToken } from '../../lib/shopee-token';
 import { getEscrowDetail, getOrderDetail, getOrderList } from '../../shopee-client';
+import { allocateLineItem, computeLineProfit, computeOrderTotals } from './order-math';
 
 const ELIGIBLE_STATUSES = new Set(['COMPLETED']);
 
@@ -15,12 +16,13 @@ async function processOrder(
   const escrow = await getEscrowDetail(accessToken, shopeeShopId, orderSn);
   const income = escrow.order_income;
 
-  const totalItemValue = income.items.reduce(
-    (sum, li) => sum + li.discounted_price * li.quantity_purchased,
-    0
+  const totals = computeOrderTotals(
+    income.items,
+    income.actual_shipping_fee,
+    income.buyer_paid_shipping_fee,
+    income.commission_fee,
+    income.service_fee
   );
-  const netShippingCost = Math.max(income.actual_shipping_fee - income.buyer_paid_shipping_fee, 0);
-  const totalShopeeFee = income.commission_fee + income.service_fee;
 
   const order = await prisma.order.upsert({
     where: { shopeeOrderSn: orderSn },
@@ -44,20 +46,14 @@ async function processOrder(
   await prisma.orderLineItem.deleteMany({ where: { orderId: order.id } });
 
   for (const li of income.items) {
-    const lineValue = li.discounted_price * li.quantity_purchased;
-    const share = totalItemValue > 0 ? lineValue / totalItemValue : 0;
+    const { lineValue, shippingFeeAllocated, shopeeFeeAllocated } = allocateLineItem(li, totals);
 
     const product = await prisma.product.findFirst({
       where: { shopId: shopDbId, shopeeItemId: String(li.item_id) },
     });
 
-    const shippingFeeAllocated = netShippingCost * share;
-    const shopeeFeeAllocated = totalShopeeFee * share;
     const productCostSnapshot = product ? Number(product.costPrice) * li.quantity_purchased : null;
-    const profit =
-      productCostSnapshot !== null
-        ? lineValue - shippingFeeAllocated - shopeeFeeAllocated - productCostSnapshot
-        : null;
+    const profit = computeLineProfit(lineValue, shippingFeeAllocated, shopeeFeeAllocated, productCostSnapshot);
 
     await prisma.orderLineItem.create({
       data: {
