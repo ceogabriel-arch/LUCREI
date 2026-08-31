@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PasswordField } from '@/components/password-field';
 import { TextField } from '@/components/text-field';
 import { Colors } from '@/constants/theme';
+import { API_URL } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { webCapWidth } from '@/lib/responsive';
 
@@ -77,6 +78,18 @@ export function SignupScreen({ onNavigateToLogin }: SignupScreenProps) {
             ) : null}
 
             {error ? <Text className="mb-3 text-sm text-lucrei-danger">{error}</Text> : null}
+
+            <Text className="mb-4 text-xs leading-5 text-lucrei-textMuted">
+              Ao criar sua conta, você concorda com nossos{' '}
+              <Text className="text-lucrei-gold" onPress={() => Linking.openURL(`${API_URL}/termos`)}>
+                Termos de Uso
+              </Text>{' '}
+              e nossa{' '}
+              <Text className="text-lucrei-gold" onPress={() => Linking.openURL(`${API_URL}/privacidade`)}>
+                Política de Privacidade
+              </Text>
+              .
+            </Text>
 
             <Pressable
               onPress={handleSubmit}

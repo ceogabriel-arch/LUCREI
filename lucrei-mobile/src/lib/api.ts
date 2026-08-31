@@ -1,4 +1,4 @@
-const API_URL = process.env.EXPO_PUBLIC_API_URL;
+export const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export type Period = 'today' | '7d' | '30d' | 'all';
 
