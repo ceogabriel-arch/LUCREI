@@ -160,16 +160,16 @@ model CostImportBatch {
 }
 
 model Plan {
-  id               String   @id @default(cuid())
-  key              String   @unique
-  name             String
-  salesPerYear     Int
-  priceUpfront     Decimal  @db.Decimal(12, 2)
-  priceInstallment Decimal  @db.Decimal(12, 2)
-  installments     Int      @default(12)
-  sortOrder        Int
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                String   @id @default(cuid())
+  key               String   @unique
+  name              String
+  salesLimit        Int?
+  integrationsLimit Int?
+  priceOriginal     Decimal? @db.Decimal(12, 2)
+  priceCurrent      Decimal? @db.Decimal(12, 2)
+  sortOrder         Int
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   users User[]
 }

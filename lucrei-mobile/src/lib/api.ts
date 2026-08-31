@@ -182,10 +182,10 @@ export function syncOrders(token: string, shopId: string) {
 export type Plan = {
   key: string;
   name: string;
-  salesPerYear: number;
-  priceUpfront: number;
-  priceInstallment: number;
-  installments: number;
+  salesLimit: number | null;
+  integrationsLimit: number | null;
+  priceOriginal: number | null;
+  priceCurrent: number | null;
 };
 
 export function getPlans() {

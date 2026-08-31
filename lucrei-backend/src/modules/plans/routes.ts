@@ -20,10 +20,10 @@ export async function plansRoutes(app: FastifyInstance) {
       plans: plans.map((plan) => ({
         key: plan.key,
         name: plan.name,
-        salesPerYear: plan.salesPerYear,
-        priceUpfront: Number(plan.priceUpfront),
-        priceInstallment: Number(plan.priceInstallment),
-        installments: plan.installments,
+        salesLimit: plan.salesLimit,
+        integrationsLimit: plan.integrationsLimit,
+        priceOriginal: plan.priceOriginal !== null ? Number(plan.priceOriginal) : null,
+        priceCurrent: plan.priceCurrent !== null ? Number(plan.priceCurrent) : null,
       })),
     };
   });
@@ -35,6 +35,9 @@ export async function plansRoutes(app: FastifyInstance) {
       const plan = await prisma.plan.findUnique({ where: { key: request.body.key } });
       if (!plan) {
         return reply.status(404).send({ message: 'Plano não encontrado.' });
+      }
+      if (plan.priceCurrent === null) {
+        return reply.status(400).send({ message: 'Este plano é sob consulta. Fale com nosso time de vendas.' });
       }
 
       const user = await prisma.user.update({

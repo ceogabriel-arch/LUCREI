@@ -9,25 +9,39 @@ import { getPlans, type Plan } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatBRL } from '@/lib/format';
 
-const salesFormatter = new Intl.NumberFormat('pt-BR');
-
 type LoadState = 'loading' | 'ready' | 'error';
+
+function formatSalesLimit(limit: number | null) {
+  return limit === null ? 'Sob consulta' : `${limit.toLocaleString('pt-BR')}/mês`;
+}
+
+function formatIntegrationsLimit(limit: number | null) {
+  if (limit === null) return 'Ilimitadas';
+  return limit === 1 ? '1 integração' : `${limit} integrações`;
+}
 
 function PlanCard({ plan }: { plan: Plan }) {
   const { state, selectPlan } = useAuth();
   const [saving, setSaving] = useState(false);
   const user = state.status === 'authenticated' ? state.user : null;
+  const isCustomPricing = plan.priceCurrent === null;
 
   const isCurrent = user?.plan?.key === plan.key && user.subscriptionStatus !== 'canceled';
-  const label = isCurrent
-    ? 'Plano atual'
-    : user?.plan?.key === plan.key
-      ? 'Reativar plano'
-      : user?.plan
-        ? 'Fazer upgrade'
-        : 'Testar 15 dias grátis';
+  const label = isCustomPricing
+    ? 'Falar com vendas'
+    : isCurrent
+      ? 'Plano atual'
+      : user?.plan?.key === plan.key
+        ? 'Reativar plano'
+        : user?.plan
+          ? 'Fazer upgrade'
+          : 'Testar 15 dias grátis';
 
   async function handlePress() {
+    if (isCustomPricing) {
+      Alert.alert('Plano Empresarial', 'Entre em contato com nosso time para um plano sob medida para o seu volume.');
+      return;
+    }
     setSaving(true);
     const result = await selectPlan(plan.key);
     setSaving(false);
@@ -42,19 +56,28 @@ function PlanCard({ plan }: { plan: Plan }) {
     <View className="mt-3 rounded-2xl border border-lucrei-border bg-lucrei-surface p-5">
       <Text className="text-xs font-semibold uppercase tracking-wide text-lucrei-gold">Plano {plan.name}</Text>
 
-      <Text className="mt-2 text-2xl font-bold text-lucrei-text">
-        {plan.installments}x de {formatBRL(plan.priceInstallment)}
-      </Text>
-      <Text className="mt-0.5 text-sm text-lucrei-textMuted">ou {formatBRL(plan.priceUpfront)} à vista</Text>
+      {isCustomPricing ? (
+        <Text className="mt-2 text-2xl font-bold text-lucrei-text">Sob consulta</Text>
+      ) : (
+        <View className="mt-2 flex-row items-baseline gap-2">
+          {plan.priceOriginal !== null && (
+            <Text className="text-sm text-lucrei-textMuted line-through">{formatBRL(plan.priceOriginal)}</Text>
+          )}
+          <Text className="text-2xl font-bold text-lucrei-text">{formatBRL(plan.priceCurrent!)}</Text>
+          <Text className="text-sm text-lucrei-textMuted">/mês</Text>
+        </View>
+      )}
 
       <View className="mt-4 gap-2">
         <View className="flex-row items-center gap-2">
           <Ionicons name="checkmark-circle" size={16} color={Colors.gold} />
-          <Text className="text-sm text-lucrei-text">Vendas/ano – {salesFormatter.format(plan.salesPerYear)}</Text>
+          <Text className="text-sm text-lucrei-text">Vendas – {formatSalesLimit(plan.salesLimit)}</Text>
         </View>
         <View className="flex-row items-center gap-2">
           <Ionicons name="checkmark-circle" size={16} color={Colors.gold} />
-          <Text className="text-sm text-lucrei-text">Integrações – Ilimitadas</Text>
+          <Text className="text-sm text-lucrei-text">
+            Integrações – {formatIntegrationsLimit(plan.integrationsLimit)}
+          </Text>
         </View>
       </View>
 
@@ -70,9 +93,11 @@ function PlanCard({ plan }: { plan: Plan }) {
         )}
       </Pressable>
 
-      <Text className="mt-3 text-[11px] leading-4 text-lucrei-textMuted">
-        *essa cobrança se renovará um ano após a data da compra.
-      </Text>
+      {!isCustomPricing && (
+        <Text className="mt-3 text-[11px] leading-4 text-lucrei-textMuted">
+          *essa cobrança se repete todo mês até você cancelar.
+        </Text>
+      )}
     </View>
   );
 }
