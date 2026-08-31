@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Redefinir senha — Lucrei</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #0A0A0B;
+    color: #FFFFFF;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .card { width: 100%; max-width: 380px; padding: 32px 28px; margin: 24px; }
+  h1 { font-size: 22px; font-weight: 700; margin: 0 0 8px; }
+  p { color: #9B9BA1; font-size: 14px; line-height: 1.5; margin: 0 0 20px; }
+  input {
+    width: 100%;
+    background: #161617;
+    border: 1px solid #2A2A2D;
+    border-radius: 12px;
+    color: #FFFFFF;
+    font-size: 15px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    outline: none;
+  }
+  input:focus { border-color: #F5C518; }
+  button {
+    width: 100%;
+    background: #F5C518;
+    color: #0A0A0B;
+    border: none;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    padding: 13px;
+    margin-top: 6px;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.6; cursor: default; }
+  #message { color: #F0554E; font-size: 13px; margin-top: 12px; margin-bottom: 0; min-height: 16px; }
+  #success { color: #3DD68C; font-size: 15px; line-height: 1.5; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div id="form">
+      <h1>Redefinir senha</h1>
+      <p>Escolha uma nova senha para a sua conta Lucrei.</p>
+      <input id="password" type="password" placeholder="Nova senha (mín. 6 caracteres)" />
+      <input id="confirm" type="password" placeholder="Confirmar nova senha" />
+      <button id="submit">Salvar nova senha</button>
+      <p id="message"></p>
+    </div>
+  </div>
+  <script>
+    var params = new URLSearchParams(window.location.search);
+    var token = params.get('token');
+    var btn = document.getElementById('submit');
+    var msg = document.getElementById('message');
+
+    btn.addEventListener('click', function () {
+      var password = document.getElementById('password').value;
+      var confirm = document.getElementById('confirm').value;
+
+      if (!token) { msg.textContent = 'Link inválido. Solicite uma nova redefinição pelo app.'; return; }
+      if (password.length < 6) { msg.textContent = 'A senha precisa ter pelo menos 6 caracteres.'; return; }
+      if (password !== confirm) { msg.textContent = 'As senhas não coincidem.'; return; }
+
+      msg.textContent = '';
+      btn.disabled = true;
+
+      fetch('/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: token, newPassword: password }),
+      })
+        .then(function (res) {
+          return res.json().then(function (body) {
+            if (!res.ok) throw new Error(body.message || 'Não foi possível redefinir a senha.');
+          });
+        })
+        .then(function () {
+          document.getElementById('form').innerHTML =
+            '<h1>Senha alterada</h1><p id="success">Pronto! Volte ao app do Lucrei e entre com a sua nova senha.</p>';
+        })
+        .catch(function (err) {
+          msg.textContent = err.message;
+          btn.disabled = false;
+        });
+    });
+  </script>
+</body>
+</html>

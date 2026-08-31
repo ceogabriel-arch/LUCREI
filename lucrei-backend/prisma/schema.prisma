@@ -39,20 +39,23 @@ enum ImportBatchStatus {
 }
 
 model User {
-  id                 String              @id @default(cuid())
-  email              String              @unique
-  passwordHash       String
-  name               String?
-  subscriptionStatus SubscriptionStatus  @default(trialing)
-  planId             String?
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
+  id                           String              @id @default(cuid())
+  email                        String              @unique
+  passwordHash                 String
+  name                         String?
+  subscriptionStatus           SubscriptionStatus  @default(trialing)
+  planId                       String?
+  passwordResetTokenHash       String?
+  passwordResetTokenExpiresAt  DateTime?
+  createdAt                    DateTime            @default(now())
+  updatedAt                    DateTime            @updatedAt
 
   plan          Plan?           @relation(fields: [planId], references: [id])
   shops         Shop[]
   subscriptions Subscription[]
 
   @@index([planId])
+  @@index([passwordResetTokenHash])
 }
 
 model Shop {

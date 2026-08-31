@@ -45,6 +45,13 @@ export function signup(name: string, email: string, password: string) {
   });
 }
 
+export function requestPasswordReset(email: string) {
+  return request<{ ok: true }>('/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+}
+
 export function login(email: string, password: string) {
   return request<AuthResponse>('/auth/login', {
     method: 'POST',

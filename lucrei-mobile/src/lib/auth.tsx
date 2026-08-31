@@ -21,7 +21,7 @@ type AuthResult = { ok: true } | { ok: false; message: string };
 
 type AuthContextValue = {
   state: AuthState;
-  login: (email: string, password: string) => Promise<AuthResult>;
+  login: (email: string, password: string, rememberMe?: boolean) => Promise<AuthResult>;
   signup: (name: string, email: string, password: string) => Promise<AuthResult>;
   logout: () => Promise<void>;
   updateName: (name: string) => Promise<AuthResult>;
@@ -51,10 +51,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
     })();
   }, []);
 
-  async function login(email: string, password: string): Promise<AuthResult> {
+  async function login(email: string, password: string, rememberMe = true): Promise<AuthResult> {
     try {
       const { token, user } = await apiLogin(email, password);
-      await setToken(token);
+      if (rememberMe) {
+        await setToken(token);
+      }
       setState({ status: 'authenticated', token, user });
       return { ok: true };
     } catch (err) {
