@@ -41,7 +41,7 @@ async function main() {
     root: path.join(__dirname, '..', 'public'),
   });
 
-  for (const route of ['pedidos', 'produtos', 'relatorios', 'configuracoes', 'shopee-connected']) {
+  for (const route of ['pedidos', 'produtos', 'relatorios', 'configuracoes', 'shopee-connected', 'planos']) {
     app.get(`/${route}`, (_req, reply) => reply.sendFile(`${route}.html`));
   }
 

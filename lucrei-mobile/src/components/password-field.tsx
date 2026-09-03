@@ -1,8 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, Text, TextInput, View } from 'react-native';
 
 import { Colors } from '@/constants/theme';
+
+// No nativo, overflow-hidden evita o input vazar pra fora do cantos
+// arredondados. Na web, essa mesma propriedade some com o blur de fundo
+// (BlurView) e cria uma borda clara indesejada — por isso só entra no nativo.
+const containerClassName = Platform.select({
+  web: 'flex-row items-center rounded-xl border border-lucrei-border bg-lucrei-surface px-4',
+  default: 'flex-row items-center overflow-hidden rounded-xl border border-lucrei-border bg-lucrei-surface px-4',
+});
 
 type PasswordFieldProps = {
   label: string;
@@ -18,7 +26,7 @@ export function PasswordField({ label, value, onChangeText, autoComplete, placeh
   return (
     <View className="mb-4">
       <Text className="mb-1.5 text-sm text-lucrei-textMuted">{label}</Text>
-      <View className="flex-row items-center overflow-hidden rounded-xl border border-lucrei-border bg-lucrei-surface px-4">
+      <View className={containerClassName}>
         <TextInput
           value={value}
           onChangeText={onChangeText}
