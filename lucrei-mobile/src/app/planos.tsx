@@ -2,10 +2,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
 
 import { Screen } from '@/components/screen';
 import { Colors } from '@/constants/theme';
-import { getPlans, type Plan } from '@/lib/api';
+import { getCheckoutUrl, getPlans, type Plan } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatBRL } from '@/lib/format';
 
@@ -46,11 +47,26 @@ function PlanCard({ plan }: { plan: Plan }) {
     const result = await selectPlan(plan.key);
     setSaving(false);
     if (result.ok) {
-      Alert.alert('Plano atualizado', `Você agora está no plano ${plan.name}.`);
+      Alert.alert('Plano atualizado', `Você agora está no plano ${plan.name}. Seu teste grátis de 15 dias começou.`);
+      if (result.checkoutUrl) {
+        WebBrowser.openBrowserAsync(result.checkoutUrl);
+      }
     } else {
       Alert.alert('Não foi possível assinar', result.message);
     }
   }
+
+  async function handleViewInvoice() {
+    if (state.status !== 'authenticated') return;
+    const { checkoutUrl } = await getCheckoutUrl(state.token);
+    if (checkoutUrl) {
+      WebBrowser.openBrowserAsync(checkoutUrl);
+    } else {
+      Alert.alert('Nenhuma fatura', 'Não encontramos uma fatura em aberto para esse plano.');
+    }
+  }
+
+  const showInvoiceLink = isCurrent && (user?.subscriptionStatus === 'trialing' || user?.subscriptionStatus === 'past_due');
 
   return (
     <View className="mt-3 rounded-2xl border border-lucrei-border bg-lucrei-surface p-5">
@@ -97,6 +113,14 @@ function PlanCard({ plan }: { plan: Plan }) {
         <Text className="mt-3 text-[11px] leading-4 text-lucrei-textMuted">
           *essa cobrança se repete todo mês até você cancelar.
         </Text>
+      )}
+
+      {showInvoiceLink && (
+        <Pressable onPress={handleViewInvoice} className="mt-3 items-center">
+          <Text className="text-xs font-medium text-lucrei-gold">
+            {user?.subscriptionStatus === 'past_due' ? 'Pagamento pendente — ver fatura' : 'Ver fatura / configurar pagamento'}
+          </Text>
+        </Pressable>
       )}
     </View>
   );

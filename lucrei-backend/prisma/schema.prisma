@@ -19,6 +19,7 @@ enum SubscriptionProvider {
   stripe
   apple_iap
   google_iap
+  mercado_pago
 }
 
 enum ShopStatus {
@@ -45,6 +46,8 @@ model User {
   name                         String?
   subscriptionStatus           SubscriptionStatus  @default(trialing)
   planId                       String?
+  document                     String?
+  trialEndsAt                  DateTime?
   passwordResetTokenHash       String?
   passwordResetTokenExpiresAt  DateTime?
   createdAt                    DateTime            @default(now())
@@ -185,6 +188,7 @@ model Subscription {
   providerSubscriptionId String?
   status                 SubscriptionStatus   @default(trialing)
   currentPeriodEnd       DateTime?
+  lastInvoiceUrl         String?
   createdAt              DateTime             @default(now())
   updatedAt              DateTime             @updatedAt
 

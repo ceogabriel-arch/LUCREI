@@ -18,6 +18,7 @@ type AuthState =
   | { status: 'authenticated'; token: string; user: AuthUser };
 
 type AuthResult = { ok: true } | { ok: false; message: string };
+type SelectPlanResult = { ok: true; checkoutUrl: string | null } | { ok: false; message: string };
 
 type AuthContextValue = {
   state: AuthState;
@@ -25,7 +26,7 @@ type AuthContextValue = {
   signup: (name: string, email: string, password: string) => Promise<AuthResult>;
   logout: () => Promise<void>;
   updateName: (name: string) => Promise<AuthResult>;
-  selectPlan: (key: string) => Promise<AuthResult>;
+  selectPlan: (key: string) => Promise<SelectPlanResult>;
   cancelPlan: () => Promise<AuthResult>;
 };
 
@@ -91,12 +92,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
   }
 
-  async function selectPlan(key: string): Promise<AuthResult> {
+  async function selectPlan(key: string): Promise<SelectPlanResult> {
     if (state.status !== 'authenticated') return { ok: false, message: 'Não autenticado.' };
     try {
-      const user = await apiSelectPlan(state.token, key);
+      const { checkoutUrl, ...user } = await apiSelectPlan(state.token, key);
       setState({ status: 'authenticated', token: state.token, user });
-      return { ok: true };
+      return { ok: true, checkoutUrl };
     } catch (err) {
       return { ok: false, message: err instanceof ApiError ? err.message : 'Algo deu errado.' };
     }

@@ -10,6 +10,7 @@ export type AuthUser = {
   email: string;
   createdAt: string;
   subscriptionStatus: SubscriptionStatus;
+  trialEndsAt: string | null;
   plan: UserPlan | null;
 };
 export type AuthResponse = { token: string; user: AuthUser };
@@ -200,10 +201,16 @@ export function getPlans() {
 }
 
 export function selectPlan(token: string, key: string) {
-  return request<AuthUser>('/plans/select', {
+  return request<AuthUser & { checkoutUrl: string | null }>('/plans/select', {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify({ key }),
+  });
+}
+
+export function getCheckoutUrl(token: string) {
+  return request<{ checkoutUrl: string | null }>('/plans/checkout-url', {
+    headers: { Authorization: `Bearer ${token}` },
   });
 }
 

@@ -13,6 +13,8 @@ function buildUser(overrides: Partial<UserWithPlan> = {}): UserWithPlan {
     name: 'Ana',
     subscriptionStatus: 'trialing',
     planId: null,
+    document: null,
+    trialEndsAt: null,
     passwordResetTokenHash: null,
     passwordResetTokenExpiresAt: null,
     createdAt: new Date('2026-01-01'),
