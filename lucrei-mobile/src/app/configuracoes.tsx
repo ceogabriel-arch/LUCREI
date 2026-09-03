@@ -61,6 +61,12 @@ function PlanSection({ user }: { user: AuthUser }) {
         </View>
       </View>
 
+      {user.subscriptionStatus === 'trialing' && user.trialEndsAt && (
+        <Text className="mt-1 text-xs text-lucrei-textMuted">
+          Teste grátis até {dateFormatter.format(new Date(user.trialEndsAt))}
+        </Text>
+      )}
+
       <View className="mt-3 flex-row gap-2.5">
         <Pressable
           onPress={() => router.push('/planos')}

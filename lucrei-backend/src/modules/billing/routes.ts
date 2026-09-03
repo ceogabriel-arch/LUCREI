@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 
 import { prisma } from '../../lib/prisma';
+import { mapMercadoPagoStatus } from '../../lib/subscription-sync';
 import { getPreapproval } from '../../mercadopago-client';
 
 type WebhookBody = {
@@ -23,13 +24,6 @@ function verifySignature(xSignature: string | undefined, xRequestId: string | un
   const manifest = `id:${dataId.toLowerCase()};request-id:${xRequestId};ts:${parts.ts};`;
   const computed = crypto.createHmac('sha256', secret).update(manifest).digest('hex');
   return computed === parts.v1;
-}
-
-function mapStatus(mpStatus: string): 'active' | 'past_due' | 'canceled' | null {
-  if (mpStatus === 'authorized') return 'active';
-  if (mpStatus === 'paused') return 'past_due';
-  if (mpStatus === 'cancelled') return 'canceled';
-  return null;
 }
 
 export async function billingRoutes(app: FastifyInstance) {
@@ -65,7 +59,7 @@ export async function billingRoutes(app: FastifyInstance) {
 
       try {
         const preapproval = await getPreapproval(dataId);
-        const status = mapStatus(preapproval.status);
+        const status = mapMercadoPagoStatus(preapproval.status);
         if (status) {
           await prisma.subscription.update({ where: { id: subscription.id }, data: { status } });
           await prisma.user.update({ where: { id: subscription.userId }, data: { subscriptionStatus: status } });

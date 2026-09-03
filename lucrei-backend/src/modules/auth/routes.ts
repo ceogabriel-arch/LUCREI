@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import type { FastifyInstance } from 'fastify';
 
 import { prisma } from '../../lib/prisma';
+import { reconcileMercadoPagoSubscription } from '../../lib/subscription-sync';
 import { serializeUser, userWithPlan } from '../plans/serialize-user';
 
 const credentialsSchema = {
@@ -90,6 +91,7 @@ export async function authRoutes(app: FastifyInstance) {
   );
 
   app.get('/auth/me', { onRequest: [app.authenticate] }, async (request, reply) => {
+    await reconcileMercadoPagoSubscription(request.user.sub);
     const user = await prisma.user.findUnique({ where: { id: request.user.sub }, include: userWithPlan });
     if (!user) {
       return reply.status(404).send({ message: 'Usuário não encontrado.' });
