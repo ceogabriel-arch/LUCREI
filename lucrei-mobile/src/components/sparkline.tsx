@@ -1,6 +1,6 @@
 import Svg, { Circle, Path } from 'react-native-svg';
 
-import { Colors } from '@/constants/theme';
+import { useColors } from '@/lib/theme';
 
 type SparklineProps = {
   data: number[];
@@ -23,6 +23,7 @@ function buildSmoothPath(points: { x: number; y: number }[]) {
 }
 
 export function Sparkline({ data, width = 296, height = 56 }: SparklineProps) {
+  const Colors = useColors();
   if (data.length < 2) return null;
 
   const min = Math.min(...data);

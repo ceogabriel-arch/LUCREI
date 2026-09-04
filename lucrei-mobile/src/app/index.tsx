@@ -11,12 +11,15 @@ import { Screen } from '@/components/screen';
 import { ShopPicker } from '@/components/shop-picker';
 import { Sparkline } from '@/components/sparkline';
 import { StatTile } from '@/components/stat-tile';
-import { Colors } from '@/constants/theme';
 import { ApiError, getSummary, type Summary } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatBRL } from '@/lib/format';
 import { useSelectedShop } from '@/lib/selected-shop';
 import { connectShopeeStore } from '@/lib/shopee';
+import { useAppTheme } from '@/lib/theme';
+
+const LOGO_LIGHT = require('../../assets/images/lucrei-logo-light.png');
+const LOGO_DARK = require('../../assets/images/lucrei-logo.png');
 
 type BackendStatus = 'checking' | 'online' | 'offline';
 
@@ -56,6 +59,7 @@ const MOCK_KPIS = [
 
 export default function InicioScreen() {
   const { state } = useAuth();
+  const { scheme, colors: Colors } = useAppTheme();
   const { shops, selectedShop, loaded: shopsLoaded, refresh: refreshShops } = useSelectedShop();
   const [backendStatus, setBackendStatus] = useState<BackendStatus>('checking');
   const [period, setPeriod] = useState<(typeof PERIODS)[number]>('30 dias');
@@ -143,7 +147,7 @@ export default function InicioScreen() {
         <View className="flex-row items-center justify-between">
           <View>
             <Image
-              source={require('../../assets/images/lucrei-logo.png')}
+              source={scheme === 'dark' ? LOGO_DARK : LOGO_LIGHT}
               style={{ width: LOGO_WIDTH, height: LOGO_HEIGHT }}
               contentFit="contain"
             />
@@ -173,7 +177,7 @@ export default function InicioScreen() {
                 style={{ backgroundColor: active ? Colors.gold : 'transparent' }}>
                 <Text
                   className="text-xs font-medium"
-                  style={{ color: active ? Colors.bg : Colors.textMuted }}>
+                  style={{ color: active ? Colors.onGold : Colors.textMuted }}>
                   {p}
                 </Text>
               </Pressable>
@@ -247,11 +251,11 @@ export default function InicioScreen() {
           className="mt-8 flex-row items-center justify-center gap-2 rounded-2xl bg-lucrei-gold py-4"
           style={{ opacity: connecting ? 0.7 : 1 }}>
           {connecting ? (
-            <ActivityIndicator color={Colors.bg} />
+            <ActivityIndicator color={Colors.onGold} />
           ) : (
-            <Ionicons name="storefront-outline" size={18} color={Colors.bg} />
+            <Ionicons name="storefront-outline" size={18} color={Colors.onGold} />
           )}
-          <Text className="text-base font-semibold text-lucrei-bg">
+          <Text className="text-base font-semibold text-lucrei-onGold">
             {connecting ? 'Conectando...' : hasShop ? 'Conectar outra loja' : 'Conectar loja Shopee'}
           </Text>
         </Pressable>

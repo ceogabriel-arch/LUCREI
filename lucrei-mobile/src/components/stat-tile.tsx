@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Text, View } from 'react-native';
 
-import { Colors } from '@/constants/theme';
+import { useColors } from '@/lib/theme';
 
 type StatTileProps = {
   label: string;
@@ -19,6 +19,7 @@ export function StatTile({
   deltaDirection = 'up',
   positiveIsGood = true,
 }: StatTileProps) {
+  const Colors = useColors();
   const isGood = (deltaDirection === 'up') === positiveIsGood;
   const deltaColor = isGood ? Colors.success : Colors.danger;
 

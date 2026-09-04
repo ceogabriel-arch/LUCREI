@@ -4,11 +4,12 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-nati
 
 import { DailyProfitChart } from '@/components/daily-profit-chart';
 import { Screen } from '@/components/screen';
-import { Colors } from '@/constants/theme';
+import type { ThemeColors } from '@/constants/theme';
 import { getShopeeProducts, getSummary, type Period, type ShopeeProduct, type Summary } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatBRL } from '@/lib/format';
 import { useSelectedShop } from '@/lib/selected-shop';
+import { useColors } from '@/lib/theme';
 
 type LoadState = 'loading' | 'no-shop' | 'ready' | 'error';
 
@@ -38,12 +39,15 @@ function CostBar({ label, value, total, color }: { label: string; value: number;
 
 type AbcClass = 'A' | 'B' | 'C' | 'Z';
 
-const ABC_COLOR: Record<AbcClass, string> = {
-  A: Colors.gold,
-  B: Colors.goldDim,
-  C: Colors.textMuted,
-  Z: Colors.danger,
-};
+function getAbcBackground(cls: AbcClass, colors: ThemeColors) {
+  return { A: colors.gold, B: colors.goldDim, C: colors.textMuted, Z: colors.danger }[cls];
+}
+
+// A e B caem numa superfície dourada (tinta escura fixa); C e Z são cinza/vermelho
+// médios nos dois temas, onde branco lê melhor que a tinta de texto normal.
+function getAbcInk(cls: AbcClass, colors: ThemeColors) {
+  return cls === 'A' || cls === 'B' ? colors.onGold : '#FFFFFF';
+}
 
 const ABC_DESCRIPTION: Record<AbcClass, string> = {
   A: 'Poucos produtos, maior parte do faturamento',
@@ -72,11 +76,12 @@ function classifyAbc(products: ShopeeProduct[]) {
 }
 
 function AbcBadge({ cls }: { cls: AbcClass }) {
+  const Colors = useColors();
   return (
     <View
       className="h-7 w-7 items-center justify-center rounded-full"
-      style={{ backgroundColor: ABC_COLOR[cls] }}>
-      <Text className="text-xs font-bold" style={{ color: cls === 'C' || cls === 'Z' ? Colors.text : Colors.bg }}>
+      style={{ backgroundColor: getAbcBackground(cls, Colors) }}>
+      <Text className="text-xs font-bold" style={{ color: getAbcInk(cls, Colors) }}>
         {cls}
       </Text>
     </View>
@@ -96,6 +101,7 @@ function AbcRow({ item }: { item: { product: ShopeeProduct; cls: AbcClass; reven
 }
 
 function ProductRankRow({ product }: { product: ShopeeProduct }) {
+  const Colors = useColors();
   const positive = (product.profit ?? 0) >= 0;
   return (
     <View className="flex-row items-center justify-between rounded-xl border border-lucrei-border bg-lucrei-surface px-3.5 py-3">
@@ -111,6 +117,7 @@ function ProductRankRow({ product }: { product: ShopeeProduct }) {
 
 export default function RelatoriosScreen() {
   const { state } = useAuth();
+  const Colors = useColors();
   const { selectedShop, loaded: shopsLoaded } = useSelectedShop();
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -175,7 +182,7 @@ export default function RelatoriosScreen() {
               onPress={() => setPeriod(p)}
               className="rounded-full px-3.5 py-1.5"
               style={{ backgroundColor: active ? Colors.gold : 'transparent' }}>
-              <Text className="text-xs font-medium" style={{ color: active ? Colors.bg : Colors.textMuted }}>
+              <Text className="text-xs font-medium" style={{ color: active ? Colors.onGold : Colors.textMuted }}>
                 {p}
               </Text>
             </Pressable>
@@ -237,7 +244,7 @@ export default function RelatoriosScreen() {
                   .map((c) => (
                     <View
                       key={c.cls}
-                      style={{ flex: c.count, backgroundColor: ABC_COLOR[c.cls], height: '100%' }}
+                      style={{ flex: c.count, backgroundColor: getAbcBackground(c.cls, Colors), height: '100%' }}
                     />
                   ))}
               </View>
@@ -247,7 +254,7 @@ export default function RelatoriosScreen() {
                   .filter((c) => c.count > 0)
                   .map((c) => (
                     <View key={c.cls} className="flex-row items-center gap-1.5">
-                      <View className="h-2 w-2 rounded-full" style={{ backgroundColor: ABC_COLOR[c.cls] }} />
+                      <View className="h-2 w-2 rounded-full" style={{ backgroundColor: getAbcBackground(c.cls, Colors) }} />
                       <Text className="text-xs text-lucrei-textMuted">
                         {c.cls}: {c.count} · {ABC_DESCRIPTION[c.cls]}
                       </Text>

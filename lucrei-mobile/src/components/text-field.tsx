@@ -1,6 +1,6 @@
 import { Platform, Text, TextInput, type TextInputProps, type TextStyle, View } from 'react-native';
 
-import { Colors } from '@/constants/theme';
+import { useColors } from '@/lib/theme';
 
 type TextFieldProps = TextInputProps & {
   label: string;
@@ -10,6 +10,7 @@ const webOutlineStyle: TextStyle | undefined =
   Platform.OS === 'web' ? ({ outlineStyle: 'none' } as unknown as TextStyle) : undefined;
 
 export function TextField({ label, style, ...inputProps }: TextFieldProps) {
+  const Colors = useColors();
   return (
     <View className="mb-4">
       <Text className="mb-1.5 text-sm text-lucrei-textMuted">{label}</Text>

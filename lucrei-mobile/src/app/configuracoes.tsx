@@ -6,11 +6,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Screen } from '@/components/screen';
 import { ToastBanner, useToast } from '@/components/toast';
-import { Colors } from '@/constants/theme';
 import { ApiError, changePassword as apiChangePassword, disconnectShop, type AuthUser, type Shop } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { webCapWidth } from '@/lib/responsive';
 import { useSelectedShop } from '@/lib/selected-shop';
+import { useAppTheme, useColors, type ThemePreference } from '@/lib/theme';
 
 const dateFormatter = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
@@ -26,6 +26,7 @@ type MenuKey = 'name' | 'password' | 'shops' | null;
 function PlanSection({ user }: { user: AuthUser }) {
   const router = useRouter();
   const { cancelPlan } = useAuth();
+  const Colors = useColors();
   const [canceling, setCanceling] = useState(false);
 
   const isCanceled = user.subscriptionStatus === 'canceled';
@@ -71,7 +72,7 @@ function PlanSection({ user }: { user: AuthUser }) {
         <Pressable
           onPress={() => router.push('/planos')}
           className="flex-1 items-center rounded-xl bg-lucrei-gold py-2.5">
-          <Text className="text-sm font-semibold text-lucrei-bg">{user.plan ? 'Fazer upgrade' : 'Ver planos'}</Text>
+          <Text className="text-sm font-semibold text-lucrei-onGold">{user.plan ? 'Fazer upgrade' : 'Ver planos'}</Text>
         </Pressable>
         {user.plan && !isCanceled && (
           <Pressable
@@ -102,6 +103,7 @@ function SettingsModal({
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  const Colors = useColors();
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View className="flex-1 justify-end bg-black/60">
@@ -122,6 +124,7 @@ function SettingsModal({
 }
 
 function MenuRow({ icon, label, onPress }: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress: () => void }) {
+  const Colors = useColors();
   return (
     <Pressable
       onPress={onPress}
@@ -137,6 +140,7 @@ function MenuRow({ icon, label, onPress }: { icon: keyof typeof Ionicons.glyphMa
 
 function NameField() {
   const { state, updateName } = useAuth();
+  const Colors = useColors();
   const currentName = state.status === 'authenticated' ? state.user.name : '';
   const [name, setName] = useState(currentName);
   const [saving, setSaving] = useState(false);
@@ -170,7 +174,11 @@ function NameField() {
           disabled={!dirty || saving}
           className="h-11 w-11 items-center justify-center rounded-xl bg-lucrei-gold"
           style={{ opacity: !dirty || saving ? 0.4 : 1 }}>
-          {saving ? <ActivityIndicator size="small" color={Colors.bg} /> : <Ionicons name="checkmark" size={18} color={Colors.bg} />}
+          {saving ? (
+            <ActivityIndicator size="small" color={Colors.onGold} />
+          ) : (
+            <Ionicons name="checkmark" size={18} color={Colors.onGold} />
+          )}
         </Pressable>
       </View>
       {state.status === 'authenticated' && (
@@ -182,6 +190,7 @@ function NameField() {
 
 function PasswordSection() {
   const { state } = useAuth();
+  const Colors = useColors();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -247,9 +256,9 @@ function PasswordSection() {
         className="items-center rounded-xl bg-lucrei-gold py-3"
         style={{ opacity: !canSave || saving ? 0.4 : 1 }}>
         {saving ? (
-          <ActivityIndicator size="small" color={Colors.bg} />
+          <ActivityIndicator size="small" color={Colors.onGold} />
         ) : (
-          <Text className="text-sm font-semibold text-lucrei-bg">Salvar nova senha</Text>
+          <Text className="text-sm font-semibold text-lucrei-onGold">Salvar nova senha</Text>
         )}
       </Pressable>
     </View>
@@ -258,6 +267,7 @@ function PasswordSection() {
 
 function ShopRow({ shop, onDisconnected }: { shop: Shop; onDisconnected: () => void }) {
   const { state } = useAuth();
+  const Colors = useColors();
   const [disconnecting, setDisconnecting] = useState(false);
   const active = shop.status === 'active';
 
@@ -294,7 +304,7 @@ function ShopRow({ shop, onDisconnected }: { shop: Shop; onDisconnected: () => v
         <View
           className="rounded-full px-2 py-0.5"
           style={{ backgroundColor: active ? Colors.gold : Colors.surfaceAlt }}>
-          <Text className="text-[10px] font-medium" style={{ color: active ? Colors.bg : Colors.textMuted }}>
+          <Text className="text-[10px] font-medium" style={{ color: active ? Colors.onGold : Colors.textMuted }}>
             {active ? 'Ativa' : 'Desconectada'}
           </Text>
         </View>
@@ -331,6 +341,39 @@ function ShopsList() {
   );
 }
 
+const APPEARANCE_OPTIONS: { key: ThemePreference; label: string }[] = [
+  { key: 'system', label: 'Sistema' },
+  { key: 'light', label: 'Claro' },
+  { key: 'dark', label: 'Escuro' },
+];
+
+function AppearanceSection() {
+  const { preference, setPreference } = useAppTheme();
+  const Colors = useColors();
+
+  return (
+    <View className="mt-4 rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+      <Text className="text-sm font-medium text-lucrei-text">Aparência</Text>
+      <View className="mt-3 flex-row self-start rounded-full bg-lucrei-surfaceAlt p-1">
+        {APPEARANCE_OPTIONS.map((option) => {
+          const active = option.key === preference;
+          return (
+            <Pressable
+              key={option.key}
+              onPress={() => setPreference(option.key)}
+              className="rounded-full px-4 py-1.5"
+              style={{ backgroundColor: active ? Colors.gold : 'transparent' }}>
+              <Text className="text-xs font-medium" style={{ color: active ? Colors.onGold : Colors.textMuted }}>
+                {option.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
 export default function ConfiguracoesScreen() {
   const { state, logout } = useAuth();
   const user = state.status === 'authenticated' ? state.user : null;
@@ -342,6 +385,8 @@ export default function ConfiguracoesScreen() {
       <Text className="mt-2 text-base text-lucrei-textMuted">
         Gerencie seu perfil, senha e lojas conectadas.
       </Text>
+
+      <AppearanceSection />
 
       {user && (
         <View className="mt-4 rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">

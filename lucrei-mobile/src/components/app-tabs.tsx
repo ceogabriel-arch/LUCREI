@@ -3,8 +3,8 @@ import { Tabs } from 'expo-router';
 import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Colors } from '@/constants/theme';
 import { webCapWidth } from '@/lib/responsive';
+import { useColors } from '@/lib/theme';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -25,6 +25,7 @@ const TAB_META: Record<string, { active: IconName; inactive: IconName; label: st
 
 function CustomTabBar({ state, navigation }: TabBarProps) {
   const insets = useSafeAreaInsets();
+  const Colors = useColors();
   const visibleRoutes = state.routes.filter((route) => TAB_META[route.name]);
 
   return (

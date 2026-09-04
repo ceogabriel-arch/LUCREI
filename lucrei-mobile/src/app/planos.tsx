@@ -5,10 +5,10 @@ import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'rea
 import * as WebBrowser from 'expo-web-browser';
 
 import { Screen } from '@/components/screen';
-import { Colors } from '@/constants/theme';
 import { getCheckoutUrl, getPlans, type Plan } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatBRL } from '@/lib/format';
+import { useColors } from '@/lib/theme';
 
 type LoadState = 'loading' | 'ready' | 'error';
 
@@ -23,6 +23,7 @@ function formatIntegrationsLimit(limit: number | null) {
 
 function PlanCard({ plan }: { plan: Plan }) {
   const { state, selectPlan } = useAuth();
+  const Colors = useColors();
   const [saving, setSaving] = useState(false);
   const user = state.status === 'authenticated' ? state.user : null;
   const isCustomPricing = plan.priceCurrent === null;
@@ -103,9 +104,9 @@ function PlanCard({ plan }: { plan: Plan }) {
         className="mt-5 items-center rounded-xl bg-lucrei-gold py-3"
         style={{ opacity: isCurrent ? 0.5 : saving ? 0.7 : 1 }}>
         {saving ? (
-          <ActivityIndicator size="small" color={Colors.bg} />
+          <ActivityIndicator size="small" color={Colors.onGold} />
         ) : (
-          <Text className="text-sm font-semibold text-lucrei-bg">{label}</Text>
+          <Text className="text-sm font-semibold text-lucrei-onGold">{label}</Text>
         )}
       </Pressable>
 
@@ -128,6 +129,7 @@ function PlanCard({ plan }: { plan: Plan }) {
 
 export default function PlanosScreen() {
   const router = useRouter();
+  const Colors = useColors();
   const [state, setState] = useState<LoadState>('loading');
   const [plans, setPlans] = useState<Plan[]>([]);
 

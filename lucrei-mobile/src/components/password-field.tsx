@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { Platform, Pressable, Text, TextInput, type TextStyle, View } from 'react-native';
 
-import { Colors } from '@/constants/theme';
+import { useColors } from '@/lib/theme';
 
 // No nativo, overflow-hidden evita o input vazar pra fora do cantos
 // arredondados. Na web, essa mesma propriedade some com o blur de fundo
@@ -21,6 +21,7 @@ type PasswordFieldProps = {
 };
 
 export function PasswordField({ label, value, onChangeText, autoComplete, placeholder }: PasswordFieldProps) {
+  const Colors = useColors();
   const [visible, setVisible] = useState(false);
 
   return (

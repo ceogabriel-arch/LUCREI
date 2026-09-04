@@ -4,9 +4,9 @@ import { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Colors } from '@/constants/theme';
 import { formatBRL } from '@/lib/format';
 import { webCapWidth } from '@/lib/responsive';
+import { useColors } from '@/lib/theme';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -39,6 +39,7 @@ function TierBadge({
   isNext: boolean;
   size?: number;
 }) {
+  const Colors = useColors();
   return (
     <View
       style={{
@@ -54,13 +55,13 @@ function TierBadge({
       <Ionicons
         name={unlocked ? tier.icon : 'lock-closed'}
         size={size * 0.48}
-        color={unlocked ? Colors.bg : Colors.textMuted}
+        color={unlocked ? Colors.onGold : Colors.textMuted}
       />
       {unlocked && (
         <View
           className="absolute -bottom-0.5 -right-0.5 items-center justify-center rounded-full"
           style={{ width: 14, height: 14, backgroundColor: Colors.success }}>
-          <Ionicons name="checkmark" size={9} color={Colors.bg} />
+          <Ionicons name="checkmark" size={9} color="#FFFFFF" />
         </View>
       )}
     </View>
@@ -68,6 +69,7 @@ function TierBadge({
 }
 
 function TierListItem({ tier, unlocked, isNext }: { tier: Tier; unlocked: boolean; isNext: boolean }) {
+  const Colors = useColors();
   return (
     <View
       className="flex-row items-center gap-3 rounded-2xl border p-3.5"
@@ -92,6 +94,7 @@ export function AchievementsCard({
   totalProfit: number;
   accountCreatedAt: string;
 }) {
+  const Colors = useColors();
   const [expanded, setExpanded] = useState(false);
   const monthsSinceSignup = (Date.now() - new Date(accountCreatedAt).getTime()) / MS_PER_MONTH;
 
@@ -118,7 +121,7 @@ export function AchievementsCard({
           <View className="flex-row items-center justify-between">
             <View className="flex-row items-center gap-2">
               <View className="h-7 w-7 items-center justify-center rounded-full" style={{ backgroundColor: Colors.gold }}>
-                <Ionicons name="trophy" size={14} color={Colors.bg} />
+                <Ionicons name="trophy" size={14} color={Colors.onGold} />
               </View>
               <Text className="text-sm font-semibold text-lucrei-text">Conquistas Lucrei</Text>
             </View>

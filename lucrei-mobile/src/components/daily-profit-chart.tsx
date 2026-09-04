@@ -2,14 +2,15 @@ import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import Svg, { Line, Rect } from 'react-native-svg';
 
-import { Colors } from '@/constants/theme';
 import { formatBRL } from '@/lib/format';
+import { useColors } from '@/lib/theme';
 
 type DayPoint = { date: string; profit: number };
 
 const dayFormatter = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' });
 
 export function DailyProfitChart({ data, height = 140 }: { data: DayPoint[]; height?: number }) {
+  const Colors = useColors();
   const [selected, setSelected] = useState(data.length > 0 ? data[data.length - 1] : null);
 
   if (data.length === 0) {

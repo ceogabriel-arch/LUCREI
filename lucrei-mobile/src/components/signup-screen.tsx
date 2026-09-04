@@ -4,10 +4,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PasswordField } from '@/components/password-field';
 import { TextField } from '@/components/text-field';
-import { Colors } from '@/constants/theme';
 import { API_URL } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { webCapWidth } from '@/lib/responsive';
+import { useColors } from '@/lib/theme';
 
 type SignupScreenProps = {
   onNavigateToLogin: () => void;
@@ -15,6 +15,7 @@ type SignupScreenProps = {
 
 export function SignupScreen({ onNavigateToLogin }: SignupScreenProps) {
   const { signup } = useAuth();
+  const Colors = useColors();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -97,9 +98,9 @@ export function SignupScreen({ onNavigateToLogin }: SignupScreenProps) {
               className="mt-2 items-center rounded-2xl bg-lucrei-gold py-4"
               style={{ opacity: submitting || !canSubmit ? 0.6 : 1 }}>
               {submitting ? (
-                <ActivityIndicator color={Colors.bg} />
+                <ActivityIndicator color={Colors.onGold} />
               ) : (
-                <Text className="text-base font-semibold text-lucrei-bg">Criar conta</Text>
+                <Text className="text-base font-semibold text-lucrei-onGold">Criar conta</Text>
               )}
             </Pressable>
           </View>

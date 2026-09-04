@@ -3,12 +3,13 @@ import { useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Colors } from '@/constants/theme';
 import { webCapWidth } from '@/lib/responsive';
 import { useSelectedShop } from '@/lib/selected-shop';
+import { useColors } from '@/lib/theme';
 
 export function ShopPicker() {
   const { shops, selectedShop, selectShop } = useSelectedShop();
+  const Colors = useColors();
   const [open, setOpen] = useState(false);
 
   return (

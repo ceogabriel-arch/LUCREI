@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { Animated, Text, View } from 'react-native';
 
-import { Colors } from '@/constants/theme';
+import { useColors } from '@/lib/theme';
 
 export type Toast = { title: string; message: string; tone: 'success' | 'error' };
 
@@ -22,6 +22,7 @@ export function useToast() {
 }
 
 export function ToastBanner({ toast, opacity }: { toast: Toast | null; opacity: Animated.Value }) {
+  const Colors = useColors();
   if (!toast) return null;
   return (
     <Animated.View

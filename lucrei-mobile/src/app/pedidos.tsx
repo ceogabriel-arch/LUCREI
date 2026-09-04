@@ -6,12 +6,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Screen } from '@/components/screen';
 import { ToastBanner, useToast } from '@/components/toast';
-import { Colors } from '@/constants/theme';
 import { ApiError, getOrders, syncOrders, type Order, type OrderLineItem, type Period } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatBRL } from '@/lib/format';
 import { webCapWidth } from '@/lib/responsive';
 import { useSelectedShop } from '@/lib/selected-shop';
+import { useColors } from '@/lib/theme';
 
 type LoadState = 'loading' | 'no-shop' | 'ready' | 'error';
 
@@ -36,6 +36,7 @@ const STATUS_LABELS: Record<string, string> = {
 const dateFormatter = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
 function BreakdownRow({ label, value, isTotal }: { label: string; value: string; isTotal?: boolean }) {
+  const Colors = useColors();
   return (
     <View className="flex-row items-center justify-between py-1.5">
       <Text className={isTotal ? 'text-sm font-semibold text-lucrei-text' : 'text-sm text-lucrei-textMuted'}>
@@ -77,6 +78,7 @@ function ItemBreakdown({ item }: { item: OrderLineItem }) {
 }
 
 function OrderDetailModal({ order, onClose }: { order: Order | null; onClose: () => void }) {
+  const Colors = useColors();
   return (
     <Modal visible={order != null} animationType="slide" transparent onRequestClose={onClose}>
       <View className="flex-1 justify-end bg-black/60">
@@ -106,6 +108,7 @@ function OrderDetailModal({ order, onClose }: { order: Order | null; onClose: ()
 }
 
 function OrderRow({ order, onPress }: { order: Order; onPress: () => void }) {
+  const Colors = useColors();
   const hasProfit = order.profit !== null;
 
   return (
@@ -143,6 +146,7 @@ function OrderRow({ order, onPress }: { order: Order; onPress: () => void }) {
 
 export default function PedidosScreen() {
   const { state } = useAuth();
+  const Colors = useColors();
   const { selectedShop, loaded: shopsLoaded } = useSelectedShop();
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [orders, setOrders] = useState<Order[]>([]);
@@ -240,7 +244,7 @@ export default function PedidosScreen() {
               onPress={() => setPeriod(p)}
               className="rounded-full px-3.5 py-1.5"
               style={{ backgroundColor: active ? Colors.gold : 'transparent' }}>
-              <Text className="text-xs font-medium" style={{ color: active ? Colors.bg : Colors.textMuted }}>
+              <Text className="text-xs font-medium" style={{ color: active ? Colors.onGold : Colors.textMuted }}>
                 {p}
               </Text>
             </Pressable>

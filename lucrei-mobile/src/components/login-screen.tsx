@@ -7,10 +7,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { PasswordField } from '@/components/password-field';
 import { Sparkline } from '@/components/sparkline';
 import { TextField } from '@/components/text-field';
-import { Colors } from '@/constants/theme';
 import { requestPasswordReset } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { webCapWidth } from '@/lib/responsive';
+import { useAppTheme } from '@/lib/theme';
+
+const LOGO_LIGHT = require('../../assets/images/lucrei-logo-light.png');
+const LOGO_DARK = require('../../assets/images/lucrei-logo.png');
 
 const LOGO_ASPECT = 449 / 153;
 const LOGO_WIDTH = 180;
@@ -23,6 +26,7 @@ type LoginScreenProps = {
 };
 
 function ForgotPasswordModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const { colors: Colors } = useAppTheme();
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
@@ -81,9 +85,9 @@ function ForgotPasswordModal({ visible, onClose }: { visible: boolean; onClose: 
                   className="mt-1 items-center rounded-2xl bg-lucrei-gold py-4"
                   style={{ opacity: submitting || email.length === 0 ? 0.6 : 1 }}>
                   {submitting ? (
-                    <ActivityIndicator color={Colors.bg} />
+                    <ActivityIndicator color={Colors.onGold} />
                   ) : (
-                    <Text className="text-base font-semibold text-lucrei-bg">Enviar link</Text>
+                    <Text className="text-base font-semibold text-lucrei-onGold">Enviar link</Text>
                   )}
                 </Pressable>
               </>
@@ -97,6 +101,7 @@ function ForgotPasswordModal({ visible, onClose }: { visible: boolean; onClose: 
 
 export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
   const { login } = useAuth();
+  const { scheme, colors: Colors } = useAppTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
@@ -127,7 +132,7 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
           <View className="items-center">
             <View style={{ width: LOGO_WIDTH, height: LOGO_HEIGHT }}>
               <Image
-                source={require('../../assets/images/lucrei-logo.png')}
+                source={scheme === 'dark' ? LOGO_DARK : LOGO_LIGHT}
                 style={{ width: '100%', height: '100%' }}
                 contentFit="contain"
               />
@@ -179,9 +184,9 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
               className="mt-2 items-center rounded-2xl bg-lucrei-gold py-4"
               style={{ opacity: submitting || !canSubmit ? 0.6 : 1 }}>
               {submitting ? (
-                <ActivityIndicator color={Colors.bg} />
+                <ActivityIndicator color={Colors.onGold} />
               ) : (
-                <Text className="text-base font-semibold text-lucrei-bg">Entrar</Text>
+                <Text className="text-base font-semibold text-lucrei-onGold">Entrar</Text>
               )}
             </Pressable>
           </View>

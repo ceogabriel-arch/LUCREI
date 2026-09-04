@@ -5,11 +5,11 @@ import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
-import { Colors } from '@/constants/theme';
 import { ApiError, getShopeeProducts, saveProductCosts, type ProductCostInput, type ShopeeProduct } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatBRL } from '@/lib/format';
 import { useSelectedShop } from '@/lib/selected-shop';
+import { useColors } from '@/lib/theme';
 
 type LoadState = 'loading' | 'no-shop' | 'ready' | 'error';
 
@@ -55,6 +55,7 @@ function ProductRow({
   onToggleSelect: (shopeeItemId: string) => void;
   period: (typeof PERIODS)[number];
 }) {
+  const Colors = useColors();
   return (
     <View
       className="flex-row items-center gap-3 rounded-2xl border bg-lucrei-surface p-3"
@@ -117,6 +118,7 @@ function ProductRow({
 
 export default function ProdutosScreen() {
   const { state } = useAuth();
+  const Colors = useColors();
   const { selectedShop, loaded: shopsLoaded } = useSelectedShop();
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [products, setProducts] = useState<ShopeeProduct[]>([]);
@@ -293,7 +295,7 @@ export default function ProdutosScreen() {
               onPress={() => setPeriod(p)}
               className="rounded-full px-3.5 py-1.5"
               style={{ backgroundColor: active ? Colors.gold : 'transparent' }}>
-              <Text className="text-xs font-medium" style={{ color: active ? Colors.bg : Colors.textMuted }}>
+              <Text className="text-xs font-medium" style={{ color: active ? Colors.onGold : Colors.textMuted }}>
                 {p}
               </Text>
             </Pressable>
@@ -362,7 +364,7 @@ export default function ProdutosScreen() {
                 className="flex-1 rounded-xl border border-lucrei-border bg-lucrei-bg px-3 py-2 text-sm text-lucrei-text"
               />
               <Pressable onPress={handleApplyBulkCost} disabled={saving} className="rounded-xl bg-lucrei-gold px-3 py-2">
-                <Text className="text-xs font-bold text-lucrei-bg">Aplicar</Text>
+                <Text className="text-xs font-bold text-lucrei-onGold">Aplicar</Text>
               </Pressable>
             </View>
           )}
@@ -408,9 +410,9 @@ export default function ProdutosScreen() {
                 className="items-center justify-center rounded-xl bg-lucrei-gold px-4 py-2.5"
                 style={{ opacity: saving ? 0.6 : 1 }}>
                 {saving ? (
-                  <ActivityIndicator size="small" color={Colors.bg} />
+                  <ActivityIndicator size="small" color={Colors.onGold} />
                 ) : (
-                  <Text className="text-sm font-bold text-lucrei-bg">Salvar tudo</Text>
+                  <Text className="text-sm font-bold text-lucrei-onGold">Salvar tudo</Text>
                 )}
               </Pressable>
             </View>

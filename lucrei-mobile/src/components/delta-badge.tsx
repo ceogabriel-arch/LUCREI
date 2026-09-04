@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Text, View } from 'react-native';
 
-import { Colors } from '@/constants/theme';
+import { useColors } from '@/lib/theme';
 
 type DeltaBadgeProps = {
   label: string;
@@ -11,9 +11,10 @@ type DeltaBadgeProps = {
 };
 
 export function DeltaBadge({ label, direction, positiveIsGood = true }: DeltaBadgeProps) {
+  const Colors = useColors();
   const isGood = (direction === 'up') === positiveIsGood;
   const color = isGood ? Colors.success : Colors.danger;
-  const backgroundColor = isGood ? 'rgba(61,214,140,0.14)' : 'rgba(240,85,78,0.14)';
+  const backgroundColor = `${color}24`;
 
   return (
     <View

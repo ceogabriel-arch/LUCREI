@@ -10,6 +10,34 @@
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace;
   --font-rounded: 'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif;
   --font-serif: Georgia, 'Times New Roman', serif;
+
+  /* Paleta clara (padrão). Os valores são triplas RGB (sem "rgb()") pra
+     permitir modificador de opacidade via rgb(var(--x) / <alpha-value>). */
+  --color-bg: 247 247 245;
+  --color-surface: 255 255 255;
+  --color-surface-alt: 240 240 238;
+  --color-border: 226 226 223;
+  --color-gold: 169 121 10;
+  --color-gold-dim: 138 99 8;
+  --color-text: 10 10 11;
+  --color-text-muted: 107 107 112;
+  --color-success: 30 159 99;
+  --color-danger: 217 59 51;
+}
+
+/* Paleta escura - ativada pelo AppThemeProvider via nativewind, que
+   adiciona/remove a classe "dark" na raiz. */
+:root.dark {
+  --color-bg: 10 10 11;
+  --color-surface: 22 22 23;
+  --color-surface-alt: 31 31 33;
+  --color-border: 42 42 45;
+  --color-gold: 245 197 24;
+  --color-gold-dim: 180 144 15;
+  --color-text: 255 255 255;
+  --color-text-muted: 155 155 161;
+  --color-success: 61 214 140;
+  --color-danger: 240 85 78;
 }
 
 /* Só afeta a build web — evita a faixa branca do fundo do navegador
@@ -18,5 +46,5 @@
 html,
 body,
 #root {
-  background-color: #0a0a0b;
+  background-color: rgb(var(--color-bg));
 }
