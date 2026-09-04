@@ -82,6 +82,14 @@ export function changePassword(token: string, currentPassword: string, newPasswo
   });
 }
 
+export function savePushToken(token: string, pushToken: string) {
+  return request<{ ok: true }>('/auth/push-token', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ token: pushToken }),
+  });
+}
+
 export type Shop = {
   id: string;
   shopName: string;

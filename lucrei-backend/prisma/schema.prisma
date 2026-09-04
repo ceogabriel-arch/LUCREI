@@ -53,6 +53,8 @@ model User {
   // Incrementado a cada troca de senha; embutido no JWT como "tv" e conferido
   // em toda requisição autenticada — invalida qualquer token emitido antes da troca.
   tokenVersion                 Int                 @default(0)
+  // Token de push do Expo (um por conta - o último dispositivo a registrar vence).
+  pushToken                    String?
   createdAt                    DateTime            @default(now())
   updatedAt                    DateTime            @updatedAt
 

@@ -3,8 +3,10 @@ import crypto from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 
 import { encrypt } from '../../lib/crypto';
+import { formatBRL, sendPushNotification } from '../../lib/push-notifications';
 import { prisma } from '../../lib/prisma';
 import { exchangeCodeForToken, getAuthorizationUrl, getShopInfo } from '../../shopee-client';
+import { syncOneOrder } from '../sync/service';
 
 type AuthorizeUrlQuery = {
   returnUrl?: string;
@@ -19,6 +21,12 @@ type CallbackQuery = {
 type PushBody = {
   code?: number;
   shop_id?: number;
+  data?: {
+    ordersn?: string;
+    order_sn?: string;
+    status?: string;
+    order_status?: string;
+  };
 };
 
 type RequestWithRawBody = FastifyRequest & { rawBody?: string };
@@ -28,6 +36,32 @@ const DEFAULT_RETURN_URL = `${process.env.APP_SCHEME || 'lucreimobile'}://shopee
 // Code 2 = "shop_authorization_canceled_push" — disparado quando o lojista
 // desconecta o app pelo painel da própria Shopee (não pelo nosso app).
 const SHOP_AUTHORIZATION_CANCELED_PUSH_CODE = 2;
+
+// Code 3 = "order status push", segundo a documentação da Shopee Open
+// Platform. Não temos como testar contra um push real antes do primeiro
+// pedido de verdade — se as notificações não chegarem, o primeiro passo é
+// conferir o "code" que realmente vem no log de pushes não reconhecidos
+// abaixo e ajustar essa constante.
+const ORDER_STATUS_PUSH_CODE = 3;
+const ORDER_COMPLETED_STATUS = 'COMPLETED';
+
+async function notifyOrderProfit(shopDbId: string, orderSn: string, orderStatus: string) {
+  const shop = await prisma.shop.findUnique({ where: { id: shopDbId } });
+  if (!shop) return;
+
+  const owner = await prisma.user.findUnique({ where: { id: shop.userId } });
+  if (!owner?.pushToken) return;
+
+  const { totalProfit } = await syncOneOrder(shopDbId, orderSn, orderStatus);
+
+  const title = 'Novo pedido concluído! 🎉';
+  const body =
+    totalProfit !== null
+      ? `Você lucrou ${formatBRL(totalProfit)} nesse pedido.`
+      : 'Cadastre o custo do produto pra ver o lucro desse pedido.';
+
+  await sendPushNotification(owner.pushToken, title, body, { orderSn });
+}
 
 export async function shopRoutes(app: FastifyInstance) {
   app.get<{ Querystring: AuthorizeUrlQuery }>(
@@ -163,7 +197,7 @@ export async function shopRoutes(app: FastifyInstance) {
       return reply.status(401).send({ message: 'Assinatura inválida.' });
     }
 
-    const { code, shop_id: shopeeShopId } = request.body;
+    const { code, shop_id: shopeeShopId, data } = request.body;
 
     if (code === SHOP_AUTHORIZATION_CANCELED_PUSH_CODE && shopeeShopId) {
       const shop = await prisma.shop.findUnique({ where: { shopeeShopId: String(shopeeShopId) } });
@@ -174,6 +208,20 @@ export async function shopRoutes(app: FastifyInstance) {
           data: { status: 'disconnected', disconnectedAt: new Date() },
         });
       }
+    } else if (code === ORDER_STATUS_PUSH_CODE && shopeeShopId) {
+      const orderSn = data?.ordersn ?? data?.order_sn;
+      const status = data?.status ?? data?.order_status;
+
+      if (orderSn && status === ORDER_COMPLETED_STATUS) {
+        const shop = await prisma.shop.findUnique({ where: { shopeeShopId: String(shopeeShopId) } });
+        if (shop) {
+          // Não deixa a Shopee esperando o pedido inteiro ser processado e a
+          // notificação ser enviada — responde 200 e termina em segundo plano.
+          notifyOrderProfit(shop.id, orderSn, status).catch((err) => app.log.error(err));
+        }
+      }
+    } else if (code !== undefined && code !== SHOP_AUTHORIZATION_CANCELED_PUSH_CODE) {
+      app.log.info({ pushCode: code, pushBody: request.body }, 'Push da Shopee com code não tratado.');
     }
 
     return reply.send({});

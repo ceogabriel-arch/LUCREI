@@ -6,8 +6,10 @@ import { StatusBar } from 'expo-status-bar';
 import AppTabs from '@/components/app-tabs';
 import { LoginScreen } from '@/components/login-screen';
 import { SignupScreen } from '@/components/signup-screen';
+import { savePushToken } from '@/lib/api';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { PeriodProvider } from '@/lib/period';
+import { registerForPushNotifications } from '@/lib/push-notifications';
 import { SelectedShopProvider } from '@/lib/selected-shop';
 import { AppThemeProvider, useAppTheme } from '@/lib/theme';
 
@@ -23,6 +25,14 @@ function RootNavigator() {
     if (state.status !== 'loading') {
       SplashScreen.hideAsync();
     }
+  }, [state.status]);
+
+  useEffect(() => {
+    if (state.status !== 'authenticated') return;
+    const token = state.token;
+    registerForPushNotifications().then((pushToken) => {
+      if (pushToken) savePushToken(token, pushToken).catch(() => {});
+    });
   }, [state.status]);
 
   if (state.status === 'loading') {

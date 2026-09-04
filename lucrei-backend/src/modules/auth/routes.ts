@@ -41,10 +41,19 @@ const changePasswordSchema = {
   },
 } as const;
 
+const pushTokenSchema = {
+  type: 'object',
+  required: ['token'],
+  properties: {
+    token: { type: 'string', minLength: 1 },
+  },
+} as const;
+
 type Credentials = { email: string; password: string };
 type SignupBody = { name: string; email: string; password: string };
 type UpdateNameBody = { name: string };
 type ChangePasswordBody = { currentPassword: string; newPassword: string };
+type PushTokenBody = { token: string };
 
 export async function authRoutes(app: FastifyInstance) {
   app.post<{ Body: SignupBody }>(
@@ -109,6 +118,18 @@ export async function authRoutes(app: FastifyInstance) {
         include: userWithPlan,
       });
       return reply.send(serializeUser(user));
+    }
+  );
+
+  app.post<{ Body: PushTokenBody }>(
+    '/auth/push-token',
+    { onRequest: [app.authenticate], schema: { body: pushTokenSchema } },
+    async (request, reply) => {
+      await prisma.user.update({
+        where: { id: request.user.sub },
+        data: { pushToken: request.body.token },
+      });
+      return reply.send({ ok: true });
     }
   );
 

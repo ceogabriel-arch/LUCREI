@@ -18,6 +18,7 @@ function buildUser(overrides: Partial<UserWithPlan> = {}): UserWithPlan {
     passwordResetTokenHash: null,
     passwordResetTokenExpiresAt: null,
     tokenVersion: 0,
+    pushToken: null,
     createdAt: new Date('2026-01-01'),
     updatedAt: new Date('2026-01-01'),
     plan: null,

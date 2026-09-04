@@ -45,6 +45,9 @@ async function processOrder(
 
   await prisma.orderLineItem.deleteMany({ where: { orderId: order.id } });
 
+  let profitSum = 0;
+  let itemsMissingCost = 0;
+
   for (const li of income.items) {
     const { lineValue, shippingFeeAllocated, shopeeFeeAllocated } = allocateLineItem(li, totals);
 
@@ -54,6 +57,9 @@ async function processOrder(
 
     const productCostSnapshot = product ? Number(product.costPrice) * li.quantity_purchased : null;
     const profit = computeLineProfit(lineValue, shippingFeeAllocated, shopeeFeeAllocated, productCostSnapshot);
+
+    if (profit === null) itemsMissingCost++;
+    else profitSum += profit;
 
     await prisma.orderLineItem.create({
       data: {
@@ -69,12 +75,18 @@ async function processOrder(
       },
     });
   }
+
+  // Segue o mesmo critério da rota de listagem de pedidos: só null quando
+  // NENHUM item do pedido tem custo cadastrado.
+  const totalProfit = itemsMissingCost === income.items.length ? null : profitSum;
+
+  return { orderId: order.id, totalProfit };
 }
 
 export async function syncOneOrder(shopId: string, orderSn: string, orderStatus: string) {
   const { accessToken, shopeeShopId } = await getValidAccessToken(shopId);
   const [detail] = await getOrderDetail(accessToken, shopeeShopId, [orderSn]);
-  await processOrder(shopId, shopeeShopId, accessToken, orderSn, orderStatus, detail?.create_time);
+  return processOrder(shopId, shopeeShopId, accessToken, orderSn, orderStatus, detail?.create_time);
 }
 
 export async function syncShopOrders(shopId: string) {
