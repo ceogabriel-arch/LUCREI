@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
@@ -39,19 +40,31 @@ function ProductRow({
   product,
   value,
   dirty,
+  selected,
   onChangeCost,
+  onToggleSelect,
   period,
 }: {
   product: ShopeeProduct;
   value: string;
   dirty: boolean;
+  selected: boolean;
   onChangeCost: (shopeeItemId: string, text: string) => void;
+  onToggleSelect: (shopeeItemId: string) => void;
   period: (typeof PERIODS)[number];
 }) {
   return (
     <View
       className="flex-row items-center gap-3 rounded-2xl border bg-lucrei-surface p-3"
       style={{ borderColor: dirty ? Colors.gold : Colors.border }}>
+      <Pressable onPress={() => onToggleSelect(product.shopeeItemId)} hitSlop={8}>
+        <Ionicons
+          name={selected ? 'checkbox' : 'square-outline'}
+          size={20}
+          color={selected ? Colors.gold : Colors.textMuted}
+        />
+      </Pressable>
+
       {product.image ? (
         <Image source={{ uri: product.image }} style={{ width: 48, height: 48, borderRadius: 10 }} />
       ) : (
@@ -99,10 +112,15 @@ export default function ProdutosScreen() {
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
   const [period, setPeriod] = useState<(typeof PERIODS)[number]>('30 dias');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkCost, setBulkCost] = useState('');
 
   const filteredProducts = products
     .filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()))
     .sort((a, b) => a.name.localeCompare(b.name));
+
+  const allFilteredSelected =
+    filteredProducts.length > 0 && filteredProducts.every((p) => selected.has(p.shopeeItemId));
 
   const pendingChanges = useMemo(
     () =>
@@ -127,6 +145,7 @@ export default function ProdutosScreen() {
       const { products } = await getShopeeProducts(state.token, selectedShop.id, PERIOD_TO_API[period]);
       setProducts(products);
       setEdits({});
+      setSelected(new Set());
       setLoadState('ready');
     } catch {
       setLoadState('error');
@@ -141,6 +160,43 @@ export default function ProdutosScreen() {
 
   function handleChangeCost(shopeeItemId: string, text: string) {
     setEdits((prev) => ({ ...prev, [shopeeItemId]: text }));
+  }
+
+  function handleToggleSelect(shopeeItemId: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(shopeeItemId)) next.delete(shopeeItemId);
+      else next.add(shopeeItemId);
+      return next;
+    });
+  }
+
+  function handleToggleSelectAll() {
+    if (allFilteredSelected) {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        for (const p of filteredProducts) next.delete(p.shopeeItemId);
+        return next;
+      });
+    } else {
+      setSelected((prev) => new Set([...prev, ...filteredProducts.map((p) => p.shopeeItemId)]));
+    }
+  }
+
+  function handleApplyBulkCost() {
+    if (selected.size === 0) return;
+    const parsed = Number(bulkCost.replace(',', '.'));
+    if (!bulkCost.trim() || Number.isNaN(parsed) || parsed < 0) {
+      Alert.alert('Custo inválido', 'Digite um valor numérico válido pra aplicar aos produtos selecionados.');
+      return;
+    }
+    setEdits((prev) => {
+      const next = { ...prev };
+      for (const id of selected) next[id] = bulkCost.replace(',', '.');
+      return next;
+    });
+    setSelected(new Set());
+    setBulkCost('');
   }
 
   async function handleSaveAll() {
@@ -241,6 +297,37 @@ export default function ProdutosScreen() {
             placeholderTextColor={Colors.textMuted}
             className="mt-4 rounded-xl border border-lucrei-border bg-lucrei-surface px-4 py-3 text-sm text-lucrei-text"
           />
+
+          {filteredProducts.length > 0 && (
+            <Pressable onPress={handleToggleSelectAll} className="mt-3 flex-row items-center gap-2 self-start" hitSlop={8}>
+              <Ionicons
+                name={allFilteredSelected ? 'checkbox' : 'square-outline'}
+                size={18}
+                color={allFilteredSelected ? Colors.gold : Colors.textMuted}
+              />
+              <Text className="text-xs text-lucrei-textMuted">Selecionar todos</Text>
+            </Pressable>
+          )}
+
+          {selected.size > 0 && (
+            <View className="mt-3 flex-row items-center gap-2 rounded-2xl border border-lucrei-gold bg-lucrei-surface p-3">
+              <Text className="text-xs text-lucrei-text">
+                {selected.size === 1 ? '1 selecionado' : `${selected.size} selecionados`}
+              </Text>
+              <TextInput
+                value={bulkCost}
+                onChangeText={setBulkCost}
+                placeholder="Custo (R$)"
+                placeholderTextColor={Colors.textMuted}
+                keyboardType="decimal-pad"
+                className="flex-1 rounded-xl border border-lucrei-border bg-lucrei-bg px-3 py-2 text-sm text-lucrei-text"
+              />
+              <Pressable onPress={handleApplyBulkCost} className="rounded-xl bg-lucrei-gold px-3 py-2">
+                <Text className="text-xs font-bold text-lucrei-bg">Aplicar</Text>
+              </Pressable>
+            </View>
+          )}
+
           <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="mt-4 gap-3 pb-4">
             {products.length === 0 ? (
               <Text className="text-sm text-lucrei-textMuted">Nenhum produto ativo encontrado na sua loja.</Text>
@@ -256,7 +343,9 @@ export default function ProdutosScreen() {
                     product={product}
                     value={value}
                     dirty={dirty}
+                    selected={selected.has(product.shopeeItemId)}
                     onChangeCost={handleChangeCost}
+                    onToggleSelect={handleToggleSelect}
                     period={period}
                   />
                 );
