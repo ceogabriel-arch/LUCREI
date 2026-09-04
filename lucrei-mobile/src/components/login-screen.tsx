@@ -1,22 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
 import { Image } from 'expo-image';
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PasswordField } from '@/components/password-field';
-import { PremiumBackground } from '@/components/premium-background';
-import { Sparkline } from '@/components/sparkline';
 import { TextField } from '@/components/text-field';
 import { Colors } from '@/constants/theme';
 import { requestPasswordReset } from '@/lib/api';
@@ -24,10 +12,8 @@ import { useAuth } from '@/lib/auth';
 import { webCapWidth } from '@/lib/responsive';
 
 const LOGO_ASPECT = 449 / 153;
-const LOGO_WIDTH = 220;
+const LOGO_WIDTH = 180;
 const LOGO_HEIGHT = LOGO_WIDTH / LOGO_ASPECT;
-
-const TREND = [18, 32, 27, 41, 38, 55, 49, 68, 63, 82, 76, 93];
 
 type LoginScreenProps = {
   onNavigateToSignup: () => void;
@@ -130,16 +116,12 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
 
   return (
     <SafeAreaView className="flex-1 bg-lucrei-bg">
-      <PremiumBackground />
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
         <ScrollView
-          contentContainerStyle={{ flexGrow: 1, ...webCapWidth() }}
-          keyboardShouldPersistTaps="handled"
-          bounces={false}
-          showsVerticalScrollIndicator={false}>
-          <View className="flex-1 items-center justify-center px-6">
+          contentContainerClassName="flex-grow justify-center px-6 py-10"
+          contentContainerStyle={webCapWidth()}
+          keyboardShouldPersistTaps="handled">
+          <View className="items-center">
             <View style={{ width: LOGO_WIDTH, height: LOGO_HEIGHT }}>
               <Image
                 source={require('../../assets/images/lucrei-logo.png')}
@@ -147,76 +129,63 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
                 contentFit="contain"
               />
             </View>
-
-            <View className="mt-2 items-center">
-              <Text className="text-2xl font-bold text-lucrei-gold">+93%</Text>
-              <Sparkline data={TREND} width={260} height={60} />
-            </View>
+            <Text className="mt-3 text-sm text-lucrei-textMuted">Entre para ver o lucro real da sua loja</Text>
           </View>
 
-          <BlurView
-            intensity={45}
-            tint="dark"
-            style={{ borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' }}
-            className="border-x border-t border-lucrei-border">
-            <View className="px-6 pb-8 pt-7">
-              <TextField
-                label="E-mail"
-                placeholder="seu@email.com"
-                autoCapitalize="none"
-                autoComplete="email"
-                keyboardType="email-address"
-                value={email}
-                onChangeText={setEmail}
-              />
-              <PasswordField
-                label="Senha"
-                placeholder="Sua senha"
-                value={password}
-                onChangeText={setPassword}
-                autoComplete="password"
-              />
+          <View className="mt-8">
+            <TextField
+              label="E-mail"
+              placeholder="seu@email.com"
+              autoCapitalize="none"
+              autoComplete="email"
+              keyboardType="email-address"
+              value={email}
+              onChangeText={setEmail}
+            />
+            <PasswordField
+              label="Senha"
+              placeholder="Sua senha"
+              value={password}
+              onChangeText={setPassword}
+              autoComplete="password"
+            />
 
-              <View className="mb-2 flex-row items-center justify-between">
-                <Pressable
-                  onPress={() => setRememberMe((v) => !v)}
-                  className="flex-row items-center gap-2"
-                  hitSlop={8}>
-                  <Ionicons
-                    name={rememberMe ? 'checkbox' : 'square-outline'}
-                    size={18}
-                    color={rememberMe ? Colors.gold : Colors.textMuted}
-                  />
-                  <Text className="text-xs text-lucrei-textMuted">Lembrar de mim</Text>
-                </Pressable>
-
-                <Pressable onPress={() => setForgotPasswordVisible(true)} hitSlop={8}>
-                  <Text className="text-xs font-medium text-lucrei-gold">Esqueci minha senha</Text>
-                </Pressable>
-              </View>
-
-              {error ? <Text className="mb-3 text-sm text-lucrei-danger">{error}</Text> : null}
-
-              <Pressable
-                onPress={handleSubmit}
-                disabled={submitting || !canSubmit}
-                className="mt-2 items-center rounded-2xl bg-lucrei-gold py-4"
-                style={{ opacity: submitting || !canSubmit ? 0.6 : 1 }}>
-                {submitting ? (
-                  <ActivityIndicator color={Colors.bg} />
-                ) : (
-                  <Text className="text-base font-semibold text-lucrei-bg">Entrar</Text>
-                )}
+            <View className="mb-2 flex-row items-center justify-between">
+              <Pressable onPress={() => setRememberMe((v) => !v)} className="flex-row items-center gap-2" hitSlop={8}>
+                <Ionicons
+                  name={rememberMe ? 'checkbox' : 'square-outline'}
+                  size={18}
+                  color={rememberMe ? Colors.gold : Colors.textMuted}
+                />
+                <Text className="text-xs text-lucrei-textMuted">Lembrar de mim</Text>
               </Pressable>
 
-              <View className="mt-6 flex-row justify-center gap-1">
-                <Text className="text-sm text-lucrei-textMuted">Ainda não tem conta?</Text>
-                <Pressable onPress={onNavigateToSignup} hitSlop={8}>
-                  <Text className="text-sm font-semibold text-lucrei-gold">Criar conta</Text>
-                </Pressable>
-              </View>
+              <Pressable onPress={() => setForgotPasswordVisible(true)} hitSlop={8}>
+                <Text className="text-xs font-medium text-lucrei-gold">Esqueci minha senha</Text>
+              </Pressable>
             </View>
-          </BlurView>
+
+            {error ? <Text className="mb-3 text-sm text-lucrei-danger">{error}</Text> : null}
+
+            <Pressable
+              onPress={handleSubmit}
+              disabled={submitting || !canSubmit}
+              className="mt-2 items-center rounded-2xl bg-lucrei-gold py-4"
+              style={{ opacity: submitting || !canSubmit ? 0.6 : 1 }}>
+              {submitting ? (
+                <ActivityIndicator color={Colors.bg} />
+              ) : (
+                <Text className="text-base font-semibold text-lucrei-bg">Entrar</Text>
+              )}
+            </Pressable>
+          </View>
+
+          <View className="mt-8 flex-row justify-center gap-1">
+            <Text className="text-sm text-lucrei-textMuted">Ainda não tem conta?</Text>
+            <Pressable onPress={onNavigateToSignup} hitSlop={8}>
+              <Text className="text-sm font-semibold text-lucrei-gold">Criar conta</Text>
+            </Pressable>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
