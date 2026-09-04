@@ -5,6 +5,7 @@ import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, Sc
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PasswordField } from '@/components/password-field';
+import { Sparkline } from '@/components/sparkline';
 import { TextField } from '@/components/text-field';
 import { Colors } from '@/constants/theme';
 import { requestPasswordReset } from '@/lib/api';
@@ -14,6 +15,8 @@ import { webCapWidth } from '@/lib/responsive';
 const LOGO_ASPECT = 449 / 153;
 const LOGO_WIDTH = 180;
 const LOGO_HEIGHT = LOGO_WIDTH / LOGO_ASPECT;
+
+const TREND = [18, 32, 27, 41, 38, 55, 49, 68, 63, 82, 76, 93];
 
 type LoginScreenProps = {
   onNavigateToSignup: () => void;
@@ -122,18 +125,6 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
           contentContainerStyle={webCapWidth()}
           keyboardShouldPersistTaps="handled">
           <View className="items-center">
-            <View
-              pointerEvents="none"
-              style={{
-                position: 'absolute',
-                top: -60,
-                width: 260,
-                height: 260,
-                borderRadius: 130,
-                backgroundColor: Colors.gold,
-                opacity: 0.12,
-              }}
-            />
             <View style={{ width: LOGO_WIDTH, height: LOGO_HEIGHT }}>
               <Image
                 source={require('../../assets/images/lucrei-logo.png')}
@@ -141,7 +132,10 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
                 contentFit="contain"
               />
             </View>
-            <Text className="mt-3 text-sm text-lucrei-textMuted">Entre para ver o lucro real da sua loja</Text>
+            <View className="mt-2 items-center">
+              <Text className="text-2xl font-bold text-lucrei-gold">+93%</Text>
+              <Sparkline data={TREND} width={260} height={60} />
+            </View>
           </View>
 
           <View className="mt-8 rounded-2xl border border-lucrei-border bg-lucrei-surface p-5">
