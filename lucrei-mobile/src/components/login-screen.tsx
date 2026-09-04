@@ -122,6 +122,18 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
           contentContainerStyle={webCapWidth()}
           keyboardShouldPersistTaps="handled">
           <View className="items-center">
+            <View
+              pointerEvents="none"
+              style={{
+                position: 'absolute',
+                top: -60,
+                width: 260,
+                height: 260,
+                borderRadius: 130,
+                backgroundColor: Colors.gold,
+                opacity: 0.12,
+              }}
+            />
             <View style={{ width: LOGO_WIDTH, height: LOGO_HEIGHT }}>
               <Image
                 source={require('../../assets/images/lucrei-logo.png')}
@@ -132,7 +144,7 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
             <Text className="mt-3 text-sm text-lucrei-textMuted">Entre para ver o lucro real da sua loja</Text>
           </View>
 
-          <View className="mt-8">
+          <View className="mt-8 rounded-2xl border border-lucrei-border bg-lucrei-surface p-5">
             <TextField
               label="E-mail"
               placeholder="seu@email.com"
