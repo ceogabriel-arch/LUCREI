@@ -1,5 +1,10 @@
 export type Period = 'today' | '7d' | '30d' | 'all';
 
+export function startOfCurrentMonth() {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), 1);
+}
+
 export function rangeStart(period: Period) {
   const now = new Date();
   if (period === 'all') {
