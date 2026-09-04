@@ -1,6 +1,7 @@
 import path from 'node:path';
 
 import 'dotenv/config';
+import compress from '@fastify/compress';
 import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
 import staticFiles from '@fastify/static';
@@ -25,6 +26,7 @@ async function main() {
   }
 
   await app.register(cors, { origin: true });
+  await app.register(compress, { global: true });
   await app.register(jwt, { secret: process.env.JWT_SECRET });
 
   app.decorate('authenticate', async (request, reply) => {
@@ -39,6 +41,15 @@ async function main() {
 
   await app.register(staticFiles, {
     root: path.join(__dirname, '..', 'public'),
+    cacheControl: true,
+    setHeaders: (res, filePath) => {
+      // Expo web build hashes filenames under _expo/static, so those are safe to cache forever.
+      if (filePath.includes(`${path.sep}_expo${path.sep}static${path.sep}`)) {
+        res.header('Cache-Control', 'public, max-age=31536000, immutable');
+      } else {
+        res.header('Cache-Control', 'no-cache');
+      }
+    },
   });
 
   for (const route of ['pedidos', 'produtos', 'relatorios', 'configuracoes', 'shopee-connected', 'planos']) {
