@@ -41,6 +41,7 @@ function ProductRow({
   value,
   dirty,
   selected,
+  disabled,
   onChangeCost,
   onToggleSelect,
   period,
@@ -49,6 +50,7 @@ function ProductRow({
   value: string;
   dirty: boolean;
   selected: boolean;
+  disabled: boolean;
   onChangeCost: (shopeeItemId: string, text: string) => void;
   onToggleSelect: (shopeeItemId: string) => void;
   period: (typeof PERIODS)[number];
@@ -56,8 +58,8 @@ function ProductRow({
   return (
     <View
       className="flex-row items-center gap-3 rounded-2xl border bg-lucrei-surface p-3"
-      style={{ borderColor: dirty ? Colors.gold : Colors.border }}>
-      <Pressable onPress={() => onToggleSelect(product.shopeeItemId)} hitSlop={8}>
+      style={{ borderColor: dirty ? Colors.gold : Colors.border, opacity: disabled ? 0.5 : 1 }}>
+      <Pressable onPress={() => onToggleSelect(product.shopeeItemId)} disabled={disabled} hitSlop={8}>
         <Ionicons
           name={selected ? 'checkbox' : 'square-outline'}
           size={20}
@@ -101,6 +103,7 @@ function ProductRow({
         <TextInput
           value={value}
           onChangeText={(text) => onChangeCost(product.shopeeItemId, text)}
+          editable={!disabled}
           placeholder="0,00"
           placeholderTextColor={Colors.textMuted}
           keyboardType="decimal-pad"
@@ -330,7 +333,11 @@ export default function ProdutosScreen() {
           />
 
           {filteredProducts.length > 0 && (
-            <Pressable onPress={handleToggleSelectAll} className="mt-3 flex-row items-center gap-2 self-start" hitSlop={8}>
+            <Pressable
+              onPress={handleToggleSelectAll}
+              disabled={saving}
+              className="mt-3 flex-row items-center gap-2 self-start"
+              hitSlop={8}>
               <Ionicons
                 name={allFilteredSelected ? 'checkbox' : 'square-outline'}
                 size={18}
@@ -348,12 +355,13 @@ export default function ProdutosScreen() {
               <TextInput
                 value={bulkCost}
                 onChangeText={setBulkCost}
+                editable={!saving}
                 placeholder="Custo (R$)"
                 placeholderTextColor={Colors.textMuted}
                 keyboardType="decimal-pad"
                 className="flex-1 rounded-xl border border-lucrei-border bg-lucrei-bg px-3 py-2 text-sm text-lucrei-text"
               />
-              <Pressable onPress={handleApplyBulkCost} className="rounded-xl bg-lucrei-gold px-3 py-2">
+              <Pressable onPress={handleApplyBulkCost} disabled={saving} className="rounded-xl bg-lucrei-gold px-3 py-2">
                 <Text className="text-xs font-bold text-lucrei-bg">Aplicar</Text>
               </Pressable>
             </View>
@@ -375,6 +383,7 @@ export default function ProdutosScreen() {
                     value={value}
                     dirty={dirty}
                     selected={selected.has(product.shopeeItemId)}
+                    disabled={saving}
                     onChangeCost={handleChangeCost}
                     onToggleSelect={handleToggleSelect}
                     period={period}
@@ -387,9 +396,11 @@ export default function ProdutosScreen() {
           {pendingChanges.length > 0 && (
             <View className="flex-row items-center gap-3 rounded-2xl border border-lucrei-gold bg-lucrei-surface p-3">
               <Text className="flex-1 text-sm text-lucrei-text">
-                {pendingChanges.length === 1
-                  ? '1 custo alterado'
-                  : `${pendingChanges.length} custos alterados`}
+                {saving
+                  ? `Salvando ${pendingChanges.length === 1 ? '1 custo' : `${pendingChanges.length} custos`}...`
+                  : pendingChanges.length === 1
+                    ? '1 custo alterado'
+                    : `${pendingChanges.length} custos alterados`}
               </Text>
               <Pressable
                 onPress={handleSaveAll}

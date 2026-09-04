@@ -190,38 +190,43 @@ export async function productRoutes(app: FastifyInstance) {
         lineItemsByShopeeId.set(li.shopeeItemId, list);
       }
 
-      const products = await prisma.$transaction(async (tx) => {
-        const results = [];
-        for (const item of items) {
-          const existing = existingByItemId.get(item.shopeeItemId);
-          const product = existing
-            ? await tx.product.update({
-                where: { id: existing.id },
-                data: { name: item.name, costPrice: item.costPrice, costSource: 'manual' },
-              })
-            : await tx.product.create({
-                data: {
-                  shopId: shop.id,
-                  shopeeItemId: item.shopeeItemId,
-                  name: item.name,
-                  costPrice: item.costPrice,
-                  costSource: 'manual',
-                },
-              });
-          results.push(product);
+      const products = await prisma.$transaction(
+        async (tx) => {
+          const results = [];
+          for (const item of items) {
+            const existing = existingByItemId.get(item.shopeeItemId);
+            const product = existing
+              ? await tx.product.update({
+                  where: { id: existing.id },
+                  data: { name: item.name, costPrice: item.costPrice, costSource: 'manual' },
+                })
+              : await tx.product.create({
+                  data: {
+                    shopId: shop.id,
+                    shopeeItemId: item.shopeeItemId,
+                    name: item.name,
+                    costPrice: item.costPrice,
+                    costSource: 'manual',
+                  },
+                });
+            results.push(product);
 
-          for (const li of lineItemsByShopeeId.get(item.shopeeItemId) ?? []) {
-            const productCostSnapshot = item.costPrice * li.quantity;
-            const profit =
-              Number(li.salePrice) - Number(li.shippingFeeAllocated) - Number(li.shopeeFeeAllocated) - productCostSnapshot;
-            await tx.orderLineItem.update({
-              where: { id: li.id },
-              data: { productId: product.id, productCostSnapshot, profit },
-            });
+            for (const li of lineItemsByShopeeId.get(item.shopeeItemId) ?? []) {
+              const productCostSnapshot = item.costPrice * li.quantity;
+              const profit =
+                Number(li.salePrice) - Number(li.shippingFeeAllocated) - Number(li.shopeeFeeAllocated) - productCostSnapshot;
+              await tx.orderLineItem.update({
+                where: { id: li.id },
+                data: { productId: product.id, productCostSnapshot, profit },
+              });
+            }
           }
-        }
-        return results;
-      });
+          return results;
+        },
+        // O padrão do Prisma (5s) estoura fácil com dezenas de produtos, cada um
+        // podendo atualizar vários line items de pedidos junto.
+        { timeout: 60_000, maxWait: 15_000 }
+      );
 
       return { products };
     }
