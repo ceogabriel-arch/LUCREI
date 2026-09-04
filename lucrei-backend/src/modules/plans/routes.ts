@@ -5,6 +5,9 @@ import { prisma } from '../../lib/prisma';
 import { serializeUser, userWithPlan } from './serialize-user';
 
 const TRIAL_DAYS = 15;
+// Só o plano de entrada dá período de teste grátis; os demais cobram
+// a partir da primeira cobrança.
+const TRIAL_ELIGIBLE_PLAN_KEY = 'start';
 const BACK_URL = process.env.PUBLIC_APP_URL || 'https://lucrei-production-bce6.up.railway.app';
 
 const selectPlanSchema = {
@@ -58,6 +61,9 @@ export async function plansRoutes(app: FastifyInstance) {
       });
 
       let checkoutUrl: string | null = null;
+      // Preservado por padrão - no caminho de upgrade (assinatura já existe),
+      // o trial (se houver) já foi travado na Mercado Pago na criação
+      // original e não muda por trocar de plano.
       let trialEndsAt = user.trialEndsAt;
 
       try {
@@ -75,14 +81,18 @@ export async function plansRoutes(app: FastifyInstance) {
             data: { status: 'trialing' },
           });
         } else {
-          if (!trialEndsAt) {
+          const eligibleForTrial = plan.key === TRIAL_ELIGIBLE_PLAN_KEY;
+          const trialDays = eligibleForTrial ? TRIAL_DAYS : 0;
+          if (eligibleForTrial && !trialEndsAt) {
             trialEndsAt = addDays(new Date(), TRIAL_DAYS);
+          } else if (!eligibleForTrial) {
+            trialEndsAt = null;
           }
           const preapproval = await mercadopago.createPreapproval({
             reason: description,
             payerEmail: user.email,
             value: Number(plan.priceCurrent),
-            trialDays: TRIAL_DAYS,
+            trialDays,
             externalReference: user.id,
             backUrl: `${BACK_URL}/planos`,
           });

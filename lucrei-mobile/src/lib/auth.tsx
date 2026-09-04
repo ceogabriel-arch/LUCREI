@@ -19,7 +19,9 @@ type AuthState =
   | { status: 'authenticated'; token: string; user: AuthUser };
 
 type AuthResult = { ok: true } | { ok: false; message: string };
-type SelectPlanResult = { ok: true; checkoutUrl: string | null } | { ok: false; message: string };
+type SelectPlanResult =
+  | { ok: true; checkoutUrl: string | null; trialEndsAt: string | null }
+  | { ok: false; message: string };
 
 type AuthContextValue = {
   state: AuthState;
@@ -115,7 +117,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     try {
       const { checkoutUrl, ...user } = await apiSelectPlan(state.token, key);
       setState({ status: 'authenticated', token: state.token, user });
-      return { ok: true, checkoutUrl };
+      return { ok: true, checkoutUrl, trialEndsAt: user.trialEndsAt };
     } catch (err) {
       return { ok: false, message: err instanceof ApiError ? err.message : 'Algo deu errado.' };
     }

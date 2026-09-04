@@ -37,7 +37,9 @@ function PlanCard({ plan }: { plan: Plan }) {
         ? 'Reativar plano'
         : user?.plan
           ? 'Fazer upgrade'
-          : 'Testar 15 dias grátis';
+          : plan.key === 'start'
+            ? 'Testar 15 dias grátis'
+            : 'Assinar agora';
 
   async function handlePress() {
     if (isCustomPricing) {
@@ -48,7 +50,12 @@ function PlanCard({ plan }: { plan: Plan }) {
     const result = await selectPlan(plan.key);
     setSaving(false);
     if (result.ok) {
-      Alert.alert('Plano atualizado', `Você agora está no plano ${plan.name}. Seu teste grátis de 15 dias começou.`);
+      Alert.alert(
+        'Plano atualizado',
+        result.trialEndsAt
+          ? `Você agora está no plano ${plan.name}. Seu teste grátis de 15 dias começou.`
+          : `Você agora está no plano ${plan.name}.`
+      );
       if (result.checkoutUrl) {
         WebBrowser.openBrowserAsync(result.checkoutUrl);
       }
@@ -159,8 +166,7 @@ export default function PlanosScreen() {
         <Text className="text-2xl font-bold text-lucrei-text">Planos</Text>
       </View>
       <Text className="mt-2 text-base text-lucrei-textMuted">
-        Todos os planos incluem 15 dias grátis para testar. Depois do teste, escolha o plano ideal para o volume de
-        vendas da sua loja.
+        O plano Start inclui 15 dias grátis para testar. Escolha o plano ideal para o volume de vendas da sua loja.
       </Text>
 
       {state === 'loading' && (
