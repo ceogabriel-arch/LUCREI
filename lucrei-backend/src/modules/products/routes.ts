@@ -50,7 +50,12 @@ export async function productRoutes(app: FastifyInstance) {
           offset = page.next_offset;
         }
 
-        const baseInfo = itemIds.length > 0 ? await getItemBaseInfo(accessToken, shopeeShopId, itemIds) : [];
+        // get_item_base_info só aceita até 50 itens por chamada.
+        const baseInfo = [];
+        for (let i = 0; i < itemIds.length; i += 50) {
+          const batch = itemIds.slice(i, i + 50);
+          baseInfo.push(...(await getItemBaseInfo(accessToken, shopeeShopId, batch)));
+        }
         const costs = await prisma.product.findMany({ where: { shopId: shop.id } });
         const costByItemId = new Map(costs.map((c) => [c.shopeeItemId, c]));
 
