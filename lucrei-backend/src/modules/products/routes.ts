@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 
+import { mapLimit } from '../../lib/concurrency';
 import { prisma } from '../../lib/prisma';
 import { rangeStart, type Period } from '../../lib/period';
 import { getValidAccessToken } from '../../lib/shopee-token';
@@ -17,6 +18,76 @@ type BatchUpsertProductBody = {
 
 async function requireOwnedShop(userId: string, shopId: string) {
   return prisma.shop.findFirst({ where: { id: shopId, userId } });
+}
+
+type CatalogItem = {
+  shopeeItemId: string;
+  name: string;
+  image: string | null;
+  price: number | null;
+};
+
+const CATALOG_TTL_MS = 5 * 60 * 1000;
+const catalogCache = new Map<string, { expiresAt: number; items: CatalogItem[] }>();
+
+// O catálogo (nome/imagem/preço) não depende do período selecionado no app,
+// então cacheamos por loja - trocar de "Hoje" pra "30 dias" não deveria
+// refazer a mesma cadeia de chamadas à Shopee.
+async function getShopeeCatalog(shopDbId: string, accessToken: string, shopeeShopId: number): Promise<CatalogItem[]> {
+  const cached = catalogCache.get(shopDbId);
+  if (cached && cached.expiresAt > Date.now()) return cached.items;
+
+  const pageSize = 50;
+  const maxItems = 200;
+
+  const firstPage = await getItemList(accessToken, shopeeShopId, { offset: 0, pageSize });
+  const itemIds = firstPage.item.map((i) => i.item_id);
+  const totalToFetch = Math.min(firstPage.total_count, maxItems);
+
+  const remainingOffsets: number[] = [];
+  for (let offset = pageSize; offset < totalToFetch; offset += pageSize) remainingOffsets.push(offset);
+
+  if (remainingOffsets.length > 0) {
+    const pages = await Promise.all(
+      remainingOffsets.map((offset) => getItemList(accessToken, shopeeShopId, { offset, pageSize }))
+    );
+    for (const page of pages) itemIds.push(...page.item.map((i) => i.item_id));
+  }
+
+  const limitedItemIds = itemIds.slice(0, maxItems);
+
+  // get_item_base_info só aceita até 50 itens por chamada; os lotes são
+  // independentes, então rodam em paralelo em vez de um atrás do outro.
+  const batches: number[][] = [];
+  for (let i = 0; i < limitedItemIds.length; i += 50) batches.push(limitedItemIds.slice(i, i + 50));
+  const baseInfoBatches = await Promise.all(batches.map((batch) => getItemBaseInfo(accessToken, shopeeShopId, batch)));
+  const baseInfo = baseInfoBatches.flat();
+
+  // get_model_list é uma chamada por produto; limitamos a concorrência pra
+  // não estourar o rate limit da Shopee em lojas com muita variação.
+  const items = await mapLimit(baseInfo, 10, async (item): Promise<CatalogItem> => {
+    let price = item.price_info?.[0]?.current_price ?? null;
+
+    if (price === null && item.has_model) {
+      try {
+        const models = await getModelList(accessToken, shopeeShopId, item.item_id);
+        const prices = models.map((m) => m.price_info[0]?.current_price).filter((p): p is number => p != null);
+        price = prices.length > 0 ? Math.min(...prices) : null;
+      } catch {
+        price = null;
+      }
+    }
+
+    return {
+      shopeeItemId: String(item.item_id),
+      name: item.item_name,
+      image: item.image?.image_url_list?.[0] ?? null,
+      price,
+    };
+  });
+
+  catalogCache.set(shopDbId, { expiresAt: Date.now() + CATALOG_TTL_MS, items });
+  return items;
 }
 
 export async function productRoutes(app: FastifyInstance) {
@@ -43,23 +114,8 @@ export async function productRoutes(app: FastifyInstance) {
 
       try {
         const { accessToken, shopeeShopId } = await getValidAccessToken(shop.id);
+        const catalog = await getShopeeCatalog(shop.id, accessToken, shopeeShopId);
 
-        const itemIds: number[] = [];
-        let offset = 0;
-        let hasNext = true;
-        while (hasNext && itemIds.length < 200) {
-          const page = await getItemList(accessToken, shopeeShopId, { offset, pageSize: 50 });
-          itemIds.push(...page.item.map((i) => i.item_id));
-          hasNext = page.has_next_page;
-          offset = page.next_offset;
-        }
-
-        // get_item_base_info só aceita até 50 itens por chamada.
-        const baseInfo = [];
-        for (let i = 0; i < itemIds.length; i += 50) {
-          const batch = itemIds.slice(i, i + 50);
-          baseInfo.push(...(await getItemBaseInfo(accessToken, shopeeShopId, batch)));
-        }
         const costs = await prisma.product.findMany({ where: { shopId: shop.id } });
         const costByItemId = new Map(costs.map((c) => [c.shopeeItemId, c]));
 
@@ -76,35 +132,21 @@ export async function productRoutes(app: FastifyInstance) {
           statsByItemId.set(li.shopeeItemId, stat);
         }
 
-        const products = await Promise.all(
-          baseInfo.map(async (item) => {
-            const existing = costByItemId.get(String(item.item_id));
-            let price = item.price_info?.[0]?.current_price ?? null;
+        const products = catalog.map((item) => {
+          const existing = costByItemId.get(item.shopeeItemId);
+          const stat = statsByItemId.get(item.shopeeItemId);
 
-            if (price === null && item.has_model) {
-              try {
-                const models = await getModelList(accessToken, shopeeShopId, item.item_id);
-                const prices = models.map((m) => m.price_info[0]?.current_price).filter((p): p is number => p != null);
-                price = prices.length > 0 ? Math.min(...prices) : null;
-              } catch {
-                price = null;
-              }
-            }
-
-            const stat = statsByItemId.get(String(item.item_id));
-
-            return {
-              shopeeItemId: String(item.item_id),
-              name: item.item_name,
-              image: item.image?.image_url_list?.[0] ?? null,
-              price,
-              costPrice: existing ? Number(existing.costPrice) : null,
-              profit: stat ? stat.profit : null,
-              revenue: stat ? stat.revenue : null,
-              orders: stat ? stat.orders : 0,
-            };
-          })
-        );
+          return {
+            shopeeItemId: item.shopeeItemId,
+            name: item.name,
+            image: item.image,
+            price: item.price,
+            costPrice: existing ? Number(existing.costPrice) : null,
+            profit: stat ? stat.profit : null,
+            revenue: stat ? stat.revenue : null,
+            orders: stat ? stat.orders : 0,
+          };
+        });
 
         return { products };
       } catch (err) {

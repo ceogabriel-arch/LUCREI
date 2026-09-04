@@ -47,6 +47,28 @@ function timestamp() {
   return Math.floor(Date.now() / 1000);
 }
 
+const DEFAULT_TIMEOUT_MS = 15_000;
+
+// Sem isso, uma resposta lenta ou travada da Shopee trava a chamada inteira -
+// e, como get_item_list/get_item_base_info são paginados em loop, uma única
+// página lenta bloqueia todas as seguintes.
+async function fetchJson<T>(url: string, init?: RequestInit, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<{ ok: boolean; body: T }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { ...init, signal: controller.signal });
+    const body = (await response.json()) as T;
+    return { ok: response.ok, body };
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error('A Shopee demorou demais pra responder.');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export function getAuthorizationUrl(state: string) {
   const { partnerId, partnerKey, callbackUrl, host } = getConfig();
   const path = '/api/v2/shop/auth_partner';
@@ -83,14 +105,12 @@ export async function exchangeCodeForToken(code: string, shopId: number) {
   url.searchParams.set('timestamp', String(ts));
   url.searchParams.set('sign', signature);
 
-  const response = await fetch(url.toString(), {
+  const { ok, body } = await fetchJson<TokenResponse>(url.toString(), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ code, shop_id: shopId, partner_id: Number(partnerId) }),
   });
-
-  const body = (await response.json()) as TokenResponse;
-  if (!response.ok || body.error) {
+  if (!ok || body.error) {
     throw new Error(body.message || body.error || 'Falha ao trocar code por token na Shopee.');
   }
   return body;
@@ -108,14 +128,12 @@ export async function refreshAccessToken(refreshToken: string, shopId: number) {
   url.searchParams.set('timestamp', String(ts));
   url.searchParams.set('sign', signature);
 
-  const response = await fetch(url.toString(), {
+  const { ok, body } = await fetchJson<TokenResponse>(url.toString(), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refresh_token: refreshToken, shop_id: shopId, partner_id: Number(partnerId) }),
   });
-
-  const body = (await response.json()) as TokenResponse;
-  if (!response.ok || body.error) {
+  if (!ok || body.error) {
     throw new Error(body.message || body.error || 'Falha ao renovar o token da Shopee.');
   }
   return body;
@@ -131,9 +149,8 @@ type ShopInfoResponse = {
 
 export async function getShopInfo(accessToken: string, shopId: number) {
   const url = buildAuthenticatedUrl('/api/v2/shop/get_shop_info', accessToken, shopId);
-  const response = await fetch(url);
-  const body = (await response.json()) as ShopInfoResponse;
-  if (!response.ok || body.error) {
+  const { ok, body } = await fetchJson<ShopInfoResponse>(url);
+  if (!ok || body.error) {
     throw new Error(body.message || body.error || 'Falha ao buscar informações da loja na Shopee.');
   }
   return body;
@@ -164,9 +181,8 @@ export async function getOrderList(
   });
   url += `&${params.toString()}`;
 
-  const response = await fetch(url);
-  const body = (await response.json()) as OrderListResponse;
-  if (!response.ok || body.error) {
+  const { ok, body } = await fetchJson<OrderListResponse>(url);
+  if (!ok || body.error) {
     throw new Error(body.message || body.error || 'Falha ao buscar pedidos na Shopee.');
   }
   return body.response!;
@@ -188,9 +204,8 @@ export async function getOrderDetail(accessToken: string, shopId: number, orderS
   });
   url += `&${params.toString()}`;
 
-  const response = await fetch(url);
-  const body = (await response.json()) as OrderDetailResponse;
-  if (!response.ok || body.error) {
+  const { ok, body } = await fetchJson<OrderDetailResponse>(url);
+  if (!ok || body.error) {
     throw new Error(body.message || body.error || 'Falha ao buscar detalhe do pedido na Shopee.');
   }
   return body.response!.order_list;
@@ -222,9 +237,8 @@ export async function getEscrowDetail(accessToken: string, shopId: number, order
   let url = buildAuthenticatedUrl('/api/v2/payment/get_escrow_detail', accessToken, shopId);
   url += `&${new URLSearchParams({ order_sn: orderSn }).toString()}`;
 
-  const response = await fetch(url);
-  const body = (await response.json()) as EscrowDetailResponse;
-  if (!response.ok || body.error) {
+  const { ok, body } = await fetchJson<EscrowDetailResponse>(url);
+  if (!ok || body.error) {
     throw new Error(body.message || body.error || 'Falha ao buscar detalhe de repasse na Shopee.');
   }
   return body.response!;
@@ -254,9 +268,8 @@ export async function getItemList(
   });
   url += `&${params.toString()}`;
 
-  const response = await fetch(url);
-  const body = (await response.json()) as ItemListResponse;
-  if (!response.ok || body.error) {
+  const { ok, body } = await fetchJson<ItemListResponse>(url);
+  if (!ok || body.error) {
     throw new Error(body.message || body.error || 'Falha ao buscar catálogo de produtos na Shopee.');
   }
   return body.response!;
@@ -285,9 +298,8 @@ export async function getItemBaseInfo(accessToken: string, shopId: number, itemI
   });
   url += `&${params.toString()}`;
 
-  const response = await fetch(url);
-  const body = (await response.json()) as ItemBaseInfoResponse;
-  if (!response.ok || body.error) {
+  const { ok, body } = await fetchJson<ItemBaseInfoResponse>(url);
+  if (!ok || body.error) {
     throw new Error(body.message || body.error || 'Falha ao buscar detalhes dos produtos na Shopee.');
   }
   return body.response!.item_list;
@@ -305,9 +317,8 @@ export async function getModelList(accessToken: string, shopId: number, itemId: 
   let url = buildAuthenticatedUrl('/api/v2/product/get_model_list', accessToken, shopId);
   url += `&${new URLSearchParams({ item_id: String(itemId) }).toString()}`;
 
-  const response = await fetch(url);
-  const body = (await response.json()) as ModelListResponse;
-  if (!response.ok || body.error) {
+  const { ok, body } = await fetchJson<ModelListResponse>(url);
+  if (!ok || body.error) {
     throw new Error(body.message || body.error || 'Falha ao buscar variações do produto na Shopee.');
   }
   return body.response!.model;
