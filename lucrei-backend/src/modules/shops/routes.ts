@@ -146,15 +146,21 @@ export async function shopRoutes(app: FastifyInstance) {
 
   app.post<{ Body: PushBody }>('/shopee/push', async (request, reply) => {
     const partnerKey = process.env.SHOPEE_LIVE_PUSH_PARTNER_KEY;
+    if (!partnerKey) {
+      app.log.error('SHOPEE_LIVE_PUSH_PARTNER_KEY não configurada — recusando push da Shopee.');
+      return reply.status(500).send({ message: 'Servidor não configurado para validar pushes.' });
+    }
+
     const pushUrl = `${process.env.PUBLIC_APP_URL || ''}/shopee/push`;
     const rawBody = (request as RequestWithRawBody).rawBody ?? '';
+    const expected = crypto.createHmac('sha256', partnerKey).update(`${pushUrl}|${rawBody}`).digest('hex');
+    const provided = request.headers.authorization ?? '';
+    const signatureValid =
+      expected.length === provided.length && crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(provided));
 
-    if (partnerKey) {
-      const expected = crypto.createHmac('sha256', partnerKey).update(`${pushUrl}|${rawBody}`).digest('hex');
-      if (request.headers.authorization !== expected) {
-        app.log.warn('Assinatura inválida no push da Shopee.');
-        return reply.status(401).send({ message: 'Assinatura inválida.' });
-      }
+    if (!signatureValid) {
+      app.log.warn('Assinatura inválida no push da Shopee.');
+      return reply.status(401).send({ message: 'Assinatura inválida.' });
     }
 
     const { code, shop_id: shopeeShopId } = request.body;

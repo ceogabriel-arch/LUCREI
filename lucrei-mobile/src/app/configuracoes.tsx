@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Screen } from '@/components/screen';
 import { ToastBanner, useToast } from '@/components/toast';
-import { ApiError, changePassword as apiChangePassword, disconnectShop, type AuthUser, type Shop } from '@/lib/api';
+import { disconnectShop, type AuthUser, type Shop } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { webCapWidth } from '@/lib/responsive';
 import { useSelectedShop } from '@/lib/selected-shop';
@@ -189,7 +189,7 @@ function NameField() {
 }
 
 function PasswordSection() {
-  const { state } = useAuth();
+  const { state, changePassword } = useAuth();
   const Colors = useColors();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -206,20 +206,15 @@ function PasswordSection() {
       return;
     }
     setSaving(true);
-    try {
-      await apiChangePassword(state.token, currentPassword, newPassword);
+    const result = await changePassword(currentPassword, newPassword);
+    setSaving(false);
+    if (result.ok) {
       show({ title: 'Senha alterada', message: 'Sua senha foi atualizada com sucesso.', tone: 'success' });
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-    } catch (err) {
-      show({
-        title: 'Não foi possível trocar a senha',
-        message: err instanceof ApiError ? err.message : 'Tente novamente.',
-        tone: 'error',
-      });
-    } finally {
-      setSaving(false);
+    } else {
+      show({ title: 'Não foi possível trocar a senha', message: result.message, tone: 'error' });
     }
   }
 

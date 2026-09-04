@@ -81,7 +81,12 @@ export async function passwordResetRoutes(app: FastifyInstance) {
       const passwordHash = await bcrypt.hash(request.body.newPassword, 10);
       await prisma.user.update({
         where: { id: user.id },
-        data: { passwordHash, passwordResetTokenHash: null, passwordResetTokenExpiresAt: null },
+        data: {
+          passwordHash,
+          passwordResetTokenHash: null,
+          passwordResetTokenExpiresAt: null,
+          tokenVersion: { increment: 1 },
+        },
       });
 
       return reply.send({ ok: true });

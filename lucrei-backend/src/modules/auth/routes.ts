@@ -64,7 +64,7 @@ export async function authRoutes(app: FastifyInstance) {
         include: userWithPlan,
       });
 
-      const token = app.jwt.sign({ sub: user.id });
+      const token = app.jwt.sign({ sub: user.id, tv: user.tokenVersion });
       return reply.status(201).send({ token, user: serializeUser(user) });
     }
   );
@@ -85,7 +85,7 @@ export async function authRoutes(app: FastifyInstance) {
         return reply.status(401).send({ message: 'E-mail ou senha inválidos.' });
       }
 
-      const token = app.jwt.sign({ sub: user.id });
+      const token = app.jwt.sign({ sub: user.id, tv: user.tokenVersion });
       return reply.send({ token, user: serializeUser(user) });
     }
   );
@@ -127,9 +127,15 @@ export async function authRoutes(app: FastifyInstance) {
       }
 
       const passwordHash = await bcrypt.hash(request.body.newPassword, 10);
-      await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+      const updated = await prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash, tokenVersion: { increment: 1 } },
+      });
 
-      return reply.send({ ok: true });
+      // Derruba qualquer outro token emitido antes da troca (ex: um token
+      // vazado); reemite um novo token válido pra não deslogar quem trocou.
+      const token = app.jwt.sign({ sub: updated.id, tv: updated.tokenVersion });
+      return reply.send({ ok: true, token });
     }
   );
 }

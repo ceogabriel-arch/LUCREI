@@ -7,6 +7,7 @@ import jwt from '@fastify/jwt';
 import staticFiles from '@fastify/static';
 import Fastify from 'fastify';
 
+import { prisma } from './lib/prisma';
 import { authRoutes } from './modules/auth/routes';
 import { billingRoutes } from './modules/billing/routes';
 import { legalRoutes } from './modules/legal/routes';
@@ -32,6 +33,16 @@ async function main() {
   app.decorate('authenticate', async (request, reply) => {
     try {
       await request.jwtVerify();
+      // "tv" (token version) precisa bater com o valor atual do usuário -
+      // trocar a senha incrementa tokenVersion e derruba qualquer token
+      // emitido antes disso, mesmo que ele ainda não tenha expirado.
+      const user = await prisma.user.findUnique({
+        where: { id: request.user.sub },
+        select: { tokenVersion: true },
+      });
+      if (!user || user.tokenVersion !== request.user.tv) {
+        return reply.status(401).send({ message: 'Sessão expirada, faça login novamente.' });
+      }
     } catch (err) {
       reply.send(err);
     }

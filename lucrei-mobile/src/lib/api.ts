@@ -75,7 +75,7 @@ export function updateName(token: string, name: string) {
 }
 
 export function changePassword(token: string, currentPassword: string, newPassword: string) {
-  return request<{ ok: true }>('/auth/change-password', {
+  return request<{ ok: true; token: string }>('/auth/change-password', {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify({ currentPassword, newPassword }),

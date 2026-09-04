@@ -4,6 +4,7 @@ import {
   ApiError,
   type AuthUser,
   cancelPlan as apiCancelPlan,
+  changePassword as apiChangePassword,
   login as apiLogin,
   me as apiMe,
   selectPlan as apiSelectPlan,
@@ -26,6 +27,7 @@ type AuthContextValue = {
   signup: (name: string, email: string, password: string) => Promise<AuthResult>;
   logout: () => Promise<void>;
   updateName: (name: string) => Promise<AuthResult>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<AuthResult>;
   selectPlan: (key: string) => Promise<SelectPlanResult>;
   cancelPlan: () => Promise<AuthResult>;
 };
@@ -92,6 +94,22 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
   }
 
+  async function changePassword(currentPassword: string, newPassword: string): Promise<AuthResult> {
+    if (state.status !== 'authenticated') return { ok: false, message: 'Não autenticado.' };
+    try {
+      const { token } = await apiChangePassword(state.token, currentPassword, newPassword);
+      // Trocar a senha invalida o token anterior no backend - só re-persiste
+      // se já havia um token salvo (login com "lembrar de mim" ou signup).
+      if (await getToken()) {
+        await setToken(token);
+      }
+      setState({ status: 'authenticated', token, user: state.user });
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, message: err instanceof ApiError ? err.message : 'Algo deu errado.' };
+    }
+  }
+
   async function selectPlan(key: string): Promise<SelectPlanResult> {
     if (state.status !== 'authenticated') return { ok: false, message: 'Não autenticado.' };
     try {
@@ -115,7 +133,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }
 
   return (
-    <AuthContext.Provider value={{ state, login, signup, logout, updateName, selectPlan, cancelPlan }}>
+    <AuthContext.Provider
+      value={{ state, login, signup, logout, updateName, changePassword, selectPlan, cancelPlan }}>
       {children}
     </AuthContext.Provider>
   );

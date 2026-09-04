@@ -23,7 +23,7 @@ function verifySignature(xSignature: string | undefined, xRequestId: string | un
 
   const manifest = `id:${dataId.toLowerCase()};request-id:${xRequestId};ts:${parts.ts};`;
   const computed = crypto.createHmac('sha256', secret).update(manifest).digest('hex');
-  return computed === parts.v1;
+  return computed.length === parts.v1.length && crypto.timingSafeEqual(Buffer.from(computed), Buffer.from(parts.v1));
 }
 
 export async function billingRoutes(app: FastifyInstance) {
@@ -38,16 +38,18 @@ export async function billingRoutes(app: FastifyInstance) {
       }
 
       const secret = process.env.MERCADOPAGO_WEBHOOK_SECRET;
-      if (secret) {
-        const ok = verifySignature(
-          request.headers['x-signature'] as string | undefined,
-          request.headers['x-request-id'] as string | undefined,
-          dataId,
-          secret
-        );
-        if (!ok) {
-          return reply.status(401).send({ message: 'Assinatura inválida.' });
-        }
+      if (!secret) {
+        app.log.error('MERCADOPAGO_WEBHOOK_SECRET não configurada — recusando webhook da Mercado Pago.');
+        return reply.status(500).send({ message: 'Servidor não configurado para validar webhooks.' });
+      }
+      const ok = verifySignature(
+        request.headers['x-signature'] as string | undefined,
+        request.headers['x-request-id'] as string | undefined,
+        dataId,
+        secret
+      );
+      if (!ok) {
+        return reply.status(401).send({ message: 'Assinatura inválida.' });
       }
 
       const subscription = await prisma.subscription.findFirst({
