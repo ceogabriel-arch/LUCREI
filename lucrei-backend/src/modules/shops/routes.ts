@@ -127,19 +127,22 @@ export async function shopRoutes(app: FastifyInstance) {
     }
   );
 
-  // Captura o corpo bruto pra qualquer content-type (só neste plugin, não
-  // afeta o resto do app) — a Shopee nem sempre manda "application/json"
-  // certinho no teste de verificação, e a assinatura do push precisa da
-  // string exata do body de qualquer forma.
-  app.addContentTypeParser('*', { parseAs: 'string' }, (req, body, done) => {
+  // Captura o corpo bruto (só neste plugin, não afeta o resto do app) — a
+  // assinatura do push da Shopee é calculada sobre a string exata do body.
+  // Precisa registrar "application/json" explicitamente além do "*": o
+  // Fastify já tem um parser padrão pra esse tipo específico, que tem
+  // prioridade sobre um catch-all e não preenche o rawBody.
+  const captureRawBody = (req: RequestWithRawBody, body: unknown, done: (err: Error | null, body?: unknown) => void) => {
     const text = body as string;
-    (req as RequestWithRawBody).rawBody = text;
+    req.rawBody = text;
     try {
       done(null, text.length > 0 ? JSON.parse(text) : {});
     } catch {
       done(null, {});
     }
-  });
+  };
+  app.addContentTypeParser('application/json', { parseAs: 'string' }, captureRawBody);
+  app.addContentTypeParser('*', { parseAs: 'string' }, captureRawBody);
 
   app.post<{ Body: PushBody }>('/shopee/push', async (request, reply) => {
     const partnerKey = process.env.SHOPEE_LIVE_PUSH_PARTNER_KEY;
