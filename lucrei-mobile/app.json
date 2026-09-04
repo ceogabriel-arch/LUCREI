@@ -46,6 +46,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "a6b6d398-a9a0-47da-b294-6e9a05dab859"
+      }
+    },
+    "owner": "filipegestortis-team"
   }
 }
