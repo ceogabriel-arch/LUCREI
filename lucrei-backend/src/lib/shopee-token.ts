@@ -1,5 +1,6 @@
-import { refreshAccessToken } from '../shopee-client';
+import { decrypt, encrypt } from './crypto';
 import { prisma } from './prisma';
+import { refreshAccessToken } from '../shopee-client';
 
 const REFRESH_MARGIN_MS = 5 * 60 * 1000;
 
@@ -20,13 +21,13 @@ export async function getValidAccessToken(shopId: string): Promise<TokenResult> 
   const expiresInMs = shop.oauthToken.accessTokenExpiresAt.getTime() - Date.now();
 
   if (expiresInMs > REFRESH_MARGIN_MS) {
-    return { accessToken: shop.oauthToken.accessToken, shopeeShopId };
+    return { accessToken: decrypt(shop.oauthToken.accessToken), shopeeShopId };
   }
 
   const existing = inFlightRefreshes.get(shopId);
   if (existing) return existing;
 
-  const refreshToken = shop.oauthToken.refreshToken;
+  const refreshToken = decrypt(shop.oauthToken.refreshToken);
   const refreshPromise = (async (): Promise<TokenResult> => {
     try {
       const refreshed = await refreshAccessToken(refreshToken, shopeeShopId);
@@ -34,8 +35,8 @@ export async function getValidAccessToken(shopId: string): Promise<TokenResult> 
       await prisma.shopeeOAuthToken.update({
         where: { shopId: shop.id },
         data: {
-          accessToken: refreshed.access_token,
-          refreshToken: refreshed.refresh_token,
+          accessToken: encrypt(refreshed.access_token),
+          refreshToken: encrypt(refreshed.refresh_token),
           accessTokenExpiresAt: new Date(now + refreshed.expire_in * 1000),
           refreshTokenExpiresAt: new Date(now + 30 * 24 * 60 * 60 * 1000),
         },

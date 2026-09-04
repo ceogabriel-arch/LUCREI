@@ -1,5 +1,8 @@
-import type { FastifyInstance } from 'fastify';
+import crypto from 'node:crypto';
 
+import type { FastifyInstance, FastifyRequest } from 'fastify';
+
+import { encrypt } from '../../lib/crypto';
 import { prisma } from '../../lib/prisma';
 import { exchangeCodeForToken, getAuthorizationUrl, getShopInfo } from '../../shopee-client';
 
@@ -13,7 +16,20 @@ type CallbackQuery = {
   state?: string;
 };
 
+type PushBody = {
+  code?: number;
+  shop_id?: number;
+};
+
+type RequestWithRawBody = FastifyRequest & { rawBody?: string };
+
 const DEFAULT_RETURN_URL = `${process.env.APP_SCHEME || 'lucreimobile'}://shopee-connected`;
+
+// Code 3 = "Shop Authorization" — a Shopee dispara isso tanto quando o
+// lojista desconecta o app pelo painel deles quanto (mais raramente) numa
+// reautorização. Na prática, é o sinal que usamos pra marcar a loja como
+// desconectada quando a ação não veio do nosso próprio app.
+const SHOP_AUTHORIZATION_PUSH_CODE = 3;
 
 export async function shopRoutes(app: FastifyInstance) {
   app.get<{ Querystring: AuthorizeUrlQuery }>(
@@ -65,15 +81,15 @@ export async function shopRoutes(app: FastifyInstance) {
       await prisma.shopeeOAuthToken.upsert({
         where: { shopId: shop.id },
         update: {
-          accessToken: token.access_token,
-          refreshToken: token.refresh_token,
+          accessToken: encrypt(token.access_token),
+          refreshToken: encrypt(token.refresh_token),
           accessTokenExpiresAt: new Date(now + token.expire_in * 1000),
           refreshTokenExpiresAt: new Date(now + 30 * 24 * 60 * 60 * 1000),
         },
         create: {
           shopId: shop.id,
-          accessToken: token.access_token,
-          refreshToken: token.refresh_token,
+          accessToken: encrypt(token.access_token),
+          refreshToken: encrypt(token.refresh_token),
           accessTokenExpiresAt: new Date(now + token.expire_in * 1000),
           refreshTokenExpiresAt: new Date(now + 30 * 24 * 60 * 60 * 1000),
         },
@@ -112,4 +128,44 @@ export async function shopRoutes(app: FastifyInstance) {
       return { id: updated.id, status: updated.status, disconnectedAt: updated.disconnectedAt };
     }
   );
+
+  // Captura o corpo bruto (só neste plugin, não afeta o resto do app) — a
+  // assinatura do push da Shopee é calculada sobre a string exata do body.
+  app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
+    (req as RequestWithRawBody).rawBody = body as string;
+    try {
+      done(null, (body as string).length > 0 ? JSON.parse(body as string) : {});
+    } catch (err) {
+      done(err as Error, undefined);
+    }
+  });
+
+  app.post<{ Body: PushBody }>('/shopee/push', async (request, reply) => {
+    const partnerKey = process.env.SHOPEE_PARTNER_KEY;
+    const pushUrl = `${process.env.PUBLIC_APP_URL || ''}/shopee/push`;
+    const rawBody = (request as RequestWithRawBody).rawBody ?? '';
+
+    if (partnerKey) {
+      const expected = crypto.createHmac('sha256', partnerKey).update(`${pushUrl}|${rawBody}`).digest('hex');
+      if (request.headers.authorization !== expected) {
+        app.log.warn('Assinatura inválida no push da Shopee.');
+        return reply.status(401).send({ message: 'Assinatura inválida.' });
+      }
+    }
+
+    const { code, shop_id: shopeeShopId } = request.body;
+
+    if (code === SHOP_AUTHORIZATION_PUSH_CODE && shopeeShopId) {
+      const shop = await prisma.shop.findUnique({ where: { shopeeShopId: String(shopeeShopId) } });
+      if (shop) {
+        await prisma.shopeeOAuthToken.deleteMany({ where: { shopId: shop.id } });
+        await prisma.shop.update({
+          where: { id: shop.id },
+          data: { status: 'disconnected', disconnectedAt: new Date() },
+        });
+      }
+    }
+
+    return reply.send({});
+  });
 }
