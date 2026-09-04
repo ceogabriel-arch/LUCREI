@@ -183,6 +183,16 @@ export default function ProdutosScreen() {
     }
   }
 
+  function applyBulkCostToSelected(parsed: number) {
+    setEdits((prev) => {
+      const next = { ...prev };
+      for (const id of selected) next[id] = String(parsed);
+      return next;
+    });
+    setSelected(new Set());
+    setBulkCost('');
+  }
+
   function handleApplyBulkCost() {
     if (selected.size === 0) return;
     const parsed = Number(bulkCost.replace(',', '.'));
@@ -190,13 +200,25 @@ export default function ProdutosScreen() {
       Alert.alert('Custo inválido', 'Digite um valor numérico válido pra aplicar aos produtos selecionados.');
       return;
     }
-    setEdits((prev) => {
-      const next = { ...prev };
-      for (const id of selected) next[id] = bulkCost.replace(',', '.');
-      return next;
-    });
-    setSelected(new Set());
-    setBulkCost('');
+
+    const selectedProducts = products.filter((p) => selected.has(p.shopeeItemId));
+    const aboveSalePrice = selectedProducts.filter((p) => p.price != null && parsed > p.price);
+
+    if (aboveSalePrice.length > 0) {
+      Alert.alert(
+        'Custo maior que o preço de venda',
+        aboveSalePrice.length === 1
+          ? `${formatBRL(parsed)} é maior que o preço de venda de "${aboveSalePrice[0].name}" (${formatBRL(aboveSalePrice[0].price!)}). Isso dá prejuízo nesse item. Aplicar assim mesmo?`
+          : `${formatBRL(parsed)} é maior que o preço de venda de ${aboveSalePrice.length} produtos selecionados. Isso dá prejuízo nesses itens. Aplicar assim mesmo?`,
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Aplicar assim mesmo', style: 'destructive', onPress: () => applyBulkCostToSelected(parsed) },
+        ]
+      );
+      return;
+    }
+
+    applyBulkCostToSelected(parsed);
   }
 
   async function handleSaveAll() {
