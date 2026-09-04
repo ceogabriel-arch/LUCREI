@@ -25,11 +25,9 @@ type RequestWithRawBody = FastifyRequest & { rawBody?: string };
 
 const DEFAULT_RETURN_URL = `${process.env.APP_SCHEME || 'lucreimobile'}://shopee-connected`;
 
-// Code 3 = "Shop Authorization" — a Shopee dispara isso tanto quando o
-// lojista desconecta o app pelo painel deles quanto (mais raramente) numa
-// reautorização. Na prática, é o sinal que usamos pra marcar a loja como
-// desconectada quando a ação não veio do nosso próprio app.
-const SHOP_AUTHORIZATION_PUSH_CODE = 3;
+// Code 2 = "shop_authorization_canceled_push" — disparado quando o lojista
+// desconecta o app pelo painel da própria Shopee (não pelo nosso app).
+const SHOP_AUTHORIZATION_CANCELED_PUSH_CODE = 2;
 
 export async function shopRoutes(app: FastifyInstance) {
   app.get<{ Querystring: AuthorizeUrlQuery }>(
@@ -129,19 +127,22 @@ export async function shopRoutes(app: FastifyInstance) {
     }
   );
 
-  // Captura o corpo bruto (só neste plugin, não afeta o resto do app) — a
-  // assinatura do push da Shopee é calculada sobre a string exata do body.
-  app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
-    (req as RequestWithRawBody).rawBody = body as string;
+  // Captura o corpo bruto pra qualquer content-type (só neste plugin, não
+  // afeta o resto do app) — a Shopee nem sempre manda "application/json"
+  // certinho no teste de verificação, e a assinatura do push precisa da
+  // string exata do body de qualquer forma.
+  app.addContentTypeParser('*', { parseAs: 'string' }, (req, body, done) => {
+    const text = body as string;
+    (req as RequestWithRawBody).rawBody = text;
     try {
-      done(null, (body as string).length > 0 ? JSON.parse(body as string) : {});
-    } catch (err) {
-      done(err as Error, undefined);
+      done(null, text.length > 0 ? JSON.parse(text) : {});
+    } catch {
+      done(null, {});
     }
   });
 
   app.post<{ Body: PushBody }>('/shopee/push', async (request, reply) => {
-    const partnerKey = process.env.SHOPEE_PARTNER_KEY;
+    const partnerKey = process.env.SHOPEE_LIVE_PUSH_PARTNER_KEY;
     const pushUrl = `${process.env.PUBLIC_APP_URL || ''}/shopee/push`;
     const rawBody = (request as RequestWithRawBody).rawBody ?? '';
 
@@ -155,7 +156,7 @@ export async function shopRoutes(app: FastifyInstance) {
 
     const { code, shop_id: shopeeShopId } = request.body;
 
-    if (code === SHOP_AUTHORIZATION_PUSH_CODE && shopeeShopId) {
+    if (code === SHOP_AUTHORIZATION_CANCELED_PUSH_CODE && shopeeShopId) {
       const shop = await prisma.shop.findUnique({ where: { shopeeShopId: String(shopeeShopId) } });
       if (shop) {
         await prisma.shopeeOAuthToken.deleteMany({ where: { shopId: shop.id } });
