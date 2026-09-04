@@ -1,11 +1,11 @@
 import { Image } from 'expo-image';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
 import { Colors } from '@/constants/theme';
-import { ApiError, getShopeeProducts, saveProductCost, type ShopeeProduct } from '@/lib/api';
+import { ApiError, getShopeeProducts, saveProductCosts, type ProductCostInput, type ShopeeProduct } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatBRL } from '@/lib/format';
 import { useSelectedShop } from '@/lib/selected-shop';
@@ -31,43 +31,27 @@ const NO_SALES_LABEL: Record<(typeof PERIODS)[number], string> = {
   '30 dias': 'Sem vendas nos últimos 30 dias',
 };
 
+function originalCostText(product: ShopeeProduct) {
+  return product.costPrice != null ? String(product.costPrice) : '';
+}
+
 function ProductRow({
   product,
-  token,
-  shopId,
+  value,
+  dirty,
+  onChangeCost,
   period,
-  onSaved,
 }: {
   product: ShopeeProduct;
-  token: string;
-  shopId: string;
+  value: string;
+  dirty: boolean;
+  onChangeCost: (shopeeItemId: string, text: string) => void;
   period: (typeof PERIODS)[number];
-  onSaved: (shopeeItemId: string, costPrice: number) => void;
 }) {
-  const [cost, setCost] = useState(product.costPrice != null ? String(product.costPrice) : '');
-  const [saving, setSaving] = useState(false);
-
-  const dirty = cost !== (product.costPrice != null ? String(product.costPrice) : '');
-
-  async function handleSave() {
-    const parsed = Number(cost.replace(',', '.'));
-    if (!cost || Number.isNaN(parsed) || parsed < 0) {
-      Alert.alert('Custo inválido', 'Digite um valor numérico válido.');
-      return;
-    }
-    setSaving(true);
-    try {
-      await saveProductCost(token, shopId, product.shopeeItemId, product.name, parsed);
-      onSaved(product.shopeeItemId, parsed);
-    } catch (err) {
-      Alert.alert('Erro', err instanceof ApiError ? err.message : 'Não foi possível salvar o custo.');
-    } finally {
-      setSaving(false);
-    }
-  }
-
   return (
-    <View className="flex-row items-center gap-3 rounded-2xl border border-lucrei-border bg-lucrei-surface p-3">
+    <View
+      className="flex-row items-center gap-3 rounded-2xl border bg-lucrei-surface p-3"
+      style={{ borderColor: dirty ? Colors.gold : Colors.border }}>
       {product.image ? (
         <Image source={{ uri: product.image }} style={{ width: 48, height: 48, borderRadius: 10 }} />
       ) : (
@@ -90,26 +74,17 @@ function ProductRow({
         </Text>
       </View>
 
-      <View className="flex-row items-center gap-2">
+      <View className="items-end gap-1">
+        <Text className="text-[11px] text-lucrei-textMuted">Custo (R$)</Text>
         <TextInput
-          value={cost}
-          onChangeText={setCost}
-          placeholder="Custo"
+          value={value}
+          onChangeText={(text) => onChangeCost(product.shopeeItemId, text)}
+          placeholder="0,00"
           placeholderTextColor={Colors.textMuted}
           keyboardType="decimal-pad"
-          className="w-20 rounded-xl border border-lucrei-border bg-lucrei-bg px-2.5 py-2 text-sm text-lucrei-text"
+          className="w-24 rounded-xl border bg-lucrei-bg px-2.5 py-2 text-right text-base text-lucrei-text"
+          style={{ borderColor: dirty ? Colors.gold : Colors.border }}
         />
-        <Pressable
-          onPress={handleSave}
-          disabled={saving || !dirty}
-          className="h-9 w-9 items-center justify-center rounded-xl bg-lucrei-gold"
-          style={{ opacity: saving || !dirty ? 0.4 : 1 }}>
-          {saving ? (
-            <ActivityIndicator size="small" color={Colors.bg} />
-          ) : (
-            <Text className="text-base font-bold text-lucrei-bg">✓</Text>
-          )}
-        </Pressable>
       </View>
     </View>
   );
@@ -120,12 +95,26 @@ export default function ProdutosScreen() {
   const { selectedShop, loaded: shopsLoaded } = useSelectedShop();
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [products, setProducts] = useState<ShopeeProduct[]>([]);
+  const [edits, setEdits] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
   const [period, setPeriod] = useState<(typeof PERIODS)[number]>('30 dias');
 
   const filteredProducts = products
     .filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()))
     .sort((a, b) => a.name.localeCompare(b.name));
+
+  const pendingChanges = useMemo(
+    () =>
+      products
+        .map((product) => {
+          const text = edits[product.shopeeItemId];
+          if (text === undefined || text === originalCostText(product)) return null;
+          return { product, text };
+        })
+        .filter((entry): entry is { product: ShopeeProduct; text: string } => entry !== null),
+    [products, edits]
+  );
 
   const load = useCallback(async () => {
     if (state.status !== 'authenticated' || !shopsLoaded) return;
@@ -137,6 +126,7 @@ export default function ProdutosScreen() {
     try {
       const { products } = await getShopeeProducts(state.token, selectedShop.id, PERIOD_TO_API[period]);
       setProducts(products);
+      setEdits({});
       setLoadState('ready');
     } catch {
       setLoadState('error');
@@ -149,15 +139,59 @@ export default function ProdutosScreen() {
     }, [load])
   );
 
-  function handleSaved(shopeeItemId: string, costPrice: number) {
-    setProducts((prev) => prev.map((p) => (p.shopeeItemId === shopeeItemId ? { ...p, costPrice } : p)));
+  function handleChangeCost(shopeeItemId: string, text: string) {
+    setEdits((prev) => ({ ...prev, [shopeeItemId]: text }));
+  }
+
+  async function handleSaveAll() {
+    if (pendingChanges.length === 0 || state.status !== 'authenticated' || !selectedShop) return;
+
+    const items: ProductCostInput[] = [];
+    const invalidNames: string[] = [];
+    for (const { product, text } of pendingChanges) {
+      const parsed = Number(text.replace(',', '.'));
+      if (!text.trim() || Number.isNaN(parsed) || parsed < 0) {
+        invalidNames.push(product.name);
+        continue;
+      }
+      items.push({ shopeeItemId: product.shopeeItemId, name: product.name, costPrice: parsed });
+    }
+
+    if (invalidNames.length > 0) {
+      Alert.alert(
+        'Custo inválido',
+        `Corrija o custo de: ${invalidNames.slice(0, 3).join(', ')}${invalidNames.length > 3 ? '...' : ''}`
+      );
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await saveProductCosts(state.token, selectedShop.id, items);
+      const itemByShopeeId = new Map(items.map((i) => [i.shopeeItemId, i]));
+      setProducts((prev) =>
+        prev.map((p) => {
+          const item = itemByShopeeId.get(p.shopeeItemId);
+          return item ? { ...p, costPrice: item.costPrice } : p;
+        })
+      );
+      setEdits((prev) => {
+        const next = { ...prev };
+        for (const item of items) delete next[item.shopeeItemId];
+        return next;
+      });
+    } catch (err) {
+      Alert.alert('Erro', err instanceof ApiError ? err.message : 'Não foi possível salvar os custos.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
     <Screen>
       <Text className="text-2xl font-bold text-lucrei-text">Produtos</Text>
       <Text className="mt-2 text-base text-lucrei-textMuted">
-        Informe o custo de cada produto pra calcularmos seu lucro real.
+        Informe o custo de cada produto e salve tudo de uma vez pra calcularmos seu lucro real.
       </Text>
 
       <View className="mt-5 flex-row self-start rounded-full bg-lucrei-surface p-1">
@@ -207,24 +241,49 @@ export default function ProdutosScreen() {
             placeholderTextColor={Colors.textMuted}
             className="mt-4 rounded-xl border border-lucrei-border bg-lucrei-surface px-4 py-3 text-sm text-lucrei-text"
           />
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="mt-4 gap-3 pb-8">
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="mt-4 gap-3 pb-4">
             {products.length === 0 ? (
               <Text className="text-sm text-lucrei-textMuted">Nenhum produto ativo encontrado na sua loja.</Text>
             ) : filteredProducts.length === 0 ? (
               <Text className="text-sm text-lucrei-textMuted">Nenhum produto encontrado pra "{search}".</Text>
             ) : (
-              filteredProducts.map((product) => (
-                <ProductRow
-                  key={product.shopeeItemId}
-                  product={product}
-                  token={state.status === 'authenticated' ? state.token : ''}
-                  shopId={selectedShop.id}
-                  period={period}
-                  onSaved={handleSaved}
-                />
-              ))
+              filteredProducts.map((product) => {
+                const value = edits[product.shopeeItemId] ?? originalCostText(product);
+                const dirty = value !== originalCostText(product);
+                return (
+                  <ProductRow
+                    key={product.shopeeItemId}
+                    product={product}
+                    value={value}
+                    dirty={dirty}
+                    onChangeCost={handleChangeCost}
+                    period={period}
+                  />
+                );
+              })
             )}
           </ScrollView>
+
+          {pendingChanges.length > 0 && (
+            <View className="flex-row items-center gap-3 rounded-2xl border border-lucrei-gold bg-lucrei-surface p-3">
+              <Text className="flex-1 text-sm text-lucrei-text">
+                {pendingChanges.length === 1
+                  ? '1 custo alterado'
+                  : `${pendingChanges.length} custos alterados`}
+              </Text>
+              <Pressable
+                onPress={handleSaveAll}
+                disabled={saving}
+                className="items-center justify-center rounded-xl bg-lucrei-gold px-4 py-2.5"
+                style={{ opacity: saving ? 0.6 : 1 }}>
+                {saving ? (
+                  <ActivityIndicator size="small" color={Colors.bg} />
+                ) : (
+                  <Text className="text-sm font-bold text-lucrei-bg">Salvar tudo</Text>
+                )}
+              </Pressable>
+            </View>
+          )}
         </>
       )}
     </Screen>

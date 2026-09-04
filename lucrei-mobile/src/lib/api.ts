@@ -149,6 +149,16 @@ export function saveProductCost(token: string, shopId: string, shopeeItemId: str
   });
 }
 
+export type ProductCostInput = { shopeeItemId: string; name: string; costPrice: number };
+
+export function saveProductCosts(token: string, shopId: string, items: ProductCostInput[]) {
+  return request(`/shops/${shopId}/products/batch`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ items }),
+  });
+}
+
 export type OrderLineItem = {
   id: string;
   productName: string;

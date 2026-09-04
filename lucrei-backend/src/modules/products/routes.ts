@@ -11,6 +11,10 @@ type UpsertProductBody = {
   costPrice: number;
 };
 
+type BatchUpsertProductBody = {
+  items: UpsertProductBody[];
+};
+
 async function requireOwnedShop(userId: string, shopId: string) {
   return prisma.shop.findFirst({ where: { id: shopId, userId } });
 }
@@ -148,6 +152,78 @@ export async function productRoutes(app: FastifyInstance) {
       }
 
       return product;
+    }
+  );
+
+  app.post<{ Params: { shopId: string }; Body: BatchUpsertProductBody }>(
+    '/shops/:shopId/products/batch',
+    { onRequest: [app.authenticate] },
+    async (request, reply) => {
+      const shop = await requireOwnedShop(request.user.sub, request.params.shopId);
+      if (!shop) return reply.status(404).send({ message: 'Loja não encontrada.' });
+
+      const { items } = request.body;
+      if (!Array.isArray(items) || items.length === 0) {
+        return reply.status(400).send({ message: 'items é obrigatório e não pode ser vazio.' });
+      }
+      for (const item of items) {
+        if (!item.shopeeItemId || !item.name || item.costPrice == null) {
+          return reply.status(400).send({ message: 'shopeeItemId, name e costPrice são obrigatórios em cada item.' });
+        }
+      }
+
+      const shopeeItemIds = items.map((i) => i.shopeeItemId);
+
+      const existingProducts = await prisma.product.findMany({
+        where: { shopId: shop.id, shopeeItemId: { in: shopeeItemIds } },
+      });
+      const existingByItemId = new Map(existingProducts.map((p) => [p.shopeeItemId, p]));
+
+      const affectedLineItems = await prisma.orderLineItem.findMany({
+        where: { shopeeItemId: { in: shopeeItemIds }, order: { shopId: shop.id } },
+      });
+      const lineItemsByShopeeId = new Map<string, typeof affectedLineItems>();
+      for (const li of affectedLineItems) {
+        if (!li.shopeeItemId) continue;
+        const list = lineItemsByShopeeId.get(li.shopeeItemId) ?? [];
+        list.push(li);
+        lineItemsByShopeeId.set(li.shopeeItemId, list);
+      }
+
+      const products = await prisma.$transaction(async (tx) => {
+        const results = [];
+        for (const item of items) {
+          const existing = existingByItemId.get(item.shopeeItemId);
+          const product = existing
+            ? await tx.product.update({
+                where: { id: existing.id },
+                data: { name: item.name, costPrice: item.costPrice, costSource: 'manual' },
+              })
+            : await tx.product.create({
+                data: {
+                  shopId: shop.id,
+                  shopeeItemId: item.shopeeItemId,
+                  name: item.name,
+                  costPrice: item.costPrice,
+                  costSource: 'manual',
+                },
+              });
+          results.push(product);
+
+          for (const li of lineItemsByShopeeId.get(item.shopeeItemId) ?? []) {
+            const productCostSnapshot = item.costPrice * li.quantity;
+            const profit =
+              Number(li.salePrice) - Number(li.shippingFeeAllocated) - Number(li.shopeeFeeAllocated) - productCostSnapshot;
+            await tx.orderLineItem.update({
+              where: { id: li.id },
+              data: { productId: product.id, productCostSnapshot, profit },
+            });
+          }
+        }
+        return results;
+      });
+
+      return { products };
     }
   );
 }
