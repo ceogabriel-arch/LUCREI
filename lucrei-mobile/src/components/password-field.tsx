@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { Platform, Pressable, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, Text, TextInput, type TextStyle, View } from 'react-native';
 
 import { Colors } from '@/constants/theme';
 
@@ -35,7 +35,8 @@ export function PasswordField({ label, value, onChangeText, autoComplete, placeh
           autoComplete={autoComplete}
           placeholder={placeholder}
           placeholderTextColor={Colors.textMuted}
-          className="flex-1 py-3 text-base text-lucrei-text"
+          className="flex-1 border-0 bg-transparent py-3 text-base text-lucrei-text"
+          style={Platform.OS === 'web' ? ({ outlineStyle: 'none' } as unknown as TextStyle) : undefined}
         />
         <Pressable onPress={() => setVisible((v) => !v)} hitSlop={8}>
           <Ionicons name={visible ? 'eye-off-outline' : 'eye-outline'} size={18} color={Colors.textMuted} />
