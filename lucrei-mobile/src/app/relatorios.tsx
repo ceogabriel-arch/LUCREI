@@ -1,24 +1,18 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 
 import { DailyProfitChart } from '@/components/daily-profit-chart';
 import { Screen } from '@/components/screen';
 import type { ThemeColors } from '@/constants/theme';
-import { getShopeeProducts, getSummary, type Period, type ShopeeProduct, type Summary } from '@/lib/api';
+import { getShopeeProducts, getSummary, type ShopeeProduct, type Summary } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatBRL } from '@/lib/format';
+import { PERIOD_TO_API, PERIODS, usePeriod } from '@/lib/period';
 import { useSelectedShop } from '@/lib/selected-shop';
 import { useColors } from '@/lib/theme';
 
 type LoadState = 'loading' | 'no-shop' | 'ready' | 'error';
-
-const PERIODS = ['Hoje', '7 dias', '30 dias'] as const;
-const PERIOD_TO_API: Record<(typeof PERIODS)[number], Period> = {
-  Hoje: 'today',
-  '7 dias': '7d',
-  '30 dias': '30d',
-};
 
 function CostBar({ label, value, total, color }: { label: string; value: number; total: number; color: string }) {
   const pct = total > 0 ? (value / total) * 100 : 0;
@@ -119,10 +113,11 @@ export default function RelatoriosScreen() {
   const { state } = useAuth();
   const Colors = useColors();
   const { selectedShop, loaded: shopsLoaded } = useSelectedShop();
+  const { period, setPeriod } = usePeriod();
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [summary, setSummary] = useState<Summary | null>(null);
   const [products, setProducts] = useState<ShopeeProduct[]>([]);
-  const [period, setPeriod] = useState<(typeof PERIODS)[number]>('30 dias');
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     if (state.status !== 'authenticated' || !shopsLoaded) return;
@@ -154,6 +149,12 @@ export default function RelatoriosScreen() {
       load();
     }, [load])
   );
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  }
 
   const sold = products.filter((p) => p.orders > 0);
   const topProfitable = [...sold].sort((a, b) => (b.profit ?? 0) - (a.profit ?? 0)).slice(0, 5);
@@ -212,7 +213,12 @@ export default function RelatoriosScreen() {
       )}
 
       {loadState === 'ready' && summary && (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="mt-5 gap-3 pb-8">
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerClassName="mt-5 gap-3 pb-8"
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.gold} />
+          }>
           <View className="rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
             <Text className="text-sm font-medium text-lucrei-text">Lucro por dia</Text>
             <DailyProfitChart data={summary.trend} />

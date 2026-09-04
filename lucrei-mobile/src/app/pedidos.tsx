@@ -1,26 +1,20 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Dimensions, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Dimensions, Modal, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Screen } from '@/components/screen';
 import { ToastBanner, useToast } from '@/components/toast';
-import { ApiError, getOrders, syncOrders, type Order, type OrderLineItem, type Period } from '@/lib/api';
+import { ApiError, getOrders, syncOrders, type Order, type OrderLineItem } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatBRL } from '@/lib/format';
+import { PERIOD_TO_API, PERIODS, usePeriod } from '@/lib/period';
 import { webCapWidth } from '@/lib/responsive';
 import { useSelectedShop } from '@/lib/selected-shop';
 import { useColors } from '@/lib/theme';
 
 type LoadState = 'loading' | 'no-shop' | 'ready' | 'error';
-
-const PERIODS = ['Hoje', '7 dias', '30 dias'] as const;
-const PERIOD_TO_API: Record<(typeof PERIODS)[number], Period> = {
-  Hoje: 'today',
-  '7 dias': '7d',
-  '30 dias': '30d',
-};
 
 const STATUS_LABELS: Record<string, string> = {
   UNPAID: 'Aguardando pagamento',
@@ -148,10 +142,11 @@ export default function PedidosScreen() {
   const { state } = useAuth();
   const Colors = useColors();
   const { selectedShop, loaded: shopsLoaded } = useSelectedShop();
+  const { period, setPeriod } = usePeriod();
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [orders, setOrders] = useState<Order[]>([]);
-  const [period, setPeriod] = useState<(typeof PERIODS)[number]>('30 dias');
   const [syncing, setSyncing] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const { toast, opacity: toastOpacity, show: showToast } = useToast();
@@ -185,6 +180,12 @@ export default function PedidosScreen() {
       load();
     }, [load])
   );
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  }
 
   async function handleSync() {
     if (state.status !== 'authenticated' || !selectedShop) return;
@@ -282,7 +283,12 @@ export default function PedidosScreen() {
             placeholderTextColor={Colors.textMuted}
             className="mt-4 rounded-xl border border-lucrei-border bg-lucrei-surface px-4 py-3 text-sm text-lucrei-text"
           />
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="mt-4 gap-3 pb-8">
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerClassName="mt-4 gap-3 pb-8"
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.gold} />
+            }>
             {orders.length === 0 ? (
               <View className="mt-4 items-center gap-3">
                 <Text className="text-sm text-lucrei-textMuted">

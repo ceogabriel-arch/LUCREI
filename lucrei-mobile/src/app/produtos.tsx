@@ -2,35 +2,33 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
 import { ApiError, getShopeeProducts, saveProductCosts, type ProductCostInput, type ShopeeProduct } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatBRL } from '@/lib/format';
+import { PERIOD_TO_API, PERIODS, type PeriodLabel, usePeriod } from '@/lib/period';
 import { useSelectedShop } from '@/lib/selected-shop';
 import { useColors } from '@/lib/theme';
 
 type LoadState = 'loading' | 'no-shop' | 'ready' | 'error';
 
-const PERIODS = ['Hoje', '7 dias', '30 dias'] as const;
-const PERIOD_TO_API: Record<(typeof PERIODS)[number], 'today' | '7d' | '30d'> = {
-  Hoje: 'today',
-  '7 dias': '7d',
-  '30 dias': '30d',
-};
-
-const PROFIT_LABEL: Record<(typeof PERIODS)[number], string> = {
+const PROFIT_LABEL: Record<PeriodLabel, string> = {
   Hoje: 'hoje',
   '7 dias': '7d',
   '30 dias': '30d',
 };
 
-const NO_SALES_LABEL: Record<(typeof PERIODS)[number], string> = {
+const NO_SALES_LABEL: Record<PeriodLabel, string> = {
   Hoje: 'Sem vendas hoje',
   '7 dias': 'Sem vendas nos últimos 7 dias',
   '30 dias': 'Sem vendas nos últimos 30 dias',
 };
+
+// Vale sugerir o atalho de seleção em massa só quando tem gente o
+// suficiente sem custo pra editar um por um ser realmente tedioso.
+const MISSING_COST_NUDGE_THRESHOLD = 3;
 
 function originalCostText(product: ShopeeProduct) {
   return product.costPrice != null ? String(product.costPrice) : '';
@@ -53,7 +51,7 @@ function ProductRow({
   disabled: boolean;
   onChangeCost: (shopeeItemId: string, text: string) => void;
   onToggleSelect: (shopeeItemId: string) => void;
-  period: (typeof PERIODS)[number];
+  period: PeriodLabel;
 }) {
   const Colors = useColors();
   return (
@@ -120,14 +118,15 @@ export default function ProdutosScreen() {
   const { state } = useAuth();
   const Colors = useColors();
   const { selectedShop, loaded: shopsLoaded } = useSelectedShop();
+  const { period, setPeriod } = usePeriod();
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [products, setProducts] = useState<ShopeeProduct[]>([]);
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
-  const [period, setPeriod] = useState<(typeof PERIODS)[number]>('30 dias');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkCost, setBulkCost] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
 
   const filteredProducts = products
     .filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()))
@@ -135,6 +134,8 @@ export default function ProdutosScreen() {
 
   const allFilteredSelected =
     filteredProducts.length > 0 && filteredProducts.every((p) => selected.has(p.shopeeItemId));
+
+  const missingCostProducts = products.filter((p) => p.costPrice == null);
 
   const pendingChanges = useMemo(
     () =>
@@ -171,6 +172,16 @@ export default function ProdutosScreen() {
       load();
     }, [load])
   );
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  }
+
+  function handleSelectMissingCost() {
+    setSelected(new Set(missingCostProducts.map((p) => p.shopeeItemId)));
+  }
 
   function handleChangeCost(shopeeItemId: string, text: string) {
     setEdits((prev) => ({ ...prev, [shopeeItemId]: text }));
@@ -334,6 +345,18 @@ export default function ProdutosScreen() {
             className="mt-4 rounded-xl border border-lucrei-border bg-lucrei-surface px-4 py-3 text-sm text-lucrei-text"
           />
 
+          {selected.size === 0 && missingCostProducts.length >= MISSING_COST_NUDGE_THRESHOLD && (
+            <View className="mt-3 flex-row items-center gap-3 rounded-2xl border border-lucrei-border bg-lucrei-surface p-3">
+              <Text className="flex-1 text-xs text-lucrei-textMuted">
+                {missingCostProducts.length} produtos sem custo cadastrado — selecionar todos pra aplicar um valor de
+                uma vez?
+              </Text>
+              <Pressable onPress={handleSelectMissingCost} className="rounded-xl bg-lucrei-surfaceAlt px-3 py-2">
+                <Text className="text-xs font-bold text-lucrei-gold">Selecionar</Text>
+              </Pressable>
+            </View>
+          )}
+
           {filteredProducts.length > 0 && (
             <Pressable
               onPress={handleToggleSelectAll}
@@ -350,26 +373,36 @@ export default function ProdutosScreen() {
           )}
 
           {selected.size > 0 && (
-            <View className="mt-3 flex-row items-center gap-2 rounded-2xl border border-lucrei-gold bg-lucrei-surface p-3">
-              <Text className="text-xs text-lucrei-text">
-                {selected.size === 1 ? '1 selecionado' : `${selected.size} selecionados`}
+            <View className="mt-3 gap-2 rounded-2xl border border-lucrei-gold bg-lucrei-surface p-3">
+              <View className="flex-row items-center gap-2">
+                <Text className="text-xs text-lucrei-text">
+                  {selected.size === 1 ? '1 selecionado' : `${selected.size} selecionados`}
+                </Text>
+                <TextInput
+                  value={bulkCost}
+                  onChangeText={setBulkCost}
+                  editable={!saving}
+                  placeholder="Custo (R$)"
+                  placeholderTextColor={Colors.textMuted}
+                  keyboardType="decimal-pad"
+                  className="flex-1 rounded-xl border border-lucrei-border bg-lucrei-bg px-3 py-2 text-sm text-lucrei-text"
+                />
+                <Pressable onPress={handleApplyBulkCost} disabled={saving} className="rounded-xl bg-lucrei-gold px-3 py-2">
+                  <Text className="text-xs font-bold text-lucrei-onGold">Aplicar</Text>
+                </Pressable>
+              </View>
+              <Text className="text-[11px] text-lucrei-textMuted">
+                Aplicar só preenche o campo de cada produto — role até o fim e toque em “Salvar tudo” pra confirmar.
               </Text>
-              <TextInput
-                value={bulkCost}
-                onChangeText={setBulkCost}
-                editable={!saving}
-                placeholder="Custo (R$)"
-                placeholderTextColor={Colors.textMuted}
-                keyboardType="decimal-pad"
-                className="flex-1 rounded-xl border border-lucrei-border bg-lucrei-bg px-3 py-2 text-sm text-lucrei-text"
-              />
-              <Pressable onPress={handleApplyBulkCost} disabled={saving} className="rounded-xl bg-lucrei-gold px-3 py-2">
-                <Text className="text-xs font-bold text-lucrei-onGold">Aplicar</Text>
-              </Pressable>
             </View>
           )}
 
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="mt-4 gap-3 pb-4">
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerClassName="mt-4 gap-3 pb-4"
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.gold} />
+            }>
             {products.length === 0 ? (
               <Text className="text-sm text-lucrei-textMuted">Nenhum produto ativo encontrado na sua loja.</Text>
             ) : filteredProducts.length === 0 ? (

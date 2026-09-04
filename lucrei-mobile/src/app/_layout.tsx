@@ -7,6 +7,7 @@ import AppTabs from '@/components/app-tabs';
 import { LoginScreen } from '@/components/login-screen';
 import { SignupScreen } from '@/components/signup-screen';
 import { AuthProvider, useAuth } from '@/lib/auth';
+import { PeriodProvider } from '@/lib/period';
 import { SelectedShopProvider } from '@/lib/selected-shop';
 import { AppThemeProvider, useAppTheme } from '@/lib/theme';
 
@@ -59,7 +60,9 @@ function ThemedNavigation() {
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       <AuthProvider>
         <SelectedShopProvider>
-          <RootNavigator />
+          <PeriodProvider>
+            <RootNavigator />
+          </PeriodProvider>
         </SelectedShopProvider>
       </AuthProvider>
     </NavigationThemeProvider>

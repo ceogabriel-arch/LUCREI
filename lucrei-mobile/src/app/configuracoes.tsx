@@ -348,7 +348,12 @@ function AppearanceSection() {
 
   return (
     <View className="mt-4 rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
-      <Text className="text-sm font-medium text-lucrei-text">Aparência</Text>
+      <View className="flex-row items-center gap-3">
+        <View className="h-9 w-9 items-center justify-center rounded-full bg-lucrei-surfaceAlt">
+          <Ionicons name="contrast-outline" size={16} color={Colors.gold} />
+        </View>
+        <Text className="text-sm font-medium text-lucrei-text">Aparência</Text>
+      </View>
       <View className="mt-3 flex-row self-start rounded-full bg-lucrei-surfaceAlt p-1">
         {APPEARANCE_OPTIONS.map((option) => {
           const active = option.key === preference;

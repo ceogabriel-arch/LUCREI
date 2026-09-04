@@ -3,7 +3,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AchievementsCard } from '@/components/achievements-card';
 import { DeltaBadge } from '@/components/delta-badge';
@@ -14,6 +14,7 @@ import { StatTile } from '@/components/stat-tile';
 import { ApiError, getSummary, type Summary } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatBRL } from '@/lib/format';
+import { PERIOD_TO_API, PERIODS, usePeriod } from '@/lib/period';
 import { useSelectedShop } from '@/lib/selected-shop';
 import { connectShopeeStore } from '@/lib/shopee';
 import { useAppTheme } from '@/lib/theme';
@@ -26,13 +27,6 @@ type BackendStatus = 'checking' | 'online' | 'offline';
 const LOGO_ASPECT = 449 / 153;
 const LOGO_HEIGHT = 30;
 const LOGO_WIDTH = LOGO_HEIGHT * LOGO_ASPECT;
-
-const PERIODS = ['Hoje', '7 dias', '30 dias'] as const;
-const PERIOD_TO_API: Record<(typeof PERIODS)[number], 'today' | '7d' | '30d'> = {
-  Hoje: 'today',
-  '7 dias': '7d',
-  '30 dias': '30d',
-};
 
 // Exemplo apenas — valores reais chegam quando a loja Shopee for conectada (Fase 2).
 const MOCK_TREND = [18400, 19200, 21000, 20500, 23800, 26100, 27400, 31200, 33600, 35900, 38100, 40250];
@@ -61,12 +55,13 @@ export default function InicioScreen() {
   const { state } = useAuth();
   const { scheme, colors: Colors } = useAppTheme();
   const { shops, selectedShop, loaded: shopsLoaded, refresh: refreshShops } = useSelectedShop();
+  const { period, setPeriod } = usePeriod();
   const [backendStatus, setBackendStatus] = useState<BackendStatus>('checking');
-  const [period, setPeriod] = useState<(typeof PERIODS)[number]>('30 dias');
   const [connecting, setConnecting] = useState(false);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [lifetimeProfit, setLifetimeProfit] = useState<number | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   async function handleConnectShopee() {
     if (state.status !== 'authenticated') return;
@@ -92,29 +87,33 @@ export default function InicioScreen() {
     }, [refreshShops])
   );
 
-  useEffect(() => {
+  const loadSummary = useCallback(async () => {
     if (state.status !== 'authenticated' || !selectedShop) {
       setSummary(null);
       setSummaryLoading(false);
       return;
     }
-    let cancelled = false;
-    setSummary(null);
     setSummaryLoading(true);
-    getSummary(state.token, selectedShop.id, PERIOD_TO_API[period])
-      .then((s) => {
-        if (!cancelled) setSummary(s);
-      })
-      .catch(() => {
-        if (!cancelled) setSummary(null);
-      })
-      .finally(() => {
-        if (!cancelled) setSummaryLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [state.status, selectedShop, period]);
+    try {
+      const s = await getSummary(state.token, selectedShop.id, PERIOD_TO_API[period]);
+      setSummary(s);
+    } catch {
+      setSummary(null);
+    } finally {
+      setSummaryLoading(false);
+    }
+  }, [state, selectedShop, period]);
+
+  useEffect(() => {
+    setSummary(null);
+    loadSummary();
+  }, [loadSummary]);
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    await Promise.all([refreshShops(), loadSummary()]);
+    setRefreshing(false);
+  }
 
   useEffect(() => {
     if (state.status !== 'authenticated' || !selectedShop) {
@@ -143,7 +142,12 @@ export default function InicioScreen() {
 
   return (
     <Screen>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="pb-8">
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerClassName="pb-8"
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.gold} />
+        }>
         <View className="flex-row items-center justify-between">
           <View>
             <Image
@@ -196,6 +200,13 @@ export default function InicioScreen() {
             <View className="flex-row items-center gap-2">
               <Text className="text-sm text-lucrei-textMuted">Você lucrou</Text>
               {!stillLoading && summaryLoading && <ActivityIndicator size="small" color={Colors.textMuted} />}
+              {!stillLoading && !showingRealData && (
+                <View className="rounded-full px-2 py-0.5" style={{ backgroundColor: Colors.surfaceAlt }}>
+                  <Text className="text-[10px] font-semibold uppercase tracking-wide text-lucrei-textMuted">
+                    Exemplo
+                  </Text>
+                </View>
+              )}
             </View>
             {stillLoading ? (
               <View className="mt-3 h-[52px] justify-center">

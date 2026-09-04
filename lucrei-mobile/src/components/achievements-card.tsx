@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { formatBRL } from '@/lib/format';
@@ -110,13 +110,9 @@ export function AchievementsCard({
 
   return (
     <>
-      <Pressable onPress={() => setExpanded(true)} className="mt-4 overflow-hidden rounded-3xl border border-lucrei-border">
-        <LinearGradient
-          colors={[Colors.surfaceAlt, Colors.surface]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
+      <Pressable
+        onPress={() => setExpanded(true)}
+        className="mt-4 rounded-3xl border border-lucrei-border bg-lucrei-surface">
         <View className="p-4">
           <View className="flex-row items-center justify-between">
             <View className="flex-row items-center gap-2">
