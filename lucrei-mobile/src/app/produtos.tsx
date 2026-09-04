@@ -78,9 +78,18 @@ function ProductRow({
         <Text className="mt-0.5 text-xs text-lucrei-textMuted">
           {product.price != null ? `Preço: ${formatBRL(product.price)}` : 'Sem preço informado'}
         </Text>
-        <Text className="mt-0.5 text-xs" style={{ color: product.profit != null ? Colors.success : Colors.textMuted }}>
+        <Text
+          className="mt-0.5 text-xs"
+          style={{
+            color:
+              product.profit == null
+                ? Colors.textMuted
+                : product.profit >= 0
+                  ? Colors.success
+                  : Colors.danger,
+          }}>
           {product.profit != null
-            ? `Lucro (${PROFIT_LABEL[period]}): ${formatBRL(product.profit)}`
+            ? `${product.profit >= 0 ? 'Lucro' : 'Prejuízo'} (${PROFIT_LABEL[period]}): ${formatBRL(product.profit)}`
             : product.orders > 0
               ? 'Vendeu, mas sem custo pra calcular lucro'
               : NO_SALES_LABEL[period]}
