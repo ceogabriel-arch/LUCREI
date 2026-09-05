@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import type { Plan, User } from '@prisma/client';
 
 import * as mercadopago from '../../mercadopago-client';
 import { prisma } from '../../lib/prisma';
@@ -9,6 +10,8 @@ const TRIAL_DAYS = 15;
 // a partir da primeira cobrança.
 const TRIAL_ELIGIBLE_PLAN_KEY = 'start';
 const BACK_URL = process.env.PUBLIC_APP_URL || 'https://lucrei-production-bce6.up.railway.app';
+// Prazo pra pagar o QR code de um ciclo antes dele expirar e um novo ser gerado.
+const PIX_EXPIRATION_MINUTES = 60 * 24;
 
 const selectPlanSchema = {
   type: 'object',
@@ -24,6 +27,28 @@ function addDays(date: Date, days: number) {
   const result = new Date(date);
   result.setDate(result.getDate() + days);
   return result;
+}
+
+// Uma loja Shopee que já consumiu o teste grátis (em qualquer conta Lucrei -
+// o shopeeShopId é único e persiste ao trocar de dono) não libera um novo
+// período de teste, mesmo numa conta nova. Compartilhado pelos fluxos de
+// cartão e Pix.
+async function resolveTrial(user: User, plan: Plan) {
+  const alreadyUsedTrial = Boolean(user.trialEndsAt);
+  const taintedShop =
+    plan.key === TRIAL_ELIGIBLE_PLAN_KEY && !alreadyUsedTrial
+      ? await prisma.shop.findFirst({ where: { userId: user.id, trialConsumedAt: { not: null } } })
+      : null;
+  const eligibleForTrial = plan.key === TRIAL_ELIGIBLE_PLAN_KEY && !alreadyUsedTrial && !taintedShop;
+  const trialEndsAt = eligibleForTrial ? addDays(new Date(), TRIAL_DAYS) : alreadyUsedTrial ? user.trialEndsAt : null;
+  return { eligibleForTrial, trialEndsAt };
+}
+
+async function markShopsTrialConsumed(userId: string) {
+  await prisma.shop.updateMany({
+    where: { userId, trialConsumedAt: null },
+    data: { trialConsumedAt: new Date() },
+  });
 }
 
 export async function plansRoutes(app: FastifyInstance) {
@@ -81,19 +106,9 @@ export async function plansRoutes(app: FastifyInstance) {
             data: { status: 'trialing' },
           });
         } else {
-          // Uma loja Shopee que já consumiu o teste grátis (em qualquer conta
-          // Lucrei - o shopeeShopId é único e persiste ao trocar de dono) não
-          // libera um novo período de teste, mesmo numa conta nova.
-          const taintedShop = plan.key === TRIAL_ELIGIBLE_PLAN_KEY && !trialEndsAt
-            ? await prisma.shop.findFirst({ where: { userId: user.id, trialConsumedAt: { not: null } } })
-            : null;
-          const eligibleForTrial = plan.key === TRIAL_ELIGIBLE_PLAN_KEY && !taintedShop;
-          const trialDays = eligibleForTrial ? TRIAL_DAYS : 0;
-          if (eligibleForTrial && !trialEndsAt) {
-            trialEndsAt = addDays(new Date(), TRIAL_DAYS);
-          } else if (!eligibleForTrial) {
-            trialEndsAt = null;
-          }
+          const trial = await resolveTrial(user, plan);
+          trialEndsAt = trial.trialEndsAt;
+          const trialDays = trial.eligibleForTrial ? TRIAL_DAYS : 0;
           const preapproval = await mercadopago.createPreapproval({
             reason: description,
             payerEmail: user.email,
@@ -116,10 +131,7 @@ export async function plansRoutes(app: FastifyInstance) {
           });
 
           if (trialDays > 0) {
-            await prisma.shop.updateMany({
-              where: { userId: user.id, trialConsumedAt: null },
-              data: { trialConsumedAt: new Date() },
-            });
+            await markShopsTrialConsumed(user.id);
           }
         }
       } catch (err) {
@@ -134,6 +146,86 @@ export async function plansRoutes(app: FastifyInstance) {
       });
 
       return reply.send({ ...serializeUser(updated), checkoutUrl });
+    }
+  );
+
+  app.post<{ Body: SelectPlanBody }>(
+    '/plans/select-pix',
+    { onRequest: [app.authenticate], schema: { body: selectPlanSchema } },
+    async (request, reply) => {
+      const plan = await prisma.plan.findUnique({ where: { key: request.body.key } });
+      if (!plan) {
+        return reply.status(404).send({ message: 'Plano não encontrado.' });
+      }
+      if (plan.priceCurrent === null) {
+        return reply.status(400).send({ message: 'Este plano é sob consulta. Fale com nosso time de vendas.' });
+      }
+
+      const user = await prisma.user.findUniqueOrThrow({ where: { id: request.user.sub } });
+      const trial = await resolveTrial(user, plan);
+
+      const subscription = await prisma.subscription.create({
+        data: {
+          userId: user.id,
+          provider: 'mercado_pago_pix',
+          status: trial.eligibleForTrial ? 'trialing' : 'past_due',
+          currentPeriodEnd: trial.trialEndsAt,
+        },
+      });
+
+      if (trial.eligibleForTrial) {
+        await markShopsTrialConsumed(user.id);
+        const updated = await prisma.user.update({
+          where: { id: user.id },
+          data: { planId: plan.id, subscriptionStatus: 'trialing', trialEndsAt: trial.trialEndsAt },
+          include: userWithPlan,
+        });
+        return reply.send({ ...serializeUser(updated), pix: null });
+      }
+
+      const now = new Date();
+      const periodEnd = addDays(now, 30);
+      let pixPayment;
+      try {
+        pixPayment = await mercadopago.createPixPayment({
+          amount: Number(plan.priceCurrent),
+          description: `Lucrei - Plano ${plan.name}`,
+          payerEmail: user.email,
+          externalReference: subscription.id,
+          expiresInMinutes: PIX_EXPIRATION_MINUTES,
+        });
+      } catch (err) {
+        app.log.error(err);
+        return reply.status(502).send({ message: 'Não foi possível gerar o Pix agora. Tente novamente em instantes.' });
+      }
+
+      await prisma.pixCharge.create({
+        data: {
+          subscriptionId: subscription.id,
+          mercadoPagoPaymentId: String(pixPayment.id),
+          amount: plan.priceCurrent,
+          qrCode: pixPayment.point_of_interaction.transaction_data.qr_code,
+          qrCodeBase64: pixPayment.point_of_interaction.transaction_data.qr_code_base64,
+          periodStart: now,
+          periodEnd,
+          expiresAt: new Date(pixPayment.date_of_expiration),
+        },
+      });
+
+      const updated = await prisma.user.update({
+        where: { id: user.id },
+        data: { planId: plan.id, subscriptionStatus: 'past_due', trialEndsAt: trial.trialEndsAt },
+        include: userWithPlan,
+      });
+
+      return reply.send({
+        ...serializeUser(updated),
+        pix: {
+          qrCode: pixPayment.point_of_interaction.transaction_data.qr_code,
+          qrCodeBase64: pixPayment.point_of_interaction.transaction_data.qr_code_base64,
+          expiresAt: pixPayment.date_of_expiration,
+        },
+      });
     }
   );
 
@@ -159,6 +251,13 @@ export async function plansRoutes(app: FastifyInstance) {
       }
       await prisma.subscription.update({ where: { id: subscription.id }, data: { status: 'canceled' } });
     }
+
+    // Pix não tem nada pra cancelar do lado do Mercado Pago (cada cobrança já
+    // é avulsa) - só para de gerar novo QR code no próximo ciclo.
+    await prisma.subscription.updateMany({
+      where: { userId: request.user.sub, provider: 'mercado_pago_pix', status: { not: 'canceled' } },
+      data: { status: 'canceled' },
+    });
 
     const user = await prisma.user.update({
       where: { id: request.user.sub },

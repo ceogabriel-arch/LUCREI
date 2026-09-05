@@ -77,3 +77,42 @@ export function cancelPreapproval(id: string) {
 export function getPreapproval(id: string) {
   return mpRequest<Preapproval>(`/preapproval/${id}`);
 }
+
+export type PixPayment = {
+  id: number;
+  status: string;
+  status_detail: string;
+  date_of_expiration: string;
+  point_of_interaction: {
+    transaction_data: {
+      qr_code: string;
+      qr_code_base64: string;
+    };
+  };
+};
+
+export function createPixPayment(params: {
+  amount: number;
+  description: string;
+  payerEmail: string;
+  externalReference: string;
+  expiresInMinutes: number;
+}) {
+  const expiresAt = new Date(Date.now() + params.expiresInMinutes * 60 * 1000);
+  return mpRequest<PixPayment>('/v1/payments', {
+    method: 'POST',
+    headers: { 'X-Idempotency-Key': `${params.externalReference}-${Date.now()}` },
+    body: JSON.stringify({
+      transaction_amount: params.amount,
+      description: params.description,
+      payment_method_id: 'pix',
+      payer: { email: params.payerEmail },
+      external_reference: params.externalReference,
+      date_of_expiration: expiresAt.toISOString(),
+    }),
+  });
+}
+
+export function getPayment(id: string) {
+  return mpRequest<PixPayment & { status: string }>(`/v1/payments/${id}`);
+}
