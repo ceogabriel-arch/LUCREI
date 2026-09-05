@@ -55,6 +55,8 @@ model User {
   tokenVersion                 Int                 @default(0)
   // Token de push do Expo (um por conta - o último dispositivo a registrar vence).
   pushToken                    String?
+  // "sub" do Google quando a conta foi criada ou vinculada via login Google.
+  googleId                     String?             @unique
   createdAt                    DateTime            @default(now())
   updatedAt                    DateTime            @updatedAt
 

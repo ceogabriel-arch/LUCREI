@@ -1,5 +1,8 @@
+import crypto from 'node:crypto';
+
 import bcrypt from 'bcryptjs';
 import type { FastifyInstance } from 'fastify';
+import { OAuth2Client } from 'google-auth-library';
 
 import { prisma } from '../../lib/prisma';
 import { reconcileMercadoPagoSubscription } from '../../lib/subscription-sync';
@@ -15,6 +18,23 @@ const deleteAccountSchema = {
 } as const;
 
 type DeleteAccountBody = { password: string };
+
+const googleAuthSchema = {
+  type: 'object',
+  required: ['idToken'],
+  properties: {
+    idToken: { type: 'string', minLength: 1 },
+  },
+} as const;
+
+type GoogleAuthBody = { idToken: string };
+
+const googleClient = new OAuth2Client();
+const GOOGLE_AUDIENCES = [
+  process.env.GOOGLE_ANDROID_CLIENT_ID,
+  process.env.GOOGLE_IOS_CLIENT_ID,
+  process.env.GOOGLE_WEB_CLIENT_ID,
+].filter((id): id is string => Boolean(id));
 
 const credentialsSchema = {
   type: 'object',
@@ -105,6 +125,51 @@ export async function authRoutes(app: FastifyInstance) {
       const valid = await bcrypt.compare(password, user.passwordHash);
       if (!valid) {
         return reply.status(401).send({ message: 'E-mail ou senha inválidos.' });
+      }
+
+      const token = app.jwt.sign({ sub: user.id, tv: user.tokenVersion });
+      return reply.send({ token, user: serializeUser(user) });
+    }
+  );
+
+  app.post<{ Body: GoogleAuthBody }>(
+    '/auth/google',
+    { schema: { body: googleAuthSchema } },
+    async (request, reply) => {
+      let payload;
+      try {
+        const ticket = await googleClient.verifyIdToken({
+          idToken: request.body.idToken,
+          audience: GOOGLE_AUDIENCES,
+        });
+        payload = ticket.getPayload();
+      } catch (err) {
+        app.log.error(err);
+        return reply.status(401).send({ message: 'Token do Google inválido.' });
+      }
+
+      if (!payload?.sub || !payload.email) {
+        return reply.status(401).send({ message: 'Token do Google inválido.' });
+      }
+
+      const googleId = payload.sub;
+      const email = payload.email.trim().toLowerCase();
+
+      let user = await prisma.user.findUnique({ where: { googleId }, include: userWithPlan });
+
+      if (!user) {
+        // Já existe conta com esse e-mail criada por senha - vincula em vez
+        // de criar duplicada.
+        const existing = await prisma.user.findUnique({ where: { email }, include: userWithPlan });
+        if (existing) {
+          user = await prisma.user.update({ where: { id: existing.id }, data: { googleId }, include: userWithPlan });
+        } else {
+          const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
+          user = await prisma.user.create({
+            data: { email, name: payload.name || email, passwordHash, googleId },
+            include: userWithPlan,
+          });
+        }
       }
 
       const token = app.jwt.sign({ sub: user.id, tv: user.tokenVersion });
