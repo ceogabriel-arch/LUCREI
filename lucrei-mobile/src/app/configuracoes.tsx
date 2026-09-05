@@ -501,38 +501,40 @@ export default function ConfiguracoesScreen() {
 
   return (
     <Screen>
-      <Text className="text-2xl font-bold text-lucrei-text">Configurações</Text>
-      <Text className="mt-2 text-base text-lucrei-textMuted">
-        Gerencie seu perfil, senha e lojas conectadas.
-      </Text>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="pb-8">
+        <Text className="text-2xl font-bold text-lucrei-text">Configurações</Text>
+        <Text className="mt-2 text-base text-lucrei-textMuted">
+          Gerencie seu perfil, senha e lojas conectadas.
+        </Text>
 
-      <AppearanceSection />
+        <AppearanceSection />
 
-      {user && (
-        <View className="mt-4 rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
-          <Text className="text-base font-semibold text-lucrei-text">{user.name}</Text>
-          <Text className="mt-0.5 text-sm text-lucrei-textMuted">{user.email}</Text>
-        </View>
-      )}
+        {user && (
+          <View className="mt-4 rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+            <Text className="text-base font-semibold text-lucrei-text">{user.name}</Text>
+            <Text className="mt-0.5 text-sm text-lucrei-textMuted">{user.email}</Text>
+          </View>
+        )}
 
-      {user && <PlanSection user={user} />}
+        {user && <PlanSection user={user} />}
 
-      <MenuRow icon="person-outline" label="Alterar nome" onPress={() => setOpenMenu('name')} />
-      <MenuRow icon="lock-closed-outline" label="Alterar senha" onPress={() => setOpenMenu('password')} />
-      <MenuRow icon="storefront-outline" label="Lojas conectadas" onPress={() => setOpenMenu('shops')} />
-      <MenuRow icon="help-circle-outline" label="Ajuda" onPress={() => setOpenMenu('help')} />
-      <MenuRow icon="document-text-outline" label="Termos de uso" onPress={() => Linking.openURL(`${API_URL}/termos`)} />
-      <MenuRow icon="shield-checkmark-outline" label="Política de privacidade" onPress={() => Linking.openURL(`${API_URL}/privacidade`)} />
+        <MenuRow icon="person-outline" label="Alterar nome" onPress={() => setOpenMenu('name')} />
+        <MenuRow icon="lock-closed-outline" label="Alterar senha" onPress={() => setOpenMenu('password')} />
+        <MenuRow icon="storefront-outline" label="Lojas conectadas" onPress={() => setOpenMenu('shops')} />
+        <MenuRow icon="help-circle-outline" label="Ajuda" onPress={() => setOpenMenu('help')} />
+        <MenuRow icon="document-text-outline" label="Termos de uso" onPress={() => Linking.openURL(`${API_URL}/termos`)} />
+        <MenuRow icon="shield-checkmark-outline" label="Política de privacidade" onPress={() => Linking.openURL(`${API_URL}/privacidade`)} />
 
-      <Pressable
-        onPress={logout}
-        className="mt-6 items-center rounded-2xl border border-lucrei-border py-4">
-        <Text className="text-base font-semibold text-lucrei-danger">Sair da conta</Text>
-      </Pressable>
+        <Pressable
+          onPress={logout}
+          className="mt-6 items-center rounded-2xl border border-lucrei-border py-4">
+          <Text className="text-base font-semibold text-lucrei-danger">Sair da conta</Text>
+        </Pressable>
 
-      <Pressable onPress={() => setOpenMenu('deleteAccount')} className="mt-4 items-center py-2">
-        <Text className="text-xs font-medium text-lucrei-danger">Excluir conta</Text>
-      </Pressable>
+        <Pressable onPress={() => setOpenMenu('deleteAccount')} className="mt-4 items-center py-2">
+          <Text className="text-xs font-medium text-lucrei-danger">Excluir conta</Text>
+        </Pressable>
+      </ScrollView>
 
       <SettingsModal title="Alterar nome" visible={openMenu === 'name'} onClose={() => setOpenMenu(null)}>
         <NameField />
