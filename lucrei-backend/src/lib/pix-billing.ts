@@ -14,6 +14,7 @@ export type CurrentPixCharge = {
   qrCode: string;
   qrCodeBase64: string;
   expiresAt: string;
+  amount: number;
 } | null;
 
 /**
@@ -39,7 +40,12 @@ export async function ensureCurrentPixCharge(userId: string): Promise<CurrentPix
   const now = new Date();
 
   if (latest?.status === 'pending' && latest.expiresAt > now) {
-    return { qrCode: latest.qrCode, qrCodeBase64: latest.qrCodeBase64, expiresAt: latest.expiresAt.toISOString() };
+    return {
+      qrCode: latest.qrCode,
+      qrCodeBase64: latest.qrCodeBase64,
+      expiresAt: latest.expiresAt.toISOString(),
+      amount: Number(latest.amount),
+    };
   }
 
   const cycleDue = !latest || latest.status !== 'approved' || subscription.currentPeriodEnd === null || subscription.currentPeriodEnd <= now;
@@ -76,5 +82,6 @@ export async function ensureCurrentPixCharge(userId: string): Promise<CurrentPix
     qrCode: pixPayment.point_of_interaction.transaction_data.qr_code,
     qrCodeBase64: pixPayment.point_of_interaction.transaction_data.qr_code_base64,
     expiresAt: pixPayment.date_of_expiration,
+    amount: Number(plan.priceCurrent),
   };
 }

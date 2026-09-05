@@ -247,6 +247,22 @@ export function getCheckoutUrl(token: string) {
   });
 }
 
+export type PixCharge = { qrCode: string; qrCodeBase64: string; expiresAt: string; amount: number };
+
+export function selectPlanPix(token: string, key: string) {
+  return request<AuthUser & { pix: PixCharge | null }>('/plans/select-pix', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ key }),
+  });
+}
+
+export function getCurrentPixCharge(token: string) {
+  return request<{ pix: PixCharge | null }>('/billing/pix/current', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 export function cancelPlan(token: string) {
   return request<AuthUser>('/plans/cancel', {
     method: 'POST',

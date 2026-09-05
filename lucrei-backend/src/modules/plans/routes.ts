@@ -224,6 +224,7 @@ export async function plansRoutes(app: FastifyInstance) {
           qrCode: pixPayment.point_of_interaction.transaction_data.qr_code,
           qrCodeBase64: pixPayment.point_of_interaction.transaction_data.qr_code_base64,
           expiresAt: pixPayment.date_of_expiration,
+          amount: Number(plan.priceCurrent),
         },
       });
     }

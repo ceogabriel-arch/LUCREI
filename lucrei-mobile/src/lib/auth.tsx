@@ -3,6 +3,7 @@ import { createContext, type PropsWithChildren, useContext, useEffect, useState 
 import {
   ApiError,
   type AuthUser,
+  type PixCharge,
   cancelPlan as apiCancelPlan,
   changePassword as apiChangePassword,
   deleteAccount as apiDeleteAccount,
@@ -10,6 +11,7 @@ import {
   login as apiLogin,
   me as apiMe,
   selectPlan as apiSelectPlan,
+  selectPlanPix as apiSelectPlanPix,
   signup as apiSignup,
   updateName as apiUpdateName,
 } from '@/lib/api';
@@ -24,6 +26,7 @@ type AuthResult = { ok: true } | { ok: false; message: string };
 type SelectPlanResult =
   | { ok: true; checkoutUrl: string | null; trialEndsAt: string | null }
   | { ok: false; message: string };
+type SelectPlanPixResult = { ok: true; pix: PixCharge | null } | { ok: false; message: string };
 
 type AuthContextValue = {
   state: AuthState;
@@ -35,7 +38,9 @@ type AuthContextValue = {
   changePassword: (currentPassword: string, newPassword: string) => Promise<AuthResult>;
   deleteAccount: (password: string) => Promise<AuthResult>;
   selectPlan: (key: string) => Promise<SelectPlanResult>;
+  selectPlanPix: (key: string) => Promise<SelectPlanPixResult>;
   cancelPlan: () => Promise<AuthResult>;
+  refreshUser: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -150,6 +155,28 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
   }
 
+  async function selectPlanPix(key: string): Promise<SelectPlanPixResult> {
+    if (state.status !== 'authenticated') return { ok: false, message: 'Não autenticado.' };
+    try {
+      const { pix, ...user } = await apiSelectPlanPix(state.token, key);
+      setState({ status: 'authenticated', token: state.token, user });
+      return { ok: true, pix };
+    } catch (err) {
+      return { ok: false, message: err instanceof ApiError ? err.message : 'Algo deu errado.' };
+    }
+  }
+
+  async function refreshUser(): Promise<void> {
+    if (state.status !== 'authenticated') return;
+    try {
+      const user = await apiMe(state.token);
+      setState({ status: 'authenticated', token: state.token, user });
+    } catch {
+      // Silencioso - só usado pra polling em segundo plano (ex: tela de Pix
+      // esperando confirmação de pagamento).
+    }
+  }
+
   async function cancelPlan(): Promise<AuthResult> {
     if (state.status !== 'authenticated') return { ok: false, message: 'Não autenticado.' };
     try {
@@ -173,7 +200,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
         changePassword,
         deleteAccount,
         selectPlan,
+        selectPlanPix,
         cancelPlan,
+        refreshUser,
       }}>
       {children}
     </AuthContext.Provider>
