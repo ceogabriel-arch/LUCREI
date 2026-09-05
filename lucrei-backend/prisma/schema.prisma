@@ -78,6 +78,10 @@ model Shop {
   connectedAt   DateTime   @default(now())
   disconnectedAt DateTime?
   lastSyncedAt  DateTime?
+  // Marca que essa loja Shopee (pelo shopeeShopId, que é único e sobrevive a
+  // troca de dono) já consumiu um período de teste grátis - nunca é limpo ao
+  // reconectar em outra conta Lucrei, pra impedir teste infinito trocando de conta.
+  trialConsumedAt DateTime?
 
   user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   oauthToken    ShopeeOAuthToken?

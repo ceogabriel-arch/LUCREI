@@ -109,6 +109,17 @@ export async function shopRoutes(app: FastifyInstance) {
         },
       });
 
+      // Se a conta já está no meio de um teste grátis e essa loja ainda não
+      // tinha consumido teste em nenhuma outra conta, marca ela como "gasta"
+      // agora - impede reconectar essa mesma loja em outra conta pra ganhar
+      // um segundo teste, mesmo quando a loja é conectada depois de escolher o plano.
+      if (!shop.trialConsumedAt) {
+        const owner = await prisma.user.findUnique({ where: { id: userId } });
+        if (owner?.subscriptionStatus === 'trialing' && owner.trialEndsAt && owner.trialEndsAt > new Date()) {
+          await prisma.shop.update({ where: { id: shop.id }, data: { trialConsumedAt: new Date() } });
+        }
+      }
+
       const now = Date.now();
       await prisma.shopeeOAuthToken.upsert({
         where: { shopId: shop.id },

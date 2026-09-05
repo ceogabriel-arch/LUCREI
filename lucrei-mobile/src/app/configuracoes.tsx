@@ -1,16 +1,80 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Screen } from '@/components/screen';
 import { ToastBanner, useToast } from '@/components/toast';
-import { disconnectShop, type AuthUser, type Shop } from '@/lib/api';
+import { API_URL, disconnectShop, type AuthUser, type Shop } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { webCapWidth } from '@/lib/responsive';
 import { useSelectedShop } from '@/lib/selected-shop';
 import { useAppTheme, useColors, type ThemePreference } from '@/lib/theme';
+
+const SUPPORT_EMAIL = 'suporte@lucreiapp.com';
+
+const FAQ_ITEMS: { question: string; answer: string }[] = [
+  {
+    question: 'Como o Lucrei calcula meu lucro?',
+    answer:
+      'Pegamos o valor de repasse real da Shopee (depois de frete, comissão e taxas) e descontamos o custo do produto que você cadastrou. Pedidos sem custo cadastrado aparecem separados, sem entrar no total, pra não inflar o número.',
+  },
+  {
+    question: 'Por que um pedido está sem lucro calculado?',
+    answer:
+      'Provavelmente o produto daquele pedido ainda não tem custo cadastrado. Cadastre o custo em Produtos e o pedido é recalculado automaticamente.',
+  },
+  {
+    question: 'Posso conectar mais de uma loja Shopee?',
+    answer: 'Sim. Em Início, toque em "Conectar outra loja" e escolha entre suas lojas pelo seletor no topo da tela.',
+  },
+  {
+    question: 'Como funciona o teste grátis de 15 dias?',
+    answer:
+      'O plano Start inclui 15 dias grátis, um por loja Shopee. Depois do período de teste (ou se você já usou o teste com essa loja antes), a cobrança mensal começa a valer.',
+  },
+  {
+    question: 'Como cancelo minha assinatura?',
+    answer: 'Em Configurações, na seção do seu plano, toque em "Cancelar plano". Você mantém acesso até o fim do período já pago.',
+  },
+];
+
+function HelpSection() {
+  const Colors = useColors();
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
+
+  return (
+    <View>
+      <Text className="mb-4 text-sm leading-5 text-lucrei-textMuted">
+        Dúvidas mais comuns. Se não encontrar o que precisa, fale direto com a gente.
+      </Text>
+      <View className="gap-2.5">
+        {FAQ_ITEMS.map((item, index) => {
+          const open = openFaq === index;
+          return (
+            <Pressable
+              key={item.question}
+              onPress={() => setOpenFaq(open ? null : index)}
+              className="rounded-xl border border-lucrei-border bg-lucrei-surface p-4">
+              <View className="flex-row items-center justify-between gap-2">
+                <Text className="flex-1 text-sm font-medium text-lucrei-text">{item.question}</Text>
+                <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={Colors.textMuted} />
+              </View>
+              {open && <Text className="mt-2 text-xs leading-5 text-lucrei-textMuted">{item.answer}</Text>}
+            </Pressable>
+          );
+        })}
+      </View>
+      <Pressable
+        onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}`)}
+        className="mt-5 flex-row items-center justify-center gap-2 rounded-xl bg-lucrei-gold py-3">
+        <Ionicons name="mail-outline" size={16} color={Colors.onGold} />
+        <Text className="text-sm font-semibold text-lucrei-onGold">Falar com o suporte</Text>
+      </Pressable>
+    </View>
+  );
+}
 
 const dateFormatter = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
@@ -21,7 +85,7 @@ const STATUS_LABEL: Record<AuthUser['subscriptionStatus'], string> = {
   canceled: 'Cancelado',
 };
 
-type MenuKey = 'name' | 'password' | 'shops' | 'deleteAccount' | null;
+type MenuKey = 'name' | 'password' | 'shops' | 'help' | 'deleteAccount' | null;
 
 function PlanSection({ user }: { user: AuthUser }) {
   const router = useRouter();
@@ -456,6 +520,9 @@ export default function ConfiguracoesScreen() {
       <MenuRow icon="person-outline" label="Alterar nome" onPress={() => setOpenMenu('name')} />
       <MenuRow icon="lock-closed-outline" label="Alterar senha" onPress={() => setOpenMenu('password')} />
       <MenuRow icon="storefront-outline" label="Lojas conectadas" onPress={() => setOpenMenu('shops')} />
+      <MenuRow icon="help-circle-outline" label="Ajuda" onPress={() => setOpenMenu('help')} />
+      <MenuRow icon="document-text-outline" label="Termos de uso" onPress={() => Linking.openURL(`${API_URL}/termos`)} />
+      <MenuRow icon="shield-checkmark-outline" label="Política de privacidade" onPress={() => Linking.openURL(`${API_URL}/privacidade`)} />
 
       <Pressable
         onPress={logout}
@@ -477,6 +544,10 @@ export default function ConfiguracoesScreen() {
 
       <SettingsModal title="Lojas conectadas" visible={openMenu === 'shops'} onClose={() => setOpenMenu(null)}>
         <ShopsList />
+      </SettingsModal>
+
+      <SettingsModal title="Ajuda" visible={openMenu === 'help'} onClose={() => setOpenMenu(null)}>
+        <HelpSection />
       </SettingsModal>
 
       <SettingsModal title="Excluir conta" visible={openMenu === 'deleteAccount'} onClose={() => setOpenMenu(null)}>

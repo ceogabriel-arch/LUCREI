@@ -81,7 +81,13 @@ export async function plansRoutes(app: FastifyInstance) {
             data: { status: 'trialing' },
           });
         } else {
-          const eligibleForTrial = plan.key === TRIAL_ELIGIBLE_PLAN_KEY;
+          // Uma loja Shopee que já consumiu o teste grátis (em qualquer conta
+          // Lucrei - o shopeeShopId é único e persiste ao trocar de dono) não
+          // libera um novo período de teste, mesmo numa conta nova.
+          const taintedShop = plan.key === TRIAL_ELIGIBLE_PLAN_KEY && !trialEndsAt
+            ? await prisma.shop.findFirst({ where: { userId: user.id, trialConsumedAt: { not: null } } })
+            : null;
+          const eligibleForTrial = plan.key === TRIAL_ELIGIBLE_PLAN_KEY && !taintedShop;
           const trialDays = eligibleForTrial ? TRIAL_DAYS : 0;
           if (eligibleForTrial && !trialEndsAt) {
             trialEndsAt = addDays(new Date(), TRIAL_DAYS);
@@ -108,6 +114,13 @@ export async function plansRoutes(app: FastifyInstance) {
               lastInvoiceUrl: checkoutUrl,
             },
           });
+
+          if (trialDays > 0) {
+            await prisma.shop.updateMany({
+              where: { userId: user.id, trialConsumedAt: null },
+              data: { trialConsumedAt: new Date() },
+            });
+          }
         }
       } catch (err) {
         app.log.error(err);

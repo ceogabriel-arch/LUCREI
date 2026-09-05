@@ -1,0 +1,1 @@
+ALTER TABLE "Shop" ADD COLUMN "trialConsumedAt" TIMESTAMP(3);
