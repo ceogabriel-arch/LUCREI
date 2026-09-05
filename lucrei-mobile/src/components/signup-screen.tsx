@@ -39,7 +39,7 @@ export function SignupScreen({ onNavigateToLogin }: SignupScreenProps) {
 
   return (
     <SafeAreaView className="flex-1 bg-lucrei-bg">
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1">
         <ScrollView
           contentContainerClassName="flex-grow justify-center px-6 py-10"
           contentContainerStyle={webCapWidth()}

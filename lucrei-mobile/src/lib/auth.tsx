@@ -6,6 +6,7 @@ import {
   cancelPlan as apiCancelPlan,
   changePassword as apiChangePassword,
   deleteAccount as apiDeleteAccount,
+  googleAuth as apiGoogleAuth,
   login as apiLogin,
   me as apiMe,
   selectPlan as apiSelectPlan,
@@ -27,6 +28,7 @@ type SelectPlanResult =
 type AuthContextValue = {
   state: AuthState;
   login: (email: string, password: string, rememberMe?: boolean) => Promise<AuthResult>;
+  loginWithGoogle: (idToken: string) => Promise<AuthResult>;
   signup: (name: string, email: string, password: string) => Promise<AuthResult>;
   logout: () => Promise<void>;
   updateName: (name: string) => Promise<AuthResult>;
@@ -64,6 +66,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
       if (rememberMe) {
         await setToken(token);
       }
+      setState({ status: 'authenticated', token, user });
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, message: err instanceof ApiError ? err.message : 'Algo deu errado.' };
+    }
+  }
+
+  async function loginWithGoogle(idToken: string): Promise<AuthResult> {
+    try {
+      const { token, user } = await apiGoogleAuth(idToken);
+      await setToken(token);
       setState({ status: 'authenticated', token, user });
       return { ok: true };
     } catch (err) {
@@ -150,7 +163,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   return (
     <AuthContext.Provider
-      value={{ state, login, signup, logout, updateName, changePassword, deleteAccount, selectPlan, cancelPlan }}>
+      value={{
+        state,
+        login,
+        loginWithGoogle,
+        signup,
+        logout,
+        updateName,
+        changePassword,
+        deleteAccount,
+        selectPlan,
+        cancelPlan,
+      }}>
       {children}
     </AuthContext.Provider>
   );

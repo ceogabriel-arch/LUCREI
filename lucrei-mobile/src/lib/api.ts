@@ -60,6 +60,13 @@ export function login(email: string, password: string) {
   });
 }
 
+export function googleAuth(idToken: string) {
+  return request<AuthResponse>('/auth/google', {
+    method: 'POST',
+    body: JSON.stringify({ idToken }),
+  });
+}
+
 export function me(token: string) {
   return request<AuthUser>('/auth/me', {
     headers: { Authorization: `Bearer ${token}` },

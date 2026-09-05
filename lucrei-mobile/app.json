@@ -42,6 +42,12 @@
           "icon": "./assets/images/icon.png",
           "color": "#F5C518"
         }
+      ],
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.15109145213-u26oi0ve72p0158s7749eknnm1ig3n6j"
+        }
       ]
     ],
     "experiments": {

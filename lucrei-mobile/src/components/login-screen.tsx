@@ -9,6 +9,7 @@ import { Sparkline } from '@/components/sparkline';
 import { TextField } from '@/components/text-field';
 import { requestPasswordReset } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { signInWithGoogle } from '@/lib/google-auth';
 import { webCapWidth } from '@/lib/responsive';
 import { useAppTheme } from '@/lib/theme';
 
@@ -100,12 +101,13 @@ function ForgotPasswordModal({ visible, onClose }: { visible: boolean; onClose: 
 }
 
 export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const { scheme, colors: Colors } = useAppTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [googleSubmitting, setGoogleSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [forgotPasswordVisible, setForgotPasswordVisible] = useState(false);
 
@@ -122,9 +124,25 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
     }
   }
 
+  async function handleGoogleSignIn() {
+    setError(null);
+    setGoogleSubmitting(true);
+    try {
+      const idToken = await signInWithGoogle();
+      if (idToken) {
+        const result = await loginWithGoogle(idToken);
+        if (!result.ok) setError(result.message);
+      }
+    } catch {
+      setError('Não foi possível entrar com o Google agora.');
+    } finally {
+      setGoogleSubmitting(false);
+    }
+  }
+
   return (
     <SafeAreaView className="flex-1 bg-lucrei-bg">
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1">
         <ScrollView
           contentContainerClassName="flex-grow justify-center px-6 py-10"
           contentContainerStyle={webCapWidth()}
@@ -190,6 +208,27 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
               )}
             </Pressable>
           </View>
+
+          <View className="mt-5 flex-row items-center gap-3">
+            <View className="h-px flex-1 bg-lucrei-border" />
+            <Text className="text-xs text-lucrei-textMuted">ou</Text>
+            <View className="h-px flex-1 bg-lucrei-border" />
+          </View>
+
+          <Pressable
+            onPress={handleGoogleSignIn}
+            disabled={googleSubmitting}
+            className="mt-5 flex-row items-center justify-center gap-2 rounded-2xl border border-lucrei-border bg-lucrei-surface py-4"
+            style={{ opacity: googleSubmitting ? 0.6 : 1 }}>
+            {googleSubmitting ? (
+              <ActivityIndicator color={Colors.text} />
+            ) : (
+              <>
+                <Ionicons name="logo-google" size={18} color={Colors.text} />
+                <Text className="text-base font-semibold text-lucrei-text">Continuar com Google</Text>
+              </>
+            )}
+          </Pressable>
 
           <View className="mt-8 flex-row justify-center gap-1">
             <Text className="text-sm text-lucrei-textMuted">Ainda não tem conta?</Text>
