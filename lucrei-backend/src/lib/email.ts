@@ -12,14 +12,38 @@ export async function sendPasswordResetEmail(app: FastifyInstance, to: string, r
   }
 
   const html = `<meta charset="utf-8">
-<div style="max-width:480px;margin:0 auto;padding:32px 24px;font-family:Arial,Helvetica,sans-serif;color:#1a1a1a;">
-  <img src="${LOGO_URL}" alt="Lucrei" width="120" style="display:block;margin:0 auto 24px;" />
-  <p>Recebemos um pedido para redefinir a senha da sua conta Lucrei.</p>
-  <p style="text-align:center;margin:28px 0;">
-    <a href="${resetLink}" style="background:#A9790A;color:#0A0A0B;text-decoration:none;font-weight:bold;padding:12px 24px;border-radius:8px;display:inline-block;">Criar nova senha</a>
-  </p>
-  <p style="color:#666;font-size:13px;">Se você não pediu isso, pode ignorar este e-mail.</p>
-</div>`;
+<meta name="color-scheme" content="light only">
+<meta name="supported-color-schemes" content="light only">
+<body style="background-color:#F7F7F5;margin:0;padding:0;">
+<table role="presentation" width="100%" bgcolor="#F7F7F5" style="background-color:#F7F7F5;padding:32px 0;">
+  <tr>
+    <td align="center">
+      <table role="presentation" width="480" bgcolor="#FFFFFF" style="background-color:#FFFFFF;max-width:480px;padding:32px 24px;border-radius:16px;font-family:Arial,Helvetica,sans-serif;color:#1a1a1a;">
+        <tr>
+          <td align="center" style="padding-bottom:24px;">
+            <img src="${LOGO_URL}" alt="Lucrei" width="120" style="display:block;" />
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <p>Recebemos um pedido para redefinir a senha da sua conta Lucrei.</p>
+          </td>
+        </tr>
+        <tr>
+          <td align="center" style="padding:20px 0;">
+            <a href="${resetLink}" style="background:#D4AF37;color:#0A0A0B;text-decoration:none;font-weight:bold;padding:12px 24px;border-radius:8px;display:inline-block;">Criar nova senha</a>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <p style="color:#666;font-size:13px;">Se você não pediu isso, pode ignorar este e-mail.</p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>`;
 
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',

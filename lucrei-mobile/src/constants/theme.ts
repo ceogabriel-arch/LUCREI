@@ -24,10 +24,10 @@ export const LightColors = {
   surface: '#FFFFFF',
   surfaceAlt: '#F0F0EE',
   border: '#E2E2DF',
-  // Dourado mais escuro que o do modo escuro - o mesmo tom vibrante do dark
-  // mode não tem contraste suficiente em cima de um fundo claro.
-  gold: '#A9790A',
-  goldDim: '#8A6308',
+  // Um pouco mais escuro que o dourado do modo escuro pra manter contraste
+  // num fundo claro, mas sem cair pro lado amarronzado/mostarda.
+  gold: '#D4AF37',
+  goldDim: '#9B8028',
   onGold,
   text: '#0A0A0B',
   textMuted: '#6B6B70',
