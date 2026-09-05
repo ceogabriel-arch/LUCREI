@@ -45,7 +45,8 @@ export async function passwordResetRoutes(app: FastifyInstance) {
     '/auth/forgot-password',
     { schema: { body: forgotPasswordSchema } },
     async (request, reply) => {
-      const user = await prisma.user.findUnique({ where: { email: request.body.email } });
+      const email = request.body.email.trim().toLowerCase();
+      const user = await prisma.user.findUnique({ where: { email } });
 
       if (user) {
         const rawToken = randomBytes(32).toString('hex');

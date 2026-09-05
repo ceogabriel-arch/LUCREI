@@ -60,7 +60,8 @@ export async function authRoutes(app: FastifyInstance) {
     '/auth/signup',
     { schema: { body: signupSchema } },
     async (request, reply) => {
-      const { name, email, password } = request.body;
+      const { name, password } = request.body;
+      const email = request.body.email.trim().toLowerCase();
 
       const existing = await prisma.user.findUnique({ where: { email } });
       if (existing) {
@@ -82,7 +83,8 @@ export async function authRoutes(app: FastifyInstance) {
     '/auth/login',
     { schema: { body: credentialsSchema } },
     async (request, reply) => {
-      const { email, password } = request.body;
+      const { password } = request.body;
+      const email = request.body.email.trim().toLowerCase();
 
       const user = await prisma.user.findUnique({ where: { email }, include: userWithPlan });
       if (!user) {
