@@ -18,7 +18,7 @@ export async function sendPasswordResetEmail(app: FastifyInstance, to: string, r
       from: process.env.RESEND_FROM_EMAIL || 'Lucrei <onboarding@resend.dev>',
       to,
       subject: 'Redefinir sua senha do Lucrei',
-      html: `<p>Recebemos um pedido para redefinir a senha da sua conta Lucrei.</p><p><a href="${resetLink}">Clique aqui para criar uma nova senha</a></p><p>Se você não pediu isso, pode ignorar este e-mail.</p>`,
+      html: `<meta charset="utf-8"><p>Recebemos um pedido para redefinir a senha da sua conta Lucrei.</p><p><a href="${resetLink}">Clique aqui para criar uma nova senha</a></p><p>Se você não pediu isso, pode ignorar este e-mail.</p>`,
     }),
   });
 
