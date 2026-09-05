@@ -3,7 +3,18 @@ import type { FastifyInstance } from 'fastify';
 
 import { prisma } from '../../lib/prisma';
 import { reconcileMercadoPagoSubscription } from '../../lib/subscription-sync';
+import * as mercadopago from '../../mercadopago-client';
 import { serializeUser, userWithPlan } from '../plans/serialize-user';
+
+const deleteAccountSchema = {
+  type: 'object',
+  required: ['password'],
+  properties: {
+    password: { type: 'string', minLength: 1 },
+  },
+} as const;
+
+type DeleteAccountBody = { password: string };
 
 const credentialsSchema = {
   type: 'object',
@@ -159,6 +170,40 @@ export async function authRoutes(app: FastifyInstance) {
       // vazado); reemite um novo token válido pra não deslogar quem trocou.
       const token = app.jwt.sign({ sub: updated.id, tv: updated.tokenVersion });
       return reply.send({ ok: true, token });
+    }
+  );
+
+  app.delete<{ Body: DeleteAccountBody }>(
+    '/auth/me',
+    { onRequest: [app.authenticate], schema: { body: deleteAccountSchema } },
+    async (request, reply) => {
+      const user = await prisma.user.findUnique({ where: { id: request.user.sub } });
+      if (!user) {
+        return reply.status(404).send({ message: 'Usuário não encontrado.' });
+      }
+
+      const valid = await bcrypt.compare(request.body.password, user.passwordHash);
+      if (!valid) {
+        return reply.status(401).send({ message: 'Senha incorreta.' });
+      }
+
+      const subscription = await prisma.subscription.findFirst({
+        where: { userId: user.id, provider: 'mercado_pago', status: { not: 'canceled' } },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (subscription?.providerSubscriptionId) {
+        try {
+          await mercadopago.cancelPreapproval(subscription.providerSubscriptionId);
+        } catch (err) {
+          app.log.error(err);
+        }
+      }
+
+      // Cascata no schema apaga lojas, tokens, pedidos, produtos e
+      // assinaturas junto - não precisa apagar cada tabela na mão.
+      await prisma.user.delete({ where: { id: user.id } });
+
+      return reply.send({ ok: true });
     }
   );
 }

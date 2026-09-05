@@ -5,6 +5,7 @@ import {
   type AuthUser,
   cancelPlan as apiCancelPlan,
   changePassword as apiChangePassword,
+  deleteAccount as apiDeleteAccount,
   login as apiLogin,
   me as apiMe,
   selectPlan as apiSelectPlan,
@@ -30,6 +31,7 @@ type AuthContextValue = {
   logout: () => Promise<void>;
   updateName: (name: string) => Promise<AuthResult>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<AuthResult>;
+  deleteAccount: (password: string) => Promise<AuthResult>;
   selectPlan: (key: string) => Promise<SelectPlanResult>;
   cancelPlan: () => Promise<AuthResult>;
 };
@@ -112,6 +114,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
   }
 
+  async function deleteAccount(password: string): Promise<AuthResult> {
+    if (state.status !== 'authenticated') return { ok: false, message: 'Não autenticado.' };
+    try {
+      await apiDeleteAccount(state.token, password);
+      await clearToken();
+      setState({ status: 'unauthenticated' });
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, message: err instanceof ApiError ? err.message : 'Algo deu errado.' };
+    }
+  }
+
   async function selectPlan(key: string): Promise<SelectPlanResult> {
     if (state.status !== 'authenticated') return { ok: false, message: 'Não autenticado.' };
     try {
@@ -136,7 +150,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   return (
     <AuthContext.Provider
-      value={{ state, login, signup, logout, updateName, changePassword, selectPlan, cancelPlan }}>
+      value={{ state, login, signup, logout, updateName, changePassword, deleteAccount, selectPlan, cancelPlan }}>
       {children}
     </AuthContext.Provider>
   );

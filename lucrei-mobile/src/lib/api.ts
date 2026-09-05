@@ -82,6 +82,14 @@ export function changePassword(token: string, currentPassword: string, newPasswo
   });
 }
 
+export function deleteAccount(token: string, password: string) {
+  return request<{ ok: true }>('/auth/me', {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ password }),
+  });
+}
+
 export function savePushToken(token: string, pushToken: string) {
   return request<{ ok: true }>('/auth/push-token', {
     method: 'POST',

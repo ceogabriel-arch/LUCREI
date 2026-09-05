@@ -21,7 +21,7 @@ const STATUS_LABEL: Record<AuthUser['subscriptionStatus'], string> = {
   canceled: 'Cancelado',
 };
 
-type MenuKey = 'name' | 'password' | 'shops' | null;
+type MenuKey = 'name' | 'password' | 'shops' | 'deleteAccount' | null;
 
 function PlanSection({ user }: { user: AuthUser }) {
   const router = useRouter();
@@ -336,6 +336,62 @@ function ShopsList() {
   );
 }
 
+function DeleteAccountSection() {
+  const { deleteAccount } = useAuth();
+  const Colors = useColors();
+  const [password, setPassword] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const { toast, opacity, show } = useToast();
+
+  function confirmDelete() {
+    Alert.alert(
+      'Excluir sua conta?',
+      'Isso apaga permanentemente sua conta, lojas conectadas, pedidos e produtos. Não tem como desfazer.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Excluir permanentemente', style: 'destructive', onPress: handleDelete },
+      ]
+    );
+  }
+
+  async function handleDelete() {
+    setDeleting(true);
+    const result = await deleteAccount(password);
+    setDeleting(false);
+    if (!result.ok) {
+      show({ title: 'Não foi possível excluir', message: result.message, tone: 'error' });
+    }
+  }
+
+  return (
+    <View>
+      <ToastBanner toast={toast} opacity={opacity} />
+      <Text className="mb-4 text-sm leading-5 text-lucrei-textMuted">
+        Essa ação é permanente. Todos os seus dados — lojas conectadas, pedidos, produtos e assinatura — serão
+        apagados e não podem ser recuperados.
+      </Text>
+      <Text className="mb-1.5 text-xs text-lucrei-textMuted">Confirme sua senha</Text>
+      <TextInput
+        value={password}
+        onChangeText={setPassword}
+        placeholder="Sua senha"
+        placeholderTextColor={Colors.textMuted}
+        secureTextEntry
+        className="mb-4 rounded-xl border border-lucrei-border bg-lucrei-surface px-4 py-3 text-sm text-lucrei-text"
+      />
+      <Pressable
+        onPress={confirmDelete}
+        disabled={password.length === 0 || deleting}
+        className="items-center rounded-xl bg-lucrei-danger py-3"
+        style={{ opacity: password.length === 0 || deleting ? 0.4 : 1 }}>
+        {deleting ? <ActivityIndicator size="small" color="#FFFFFF" /> : (
+          <Text className="text-sm font-semibold text-white">Excluir conta permanentemente</Text>
+        )}
+      </Pressable>
+    </View>
+  );
+}
+
 const APPEARANCE_OPTIONS: { key: ThemePreference; label: string }[] = [
   { key: 'system', label: 'Sistema' },
   { key: 'light', label: 'Claro' },
@@ -407,6 +463,10 @@ export default function ConfiguracoesScreen() {
         <Text className="text-base font-semibold text-lucrei-danger">Sair da conta</Text>
       </Pressable>
 
+      <Pressable onPress={() => setOpenMenu('deleteAccount')} className="mt-4 items-center py-2">
+        <Text className="text-xs font-medium text-lucrei-danger">Excluir conta</Text>
+      </Pressable>
+
       <SettingsModal title="Alterar nome" visible={openMenu === 'name'} onClose={() => setOpenMenu(null)}>
         <NameField />
       </SettingsModal>
@@ -417,6 +477,10 @@ export default function ConfiguracoesScreen() {
 
       <SettingsModal title="Lojas conectadas" visible={openMenu === 'shops'} onClose={() => setOpenMenu(null)}>
         <ShopsList />
+      </SettingsModal>
+
+      <SettingsModal title="Excluir conta" visible={openMenu === 'deleteAccount'} onClose={() => setOpenMenu(null)}>
+        <DeleteAccountSection />
       </SettingsModal>
     </Screen>
   );
