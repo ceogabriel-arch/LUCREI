@@ -34,6 +34,7 @@ export function PasswordField({ label, value, onChangeText, autoComplete, placeh
           secureTextEntry={!visible}
           autoCapitalize="none"
           autoComplete={autoComplete}
+          importantForAutofill="no"
           placeholder={placeholder}
           placeholderTextColor={Colors.textMuted}
           className="flex-1 border-0 bg-transparent py-3 text-base text-lucrei-text"

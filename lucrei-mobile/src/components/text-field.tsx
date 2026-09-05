@@ -18,6 +18,7 @@ export function TextField({ label, style, ...inputProps }: TextFieldProps) {
         placeholderTextColor={Colors.textMuted}
         className="rounded-xl border border-lucrei-border bg-lucrei-surface px-4 py-3 text-base text-lucrei-text"
         style={[webOutlineStyle, style]}
+        importantForAutofill="no"
         {...inputProps}
       />
     </View>
