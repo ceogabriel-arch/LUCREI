@@ -36,3 +36,33 @@ export const LightColors = {
 } as const;
 
 export type ThemeColors = { [K in keyof typeof DarkColors]: string };
+
+function hexToRgbTriplet(hex: string) {
+  const value = parseInt(hex.replace('#', ''), 16);
+  const r = (value >> 16) & 255;
+  const g = (value >> 8) & 255;
+  const b = value & 255;
+  return `${r} ${g} ${b}`;
+}
+
+// Variáveis CSS por tema, no mesmo formato usado em global.css (--color-bg
+// etc.). Usadas via a API vars() do NativeWind pra aplicar via style, sem
+// depender da troca de classe ".dark" — que tem bug documentado no v4 em
+// apps nativos (a troca não é aplicada de forma confiável).
+function toCssVars(colors: ThemeColors) {
+  return {
+    '--color-bg': hexToRgbTriplet(colors.bg),
+    '--color-surface': hexToRgbTriplet(colors.surface),
+    '--color-surface-alt': hexToRgbTriplet(colors.surfaceAlt),
+    '--color-border': hexToRgbTriplet(colors.border),
+    '--color-gold': hexToRgbTriplet(colors.gold),
+    '--color-gold-dim': hexToRgbTriplet(colors.goldDim),
+    '--color-text': hexToRgbTriplet(colors.text),
+    '--color-text-muted': hexToRgbTriplet(colors.textMuted),
+    '--color-success': hexToRgbTriplet(colors.success),
+    '--color-danger': hexToRgbTriplet(colors.danger),
+  };
+}
+
+export const DarkCssVars = toCssVars(DarkColors);
+export const LightCssVars = toCssVars(LightColors);
