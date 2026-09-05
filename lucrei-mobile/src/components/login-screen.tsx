@@ -75,7 +75,7 @@ function ForgotPasswordModal({ visible, onClose }: { visible: boolean; onClose: 
                   label="E-mail"
                   placeholder="seu@email.com"
                   autoCapitalize="none"
-                  autoComplete="email"
+                  autoComplete="off"
                   keyboardType="email-address"
                   value={email}
                   onChangeText={setEmail}
@@ -166,7 +166,7 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
               label="E-mail"
               placeholder="seu@email.com"
               autoCapitalize="none"
-              autoComplete="email"
+              autoComplete="off"
               keyboardType="email-address"
               value={email}
               onChangeText={setEmail}
@@ -176,7 +176,7 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
               placeholder="Sua senha"
               value={password}
               onChangeText={setPassword}
-              autoComplete="password"
+              autoComplete="off"
             />
 
             <View className="mb-2 flex-row items-center justify-between">

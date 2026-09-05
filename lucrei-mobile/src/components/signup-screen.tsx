@@ -55,7 +55,7 @@ export function SignupScreen({ onNavigateToLogin }: SignupScreenProps) {
               label="E-mail"
               placeholder="seu@email.com"
               autoCapitalize="none"
-              autoComplete="email"
+              autoComplete="off"
               keyboardType="email-address"
               value={email}
               onChangeText={setEmail}

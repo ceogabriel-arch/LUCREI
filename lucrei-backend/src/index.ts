@@ -5,7 +5,7 @@ import compress from '@fastify/compress';
 import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
 import staticFiles from '@fastify/static';
-import Fastify from 'fastify';
+import Fastify, { type FastifyError } from 'fastify';
 
 import { prisma } from './lib/prisma';
 import { authRoutes } from './modules/auth/routes';
@@ -46,6 +46,21 @@ async function main() {
     } catch (err) {
       reply.send(err);
     }
+  });
+
+  // Sem isso, qualquer exceção não tratada (ex: banco fora do ar) vaza a
+  // mensagem crua do erro (stack, host do banco etc.) direto pro cliente -
+  // Fastify não esconde isso sozinho por padrão.
+  app.setErrorHandler((error: FastifyError, _request, reply) => {
+    app.log.error(error);
+    if (error.validation) {
+      return reply.status(400).send({ message: 'Dados inválidos.' });
+    }
+    const statusCode = error.statusCode ?? 500;
+    if (statusCode < 500) {
+      return reply.status(statusCode).send({ message: error.message });
+    }
+    return reply.status(500).send({ message: 'Algo deu errado no servidor. Tente novamente em instantes.' });
   });
 
   app.get('/health', async () => ({ status: 'ok' }));

@@ -16,7 +16,7 @@ type PasswordFieldProps = {
   label: string;
   value: string;
   onChangeText: (value: string) => void;
-  autoComplete?: 'password' | 'password-new';
+  autoComplete?: 'password' | 'password-new' | 'off';
   placeholder?: string;
 };
 
