@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import bcrypt from 'bcryptjs';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 
 import { sendPasswordResetEmail } from '../../lib/email';
 import { prisma } from '../../lib/prisma';
@@ -32,6 +32,13 @@ const resetPasswordSchema = {
 type ForgotPasswordBody = { email: string };
 type ResetPasswordBody = { token: string; newPassword: string };
 
+// Por IP + e-mail - evita usar esse endpoint pra martelar caixa de entrada de
+// alguém (spam de e-mail) sem travar todo mundo de uma rede compartilhada.
+function forgotPasswordRateLimitKey(request: FastifyRequest) {
+  const email = (request.body as Partial<ForgotPasswordBody> | undefined)?.email?.trim().toLowerCase() ?? '';
+  return `${request.ip}:${email}`;
+}
+
 function hashToken(token: string) {
   return createHash('sha256').update(token).digest('hex');
 }
@@ -43,7 +50,12 @@ export async function passwordResetRoutes(app: FastifyInstance) {
 
   app.post<{ Body: ForgotPasswordBody }>(
     '/auth/forgot-password',
-    { schema: { body: forgotPasswordSchema } },
+    {
+      schema: { body: forgotPasswordSchema },
+      config: {
+        rateLimit: { max: 5, timeWindow: '1 hour', hook: 'preHandler', keyGenerator: forgotPasswordRateLimitKey },
+      },
+    },
     async (request, reply) => {
       const email = request.body.email.trim().toLowerCase();
       const user = await prisma.user.findUnique({ where: { email } });
@@ -68,7 +80,7 @@ export async function passwordResetRoutes(app: FastifyInstance) {
 
   app.post<{ Body: ResetPasswordBody }>(
     '/auth/reset-password',
-    { schema: { body: resetPasswordSchema } },
+    { schema: { body: resetPasswordSchema }, config: { rateLimit: { max: 10, timeWindow: '1 hour' } } },
     async (request, reply) => {
       const tokenHash = hashToken(request.body.token);
       const user = await prisma.user.findFirst({

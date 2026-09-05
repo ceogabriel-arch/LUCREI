@@ -4,6 +4,7 @@ import 'dotenv/config';
 import compress from '@fastify/compress';
 import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
+import rateLimit from '@fastify/rate-limit';
 import staticFiles from '@fastify/static';
 import Fastify, { type FastifyError } from 'fastify';
 
@@ -19,7 +20,10 @@ import { shopRoutes } from './modules/shops/routes';
 import { summaryRoutes } from './modules/summary/routes';
 import { syncRoutes } from './modules/sync/routes';
 
-const app = Fastify({ logger: true });
+// Railway coloca a API atrás de um proxy - sem isso, request.ip volta sempre
+// o IP interno do proxy (o mesmo pra todo mundo), o que quebraria o rate
+// limit por IP abaixo.
+const app = Fastify({ logger: true, trustProxy: true });
 
 async function main() {
   if (!process.env.JWT_SECRET) {
@@ -29,6 +33,18 @@ async function main() {
   await app.register(cors, { origin: true });
   await app.register(compress, { global: true });
   await app.register(jwt, { secret: process.env.JWT_SECRET });
+  // Limite geral (por IP) contra abuso/DoS; rotas de login/cadastro/reset têm
+  // limites bem mais apertados registrados junto com cada rota.
+  await app.register(rateLimit, {
+    global: true,
+    max: 300,
+    timeWindow: '1 minute',
+    errorResponseBuilder: (_req, context) => {
+      const err = new Error('Muitas tentativas. Aguarde um pouco e tente de novo.') as FastifyError;
+      err.statusCode = context.statusCode;
+      return err;
+    },
+  });
 
   app.decorate('authenticate', async (request, reply) => {
     try {

@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 
 import bcrypt from 'bcryptjs';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { OAuth2Client } from 'google-auth-library';
 
 import { prisma } from '../../lib/prisma';
@@ -80,6 +80,14 @@ const pushTokenSchema = {
   },
 } as const;
 
+// Por IP + e-mail, não só IP: evita bloquear todo mundo de uma rede
+// compartilhada (NAT de empresa/escola) por causa de uma conta só sendo
+// atacada, e ainda impede alguém martelar senha numa conta específica.
+function loginRateLimitKey(request: FastifyRequest) {
+  const email = (request.body as Partial<Credentials> | undefined)?.email?.trim().toLowerCase() ?? '';
+  return `${request.ip}:${email}`;
+}
+
 type Credentials = { email: string; password: string };
 type SignupBody = { name: string; email: string; password: string };
 type UpdateNameBody = { name: string };
@@ -89,7 +97,7 @@ type PushTokenBody = { token: string };
 export async function authRoutes(app: FastifyInstance) {
   app.post<{ Body: SignupBody }>(
     '/auth/signup',
-    { schema: { body: signupSchema } },
+    { schema: { body: signupSchema }, config: { rateLimit: { max: 5, timeWindow: '1 hour' } } },
     async (request, reply) => {
       const { name, password } = request.body;
       const email = request.body.email.trim().toLowerCase();
@@ -112,7 +120,12 @@ export async function authRoutes(app: FastifyInstance) {
 
   app.post<{ Body: Credentials }>(
     '/auth/login',
-    { schema: { body: credentialsSchema } },
+    {
+      schema: { body: credentialsSchema },
+      // hook: 'preHandler' porque o padrão (onRequest) roda antes do corpo
+      // da requisição ser parseado - o keyGenerator precisa ler o e-mail.
+      config: { rateLimit: { max: 8, timeWindow: '10 minutes', hook: 'preHandler', keyGenerator: loginRateLimitKey } },
+    },
     async (request, reply) => {
       const { password } = request.body;
       const email = request.body.email.trim().toLowerCase();
@@ -134,7 +147,7 @@ export async function authRoutes(app: FastifyInstance) {
 
   app.post<{ Body: GoogleAuthBody }>(
     '/auth/google',
-    { schema: { body: googleAuthSchema } },
+    { schema: { body: googleAuthSchema }, config: { rateLimit: { max: 20, timeWindow: '10 minutes' } } },
     async (request, reply) => {
       let payload;
       try {
