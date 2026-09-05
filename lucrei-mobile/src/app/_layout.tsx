@@ -1,6 +1,7 @@
 import { DarkTheme, DefaultTheme, ThemeProvider as NavigationThemeProvider } from 'expo-router';
 import { vars } from 'nativewind';
 import * as SplashScreen from 'expo-splash-screen';
+import * as SystemUI from 'expo-system-ui';
 import { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { View } from 'react-native';
@@ -55,6 +56,14 @@ function RootNavigator() {
 
 function ThemedNavigation() {
   const { scheme, colors } = useAppTheme();
+
+  useEffect(() => {
+    // app.json fixa um "backgroundColor" escuro estático pra janela raiz do
+    // Android - no modo claro isso aparecia como uma faixa preta em áreas
+    // sem conteúdo (embaixo da tab bar, por exemplo). Aqui a gente sobrepõe
+    // isso em tempo real com a cor certa do tema atual.
+    SystemUI.setBackgroundColorAsync(colors.bg);
+  }, [colors.bg]);
 
   const navigationTheme = {
     ...(scheme === 'dark' ? DarkTheme : DefaultTheme),
