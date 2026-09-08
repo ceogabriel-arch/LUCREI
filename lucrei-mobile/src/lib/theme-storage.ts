@@ -7,7 +7,7 @@ const THEME_KEY = 'lucrei_theme_preference';
 
 export async function getThemePreference(): Promise<ThemePreference | null> {
   const value = Platform.OS === 'web' ? (globalThis.localStorage?.getItem(THEME_KEY) ?? null) : await SecureStore.getItemAsync(THEME_KEY);
-  return value === 'system' || value === 'light' || value === 'dark' ? value : null;
+  return value === 'light' || value === 'dark' ? value : null;
 }
 
 export async function setThemePreference(preference: ThemePreference): Promise<void> {

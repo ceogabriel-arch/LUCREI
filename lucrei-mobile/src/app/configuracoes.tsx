@@ -457,7 +457,6 @@ function DeleteAccountSection() {
 }
 
 const APPEARANCE_OPTIONS: { key: ThemePreference; label: string }[] = [
-  { key: 'system', label: 'Sistema' },
   { key: 'light', label: 'Claro' },
   { key: 'dark', label: 'Escuro' },
 ];
