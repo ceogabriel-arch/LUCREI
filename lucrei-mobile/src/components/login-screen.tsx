@@ -53,7 +53,7 @@ function ForgotPasswordModal({ visible, onClose }: { visible: boolean; onClose: 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         className="flex-1 justify-end bg-black/60">
         <SafeAreaView edges={['bottom']} className="rounded-t-3xl bg-lucrei-bg">
           <View className="flex-row items-center justify-between border-b border-lucrei-border px-5 py-4">
@@ -144,7 +144,7 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
 
   return (
     <SafeAreaView className="flex-1 bg-lucrei-bg">
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1">
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
         <ScrollView
           contentContainerClassName="flex-grow justify-center px-6 py-10"
           contentContainerStyle={webCapWidth()}
