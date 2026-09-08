@@ -3,6 +3,8 @@
 @tailwind utilities;
 
 :root {
+  color-scheme: light;
+
   --font-display:
     Spline Sans, Inter, ui-sans-serif, system-ui, sans-serif, Apple Color Emoji, Segoe UI Emoji,
     Segoe UI Symbol, Noto Color Emoji;
@@ -28,6 +30,8 @@
 /* Paleta escura - ativada pelo AppThemeProvider via nativewind, que
    adiciona/remove a classe "dark" na raiz. */
 :root.dark {
+  color-scheme: dark;
+
   --color-bg: 10 10 11;
   --color-surface: 22 22 23;
   --color-surface-alt: 31 31 33;
