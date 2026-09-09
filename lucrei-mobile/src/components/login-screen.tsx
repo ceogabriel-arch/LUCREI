@@ -1,7 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  BackHandler,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PasswordField } from '@/components/password-field';
@@ -50,14 +59,28 @@ function ForgotPasswordModal({ visible, onClose }: { visible: boolean; onClose: 
     onClose();
   }
 
+  // Um <Modal> nativo é uma janela Android separada que não participa do
+  // resize da Activity quando o teclado abre (é por isso que o
+  // KeyboardAvoidingView não tinha efeito nenhum aqui dentro, mesmo com
+  // behavior="height"). Em vez de lutar contra isso, renderiza como um
+  // overlay normal dentro da própria árvore da tela - assim ele herda o
+  // mesmo resize nativo que já funciona no formulário de login principal.
+  useEffect(() => {
+    if (!visible || Platform.OS !== 'android') return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      onClose();
+      return true;
+    });
+    return () => sub.remove();
+  }, [visible, onClose]);
+
+  if (!visible) return null;
+
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
-      <KeyboardAvoidingView
-        // O resize nativo do Android que as telas de login/cadastro usam não
-        // se aplica dentro de um <Modal> (janela separada) - aqui precisa
-        // mesmo do KeyboardAvoidingView, senão o teclado cobre o campo.
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        className="flex-1 justify-end bg-black/60">
+    <View
+      style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+      className="justify-end bg-black/60">
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <SafeAreaView edges={['bottom']} className="rounded-t-3xl bg-lucrei-bg">
           <View className="flex-row items-center justify-between border-b border-lucrei-border px-5 py-4">
             <Text className="text-base font-semibold text-lucrei-text">Esqueci minha senha</Text>
@@ -101,7 +124,7 @@ function ForgotPasswordModal({ visible, onClose }: { visible: boolean; onClose: 
           </View>
         </SafeAreaView>
       </KeyboardAvoidingView>
-    </Modal>
+    </View>
   );
 }
 

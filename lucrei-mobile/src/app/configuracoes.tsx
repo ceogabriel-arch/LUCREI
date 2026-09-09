@@ -1,12 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  BackHandler,
   KeyboardAvoidingView,
   Linking,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -180,14 +180,26 @@ function SettingsModal({
   children: React.ReactNode;
 }) {
   const Colors = useColors();
+
+  // Um <Modal> nativo é uma janela Android separada que não participa do
+  // resize da Activity quando o teclado abre - por isso KeyboardAvoidingView
+  // não tinha efeito nenhum aqui dentro. Renderiza como overlay normal na
+  // própria árvore da tela em vez disso, herdando o resize nativo que já
+  // funciona no resto do app.
+  useEffect(() => {
+    if (!visible || Platform.OS !== 'android') return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      onClose();
+      return true;
+    });
+    return () => sub.remove();
+  }, [visible, onClose]);
+
+  if (!visible) return null;
+
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        // Modal é uma janela separada no Android - não herda o resize
-        // automático da tela principal, então precisa do KeyboardAvoidingView
-        // aqui mesmo pra não deixar o teclado cobrir os campos (senha etc).
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        className="flex-1 justify-end bg-black/60">
+    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} className="justify-end bg-black/60">
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <SafeAreaView edges={['bottom']} style={{ maxHeight: '85%', ...webCapWidth() }} className="rounded-t-3xl bg-lucrei-bg">
           <View className="flex-row items-center justify-between border-b border-lucrei-border px-5 py-4">
             <Text className="text-base font-semibold text-lucrei-text">{title}</Text>
@@ -200,7 +212,7 @@ function SettingsModal({
           </ScrollView>
         </SafeAreaView>
       </KeyboardAvoidingView>
-    </Modal>
+    </View>
   );
 }
 
@@ -516,7 +528,8 @@ export default function ConfiguracoesScreen() {
   const [openMenu, setOpenMenu] = useState<MenuKey>(null);
 
   return (
-    <Screen>
+    <>
+      <Screen>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="pb-8">
         <Text className="text-2xl font-bold text-lucrei-text">Configurações</Text>
         <Text className="mt-2 text-base text-lucrei-textMuted">
@@ -551,6 +564,7 @@ export default function ConfiguracoesScreen() {
           <Text className="text-xs font-medium text-lucrei-danger">Excluir conta</Text>
         </Pressable>
       </ScrollView>
+      </Screen>
 
       <SettingsModal title="Alterar nome" visible={openMenu === 'name'} onClose={() => setOpenMenu(null)}>
         <NameField />
@@ -571,6 +585,6 @@ export default function ConfiguracoesScreen() {
       <SettingsModal title="Excluir conta" visible={openMenu === 'deleteAccount'} onClose={() => setOpenMenu(null)}>
         <DeleteAccountSection />
       </SettingsModal>
-    </Screen>
+    </>
   );
 }
