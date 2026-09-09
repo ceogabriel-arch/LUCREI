@@ -53,7 +53,10 @@ function ForgotPasswordModal({ visible, onClose }: { visible: boolean; onClose: 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        // O resize nativo do Android que as telas de login/cadastro usam não
+        // se aplica dentro de um <Modal> (janela separada) - aqui precisa
+        // mesmo do KeyboardAvoidingView, senão o teclado cobre o campo.
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         className="flex-1 justify-end bg-black/60">
         <SafeAreaView edges={['bottom']} className="rounded-t-3xl bg-lucrei-bg">
           <View className="flex-row items-center justify-between border-b border-lucrei-border px-5 py-4">

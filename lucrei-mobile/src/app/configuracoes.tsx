@@ -1,7 +1,19 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Linking, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Linking,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Screen } from '@/components/screen';
@@ -170,7 +182,12 @@ function SettingsModal({
   const Colors = useColors();
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View className="flex-1 justify-end bg-black/60">
+      <KeyboardAvoidingView
+        // Modal é uma janela separada no Android - não herda o resize
+        // automático da tela principal, então precisa do KeyboardAvoidingView
+        // aqui mesmo pra não deixar o teclado cobrir os campos (senha etc).
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        className="flex-1 justify-end bg-black/60">
         <SafeAreaView edges={['bottom']} style={{ maxHeight: '85%', ...webCapWidth() }} className="rounded-t-3xl bg-lucrei-bg">
           <View className="flex-row items-center justify-between border-b border-lucrei-border px-5 py-4">
             <Text className="text-base font-semibold text-lucrei-text">{title}</Text>
@@ -182,7 +199,7 @@ function SettingsModal({
             {children}
           </ScrollView>
         </SafeAreaView>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
