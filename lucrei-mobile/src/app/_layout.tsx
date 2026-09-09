@@ -5,6 +5,7 @@ import * as SystemUI from 'expo-system-ui';
 import { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { View } from 'react-native';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 import AppTabs from '@/components/app-tabs';
 import { LoginScreen } from '@/components/login-screen';
@@ -95,8 +96,10 @@ function ThemedNavigation() {
 
 export default function RootLayout() {
   return (
-    <AppThemeProvider>
-      <ThemedNavigation />
-    </AppThemeProvider>
+    <KeyboardProvider>
+      <AppThemeProvider>
+        <ThemedNavigation />
+      </AppThemeProvider>
+    </KeyboardProvider>
   );
 }

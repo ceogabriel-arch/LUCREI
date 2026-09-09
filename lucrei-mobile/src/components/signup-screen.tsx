@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, ScrollView, Text, View } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PasswordField } from '@/components/password-field';
@@ -39,7 +40,7 @@ export function SignupScreen({ onNavigateToLogin }: SignupScreenProps) {
 
   return (
     <SafeAreaView className="flex-1 bg-lucrei-bg">
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
+      <KeyboardAvoidingView behavior="padding" className="flex-1">
         <ScrollView
           contentContainerClassName="flex-grow justify-center px-6 py-10"
           contentContainerStyle={webCapWidth()}

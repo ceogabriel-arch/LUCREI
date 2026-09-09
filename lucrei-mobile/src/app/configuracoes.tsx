@@ -5,7 +5,6 @@ import {
   ActivityIndicator,
   Alert,
   BackHandler,
-  KeyboardAvoidingView,
   Linking,
   Platform,
   Pressable,
@@ -14,6 +13,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Screen } from '@/components/screen';
@@ -199,7 +199,7 @@ function SettingsModal({
 
   return (
     <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} className="justify-end bg-black/60">
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView behavior="padding">
         <SafeAreaView edges={['bottom']} style={{ maxHeight: '85%', ...webCapWidth() }} className="rounded-t-3xl bg-lucrei-bg">
           <View className="flex-row items-center justify-between border-b border-lucrei-border px-5 py-4">
             <Text className="text-base font-semibold text-lucrei-text">{title}</Text>

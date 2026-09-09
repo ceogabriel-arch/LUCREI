@@ -1,16 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  BackHandler,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, BackHandler, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PasswordField } from '@/components/password-field';
@@ -80,7 +72,7 @@ function ForgotPasswordModal({ visible, onClose }: { visible: boolean; onClose: 
     <View
       style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
       className="justify-end bg-black/60">
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView behavior="padding">
         <SafeAreaView edges={['bottom']} className="rounded-t-3xl bg-lucrei-bg">
           <View className="flex-row items-center justify-between border-b border-lucrei-border px-5 py-4">
             <Text className="text-base font-semibold text-lucrei-text">Esqueci minha senha</Text>
@@ -170,7 +162,7 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
 
   return (
     <SafeAreaView className="flex-1 bg-lucrei-bg">
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
+      <KeyboardAvoidingView behavior="padding" className="flex-1">
         <ScrollView
           contentContainerClassName="flex-grow justify-center px-6 py-10"
           contentContainerStyle={webCapWidth()}
