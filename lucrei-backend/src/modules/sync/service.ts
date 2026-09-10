@@ -45,15 +45,21 @@ async function processOrder(
 
   await prisma.orderLineItem.deleteMany({ where: { orderId: order.id } });
 
+  const itemIds = income.items.map((li) => String(li.item_id));
+  const products = await prisma.product.findMany({
+    where: { shopId: shopDbId, shopeeItemId: { in: itemIds } },
+  });
+  const productByItemId = new Map<string, (typeof products)[number]>();
+  for (const p of products) {
+    if (p.shopeeItemId && !productByItemId.has(p.shopeeItemId)) productByItemId.set(p.shopeeItemId, p);
+  }
+
   let profitSum = 0;
   let itemsMissingCost = 0;
 
-  for (const li of income.items) {
+  const lineItemsData = income.items.map((li) => {
     const { lineValue, shippingFeeAllocated, shopeeFeeAllocated } = allocateLineItem(li, totals);
-
-    const product = await prisma.product.findFirst({
-      where: { shopId: shopDbId, shopeeItemId: String(li.item_id) },
-    });
+    const product = productByItemId.get(String(li.item_id));
 
     const productCostSnapshot = product ? Number(product.costPrice) * li.quantity_purchased : null;
     const profit = computeLineProfit(lineValue, shippingFeeAllocated, shopeeFeeAllocated, productCostSnapshot);
@@ -61,20 +67,20 @@ async function processOrder(
     if (profit === null) itemsMissingCost++;
     else profitSum += profit;
 
-    await prisma.orderLineItem.create({
-      data: {
-        orderId: order.id,
-        productId: product?.id,
-        shopeeItemId: String(li.item_id),
-        quantity: li.quantity_purchased,
-        salePrice: lineValue,
-        shippingFeeAllocated,
-        shopeeFeeAllocated,
-        productCostSnapshot: productCostSnapshot ?? undefined,
-        profit: profit ?? undefined,
-      },
-    });
-  }
+    return {
+      orderId: order.id,
+      productId: product?.id,
+      shopeeItemId: String(li.item_id),
+      quantity: li.quantity_purchased,
+      salePrice: lineValue,
+      shippingFeeAllocated,
+      shopeeFeeAllocated,
+      productCostSnapshot: productCostSnapshot ?? undefined,
+      profit: profit ?? undefined,
+    };
+  });
+
+  await prisma.orderLineItem.createMany({ data: lineItemsData });
 
   // Segue o mesmo critério da rota de listagem de pedidos: só null quando
   // NENHUM item do pedido tem custo cadastrado.
