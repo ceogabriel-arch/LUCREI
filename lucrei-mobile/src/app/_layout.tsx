@@ -1,5 +1,6 @@
 import { DarkTheme, DefaultTheme, ThemeProvider as NavigationThemeProvider } from 'expo-router';
 import { vars } from 'nativewind';
+import * as Sentry from '@sentry/react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import * as SystemUI from 'expo-system-ui';
 import { useEffect, useState } from 'react';
@@ -19,6 +20,14 @@ import { SelectedShopProvider } from '@/lib/selected-shop';
 import { AppThemeProvider, useAppTheme } from '@/lib/theme';
 
 SplashScreen.preventAutoHideAsync();
+
+// Sem DSN (ex: dev local sem .env configurado), o SDK fica desativado e não
+// manda nada - só passa a reportar quando EXPO_PUBLIC_SENTRY_DSN existir.
+Sentry.init({
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+  enabled: !!process.env.EXPO_PUBLIC_SENTRY_DSN,
+  tracesSampleRate: 0.2,
+});
 
 type AuthScreen = 'login' | 'signup';
 
@@ -94,7 +103,7 @@ function ThemedNavigation() {
   );
 }
 
-export default function RootLayout() {
+function RootLayout() {
   return (
     <KeyboardProvider>
       <AppThemeProvider>
@@ -103,3 +112,5 @@ export default function RootLayout() {
     </KeyboardProvider>
   );
 }
+
+export default Sentry.wrap(RootLayout);
