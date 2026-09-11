@@ -39,6 +39,9 @@ function buildPlan(overrides: Partial<Plan> = {}): Plan {
     priceOriginal: null,
     priceCurrent: null,
     sortOrder: 2,
+    groupKey: 'pro',
+    billingPeriod: 'monthly',
+    trialEligible: false,
     createdAt: new Date('2026-01-01'),
     updatedAt: new Date('2026-01-01'),
     ...overrides,
@@ -56,9 +59,9 @@ describe('serializeUser', () => {
     expect(result.plan).toBeNull();
   });
 
-  it('exposes key, name, and salesLimit from the linked plan', () => {
+  it('exposes key, name, salesLimit, and billingPeriod from the linked plan', () => {
     const result = serializeUser(buildUser({ planId: 'plan_pro', plan: buildPlan() }));
-    expect(result.plan).toEqual({ key: 'pro', name: 'Pro', salesLimit: 1500 });
+    expect(result.plan).toEqual({ key: 'pro', name: 'Pro', salesLimit: 1500, billingPeriod: 'monthly' });
   });
 
   it('passes through the subscription status as-is', () => {

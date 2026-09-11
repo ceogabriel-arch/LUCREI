@@ -3,7 +3,7 @@ export const API_URL = process.env.EXPO_PUBLIC_API_URL;
 export type Period = 'today' | '7d' | '30d' | 'all';
 
 export type SubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'canceled';
-export type UserPlan = { key: string; name: string; salesLimit: number | null };
+export type UserPlan = { key: string; name: string; salesLimit: number | null; billingPeriod: BillingPeriod };
 export type AuthUser = {
   id: string;
   name: string;

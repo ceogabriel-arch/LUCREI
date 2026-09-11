@@ -223,9 +223,14 @@ const BILLING_PERIOD_OPTIONS: { key: BillingPeriod; label: string }[] = [
 export default function PlanosScreen() {
   const router = useRouter();
   const Colors = useColors();
-  const [state, setState] = useState<LoadState>('loading');
+  const { state: authState } = useAuth();
+  const [loadState, setLoadState] = useState<LoadState>('loading');
   const [plans, setPlans] = useState<Plan[]>([]);
-  const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>('monthly');
+  // Se a pessoa já tem um plano, abre o seletor já no período que ela paga
+  // hoje - evita ela ver preço mensal por engano estando no anual (ou vice-versa).
+  const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>(
+    authState.status === 'authenticated' ? (authState.user.plan?.billingPeriod ?? 'monthly') : 'monthly'
+  );
 
   // Um "grupo" (Start, Pro, Master, Empresarial) tem uma linha de plano por
   // período de cobrança - mostra a que combina com o seletor, caindo pra
@@ -245,11 +250,11 @@ export default function PlanosScreen() {
       .then(({ plans }) => {
         if (cancelled) return;
         setPlans(plans);
-        setState('ready');
+        setLoadState('ready');
       })
       .catch(() => {
         if (cancelled) return;
-        setState('error');
+        setLoadState('error');
       });
     return () => {
       cancelled = true;
@@ -286,19 +291,19 @@ export default function PlanosScreen() {
         })}
       </View>
 
-      {state === 'loading' && (
+      {loadState === 'loading' && (
         <View className="mt-10 items-center">
           <ActivityIndicator color={Colors.gold} />
         </View>
       )}
 
-      {state === 'error' && (
+      {loadState === 'error' && (
         <View className="mt-10 items-center">
           <Text className="text-sm text-lucrei-danger">Não foi possível carregar os planos agora.</Text>
         </View>
       )}
 
-      {state === 'ready' && (
+      {loadState === 'ready' && (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="pb-8">
           {visiblePlans.map((plan) => (
             <PlanCard key={plan.key} plan={plan} />
