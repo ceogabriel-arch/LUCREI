@@ -20,6 +20,7 @@ function buildUser(overrides: Partial<UserWithPlan> = {}): UserWithPlan {
     tokenVersion: 0,
     pushToken: null,
     googleId: null,
+    salesLimitWarnedAt: null,
     createdAt: new Date('2026-01-01'),
     updatedAt: new Date('2026-01-01'),
     plan: null,
@@ -54,9 +55,9 @@ describe('serializeUser', () => {
     expect(result.plan).toBeNull();
   });
 
-  it('exposes only key and name from the linked plan', () => {
+  it('exposes key, name, and salesLimit from the linked plan', () => {
     const result = serializeUser(buildUser({ planId: 'plan_pro', plan: buildPlan() }));
-    expect(result.plan).toEqual({ key: 'pro', name: 'Pro' });
+    expect(result.plan).toEqual({ key: 'pro', name: 'Pro', salesLimit: 1500 });
   });
 
   it('passes through the subscription status as-is', () => {

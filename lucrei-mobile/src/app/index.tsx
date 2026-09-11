@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -52,7 +52,8 @@ const MOCK_KPIS = [
 ];
 
 export default function InicioScreen() {
-  const { state } = useAuth();
+  const { state, refreshUser } = useAuth();
+  const router = useRouter();
   const { scheme, colors: Colors } = useAppTheme();
   const { shops, selectedShop, loaded: shopsLoaded, refresh: refreshShops } = useSelectedShop();
   const { period, setPeriod } = usePeriod();
@@ -84,7 +85,8 @@ export default function InicioScreen() {
   useFocusEffect(
     useCallback(() => {
       refreshShops();
-    }, [refreshShops])
+      refreshUser();
+    }, [refreshShops, refreshUser])
   );
 
   const loadSummary = useCallback(async () => {
@@ -129,6 +131,11 @@ export default function InicioScreen() {
   const showingRealData = hasShop && summary !== null;
   const stillLoading = !shopsLoaded || (hasShop && summaryLoading && summary === null);
 
+  const salesLimit = state.status === 'authenticated' ? state.user.plan?.salesLimit ?? null : null;
+  const salesUsed = state.status === 'authenticated' ? state.user.salesUsedThisMonth ?? null : null;
+  const salesUsageRatio = salesLimit && salesUsed !== null ? salesUsed / salesLimit : null;
+  const showSalesLimitWarning = salesUsageRatio !== null && salesUsageRatio >= 0.8;
+
   useEffect(() => {
     const apiUrl = process.env.EXPO_PUBLIC_API_URL;
     if (!apiUrl) {
@@ -169,6 +176,23 @@ export default function InicioScreen() {
             }}
           />
         </View>
+
+        {showSalesLimitWarning && (
+          <Pressable
+            onPress={() => router.push('/planos')}
+            className="mt-4 flex-row items-center gap-3 rounded-2xl border border-lucrei-gold bg-lucrei-surface p-4">
+            <Ionicons name="warning-outline" size={20} color={Colors.gold} />
+            <View className="flex-1">
+              <Text className="text-sm font-semibold text-lucrei-text">
+                {salesUsed} de {salesLimit} vendas usadas esse mês
+              </Text>
+              <Text className="mt-0.5 text-xs text-lucrei-textMuted">
+                Você está perto do limite do seu plano. Toque para ver planos maiores.
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+          </Pressable>
+        )}
 
         <View className="mt-7 flex-row self-start rounded-full bg-lucrei-surface p-1">
           {PERIODS.map((p) => {

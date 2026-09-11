@@ -5,6 +5,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { OAuth2Client } from 'google-auth-library';
 
 import { prisma } from '../../lib/prisma';
+import { getOrdersThisMonth } from '../../lib/sales-usage';
 import { reconcileMercadoPagoSubscription } from '../../lib/subscription-sync';
 import * as mercadopago from '../../mercadopago-client';
 import { serializeUser, userWithPlan } from '../plans/serialize-user';
@@ -196,7 +197,8 @@ export async function authRoutes(app: FastifyInstance) {
     if (!user) {
       return reply.status(404).send({ message: 'Usuário não encontrado.' });
     }
-    return reply.send(serializeUser(user));
+    const salesUsedThisMonth = user.plan?.salesLimit != null ? await getOrdersThisMonth(user.id) : null;
+    return reply.send({ ...serializeUser(user), salesUsedThisMonth });
   });
 
   app.patch<{ Body: UpdateNameBody }>(

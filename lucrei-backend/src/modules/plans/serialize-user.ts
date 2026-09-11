@@ -12,6 +12,6 @@ export function serializeUser(user: UserWithPlan) {
     createdAt: user.createdAt,
     subscriptionStatus: user.subscriptionStatus,
     trialEndsAt: user.trialEndsAt,
-    plan: user.plan ? { key: user.plan.key, name: user.plan.name } : null,
+    plan: user.plan ? { key: user.plan.key, name: user.plan.name, salesLimit: user.plan.salesLimit } : null,
   };
 }
