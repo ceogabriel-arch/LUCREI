@@ -69,6 +69,10 @@ model User {
   // reenviar toda sincronização depois de passar de 80%. Comparado sempre
   // contra o início do mês atual, então reseta sozinho todo mês.
   salesLimitWarnedAt           DateTime?
+  // Marca que já avisamos essa conta que o teste grátis está acabando -
+  // dispara uma vez só por trial (não reseta, porque cada Shopee shop só
+  // ganha um teste grátis na vida, ver Shop.trialConsumedAt).
+  trialEndingWarnedAt          DateTime?
   createdAt                    DateTime            @default(now())
   updatedAt                    DateTime            @updatedAt
 

@@ -21,6 +21,7 @@ function buildUser(overrides: Partial<UserWithPlan> = {}): UserWithPlan {
     pushToken: null,
     googleId: null,
     salesLimitWarnedAt: null,
+    trialEndingWarnedAt: null,
     createdAt: new Date('2026-01-01'),
     updatedAt: new Date('2026-01-01'),
     plan: null,

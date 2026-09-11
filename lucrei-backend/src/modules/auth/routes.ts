@@ -7,6 +7,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { prisma } from '../../lib/prisma';
 import { getOrdersThisMonth } from '../../lib/sales-usage';
 import { reconcileMercadoPagoSubscription } from '../../lib/subscription-sync';
+import { warnIfTrialEndingSoon } from '../../lib/trial-warning';
 import * as mercadopago from '../../mercadopago-client';
 import { serializeUser, userWithPlan } from '../plans/serialize-user';
 
@@ -198,6 +199,7 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.status(404).send({ message: 'Usuário não encontrado.' });
     }
     const salesUsedThisMonth = user.plan?.salesLimit != null ? await getOrdersThisMonth(user.id) : null;
+    await warnIfTrialEndingSoon(app, user);
     return reply.send({ ...serializeUser(user), salesUsedThisMonth });
   });
 
