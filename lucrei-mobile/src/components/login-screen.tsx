@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Sentry from '@sentry/react-native';
 import { Image } from 'expo-image';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, BackHandler, Platform, Pressable, ScrollView, Text, View } from 'react-native';
@@ -153,7 +154,9 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
         const result = await loginWithGoogle(idToken);
         if (!result.ok) setError(result.message);
       }
-    } catch {
+    } catch (err) {
+      const code = typeof err === 'object' && err !== null && 'code' in err ? String(err.code) : undefined;
+      Sentry.captureException(err, { tags: { flow: 'google_sign_in', google_error_code: code } });
       setError('Não foi possível entrar com o Google agora.');
     } finally {
       setGoogleSubmitting(false);
