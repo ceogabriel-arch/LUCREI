@@ -295,19 +295,25 @@ export default function PlanosScreen() {
         O plano Start inclui 15 dias grátis para testar. Escolha o plano ideal para o volume de vendas da sua loja.
       </Text>
 
-      <View className="mt-4 flex-row self-start rounded-full bg-lucrei-surface p-1">
+      <View className="mt-5 flex-row rounded-2xl border border-lucrei-border bg-lucrei-surface p-1.5">
         {BILLING_PERIOD_OPTIONS.map((option) => {
           const active = option.key === billingPeriod;
           return (
             <Pressable
               key={option.key}
               onPress={() => setBillingPeriod(option.key)}
-              className="rounded-full px-4 py-1.5"
+              className="flex-1 items-center rounded-xl py-2.5"
               style={{ backgroundColor: active ? Colors.gold : 'transparent' }}>
-              <Text className="text-xs font-medium" style={{ color: active ? Colors.onGold : Colors.textMuted }}>
+              <Text className="text-sm font-semibold" style={{ color: active ? Colors.onGold : Colors.text }}>
                 {option.label}
-                {option.key === 'annual' ? ' · 2 meses grátis' : ''}
               </Text>
+              {option.key === 'annual' && (
+                <Text
+                  className="mt-0.5 text-[11px] font-medium"
+                  style={{ color: active ? Colors.onGold : Colors.gold }}>
+                  2 meses grátis
+                </Text>
+              )}
             </Pressable>
           );
         })}
