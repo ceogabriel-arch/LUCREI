@@ -8,6 +8,7 @@ const LEGAL_DIR = path.join(__dirname, '..', '..', '..', 'legal');
 const TERMS_HTML = readFileSync(path.join(LEGAL_DIR, 'termos-de-uso.html'), 'utf-8');
 const PRIVACY_HTML = readFileSync(path.join(LEGAL_DIR, 'politica-de-privacidade.html'), 'utf-8');
 const ACCOUNT_DELETION_HTML = readFileSync(path.join(LEGAL_DIR, 'exclusao-de-conta.html'), 'utf-8');
+const ABOUT_HTML = readFileSync(path.join(LEGAL_DIR, 'sobre.html'), 'utf-8');
 
 export async function legalRoutes(app: FastifyInstance) {
   app.get('/termos', async (_req, reply) => {
@@ -20,5 +21,9 @@ export async function legalRoutes(app: FastifyInstance) {
 
   app.get('/exclusao-de-conta', async (_req, reply) => {
     reply.type('text/html; charset=utf-8').send(ACCOUNT_DELETION_HTML);
+  });
+
+  app.get('/sobre', async (_req, reply) => {
+    reply.type('text/html; charset=utf-8').send(ABOUT_HTML);
   });
 }
