@@ -3,12 +3,10 @@ import type { Plan, User } from '@prisma/client';
 
 import * as mercadopago from '../../mercadopago-client';
 import { prisma } from '../../lib/prisma';
+import { CYCLE_DAYS_BY_PERIOD } from '../../lib/pix-billing';
 import { serializeUser, userWithPlan } from './serialize-user';
 
 const TRIAL_DAYS = 15;
-// Só o plano de entrada dá período de teste grátis; os demais cobram
-// a partir da primeira cobrança.
-const TRIAL_ELIGIBLE_PLAN_KEY = 'start';
 const BACK_URL = process.env.PUBLIC_APP_URL || 'https://lucrei-production-bce6.up.railway.app';
 // Prazo pra pagar o QR code de um ciclo antes dele expirar e um novo ser gerado.
 const PIX_EXPIRATION_MINUTES = 60 * 24;
@@ -36,10 +34,10 @@ function addDays(date: Date, days: number) {
 async function resolveTrial(user: User, plan: Plan) {
   const alreadyUsedTrial = Boolean(user.trialEndsAt);
   const taintedShop =
-    plan.key === TRIAL_ELIGIBLE_PLAN_KEY && !alreadyUsedTrial
+    plan.trialEligible && !alreadyUsedTrial
       ? await prisma.shop.findFirst({ where: { userId: user.id, trialConsumedAt: { not: null } } })
       : null;
-  const eligibleForTrial = plan.key === TRIAL_ELIGIBLE_PLAN_KEY && !alreadyUsedTrial && !taintedShop;
+  const eligibleForTrial = plan.trialEligible && !alreadyUsedTrial && !taintedShop;
   const trialEndsAt = eligibleForTrial ? addDays(new Date(), TRIAL_DAYS) : alreadyUsedTrial ? user.trialEndsAt : null;
   return { eligibleForTrial, trialEndsAt };
 }
@@ -57,6 +55,9 @@ export async function plansRoutes(app: FastifyInstance) {
     return {
       plans: plans.map((plan) => ({
         key: plan.key,
+        groupKey: plan.groupKey,
+        billingPeriod: plan.billingPeriod,
+        trialEligible: plan.trialEligible,
         name: plan.name,
         salesLimit: plan.salesLimit,
         integrationsLimit: plan.integrationsLimit,
@@ -78,12 +79,17 @@ export async function plansRoutes(app: FastifyInstance) {
         return reply.status(400).send({ message: 'Este plano é sob consulta. Fale com nosso time de vendas.' });
       }
 
-      const user = await prisma.user.findUniqueOrThrow({ where: { id: request.user.sub } });
+      const user = await prisma.user.findUniqueOrThrow({ where: { id: request.user.sub }, include: { plan: true } });
 
       const existingSubscription = await prisma.subscription.findFirst({
         where: { userId: user.id, provider: 'mercado_pago' },
         orderBy: { createdAt: 'desc' },
       });
+      // Só reaproveita a assinatura existente (só troca o valor) se o ciclo de
+      // cobrança continuar o mesmo - mensal->anual (ou vice-versa) precisa de
+      // uma assinatura nova, porque muda a frequência de cobrança na Mercado
+      // Pago, não só o valor.
+      const sameBillingPeriod = user.plan?.billingPeriod === plan.billingPeriod;
 
       let checkoutUrl: string | null = null;
       // Preservado por padrão - no caminho de upgrade (assinatura já existe),
@@ -94,7 +100,7 @@ export async function plansRoutes(app: FastifyInstance) {
       try {
         const description = `Lucrei - Plano ${plan.name}`;
 
-        if (existingSubscription?.providerSubscriptionId && existingSubscription.status !== 'canceled') {
+        if (existingSubscription?.providerSubscriptionId && existingSubscription.status !== 'canceled' && sameBillingPeriod) {
           await mercadopago.updatePreapprovalValue(
             existingSubscription.providerSubscriptionId,
             Number(plan.priceCurrent)
@@ -106,6 +112,15 @@ export async function plansRoutes(app: FastifyInstance) {
             data: { status: 'trialing' },
           });
         } else {
+          if (existingSubscription?.providerSubscriptionId && existingSubscription.status !== 'canceled') {
+            try {
+              await mercadopago.cancelPreapproval(existingSubscription.providerSubscriptionId);
+            } catch (err) {
+              app.log.error(err);
+            }
+            await prisma.subscription.update({ where: { id: existingSubscription.id }, data: { status: 'canceled' } });
+          }
+
           const trial = await resolveTrial(user, plan);
           trialEndsAt = trial.trialEndsAt;
           const trialDays = trial.eligibleForTrial ? TRIAL_DAYS : 0;
@@ -116,6 +131,7 @@ export async function plansRoutes(app: FastifyInstance) {
             trialDays,
             externalReference: user.id,
             backUrl: `${BACK_URL}/planos`,
+            frequencyMonths: plan.billingPeriod === 'annual' ? 12 : 1,
           });
           checkoutUrl = preapproval.init_point;
 
@@ -184,7 +200,7 @@ export async function plansRoutes(app: FastifyInstance) {
       }
 
       const now = new Date();
-      const periodEnd = addDays(now, 30);
+      const periodEnd = addDays(now, CYCLE_DAYS_BY_PERIOD[plan.billingPeriod]);
       let pixPayment;
       try {
         pixPayment = await mercadopago.createPixPayment({

@@ -192,19 +192,35 @@ model CostImportBatch {
   @@index([shopId])
 }
 
+enum BillingPeriod {
+  monthly
+  annual
+}
+
 model Plan {
-  id                String   @id @default(cuid())
-  key               String   @unique
+  id                String        @id @default(cuid())
+  key               String        @unique
   name              String
   salesLimit        Int?
   integrationsLimit Int?
-  priceOriginal     Decimal? @db.Decimal(12, 2)
-  priceCurrent      Decimal? @db.Decimal(12, 2)
+  priceOriginal     Decimal?      @db.Decimal(12, 2)
+  priceCurrent      Decimal?      @db.Decimal(12, 2)
   sortOrder         Int
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  // Liga a versão mensal e anual do mesmo nível de plano (ex: "start" tem uma
+  // linha Plan com billingPeriod=monthly e outra com annual, ambas com
+  // groupKey="start") - é assim que o app agrupa as duas pra mostrar o
+  // seletor mensal/anual sem duplicar cards de planos diferentes.
+  groupKey          String
+  billingPeriod     BillingPeriod @default(monthly)
+  // Decidido por plano, não mais fixo no código - permite a versão anual do
+  // Start também dar direito a teste grátis, por exemplo.
+  trialEligible     Boolean       @default(false)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
 
   users User[]
+
+  @@unique([groupKey, billingPeriod])
 }
 
 model Subscription {

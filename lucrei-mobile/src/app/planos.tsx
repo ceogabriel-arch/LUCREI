@@ -6,7 +6,14 @@ import * as WebBrowser from 'expo-web-browser';
 
 import { PixPaymentModal } from '@/components/pix-payment-modal';
 import { Screen } from '@/components/screen';
-import { getCheckoutUrl, getCurrentPixCharge, getPlans, type Plan, type PixCharge } from '@/lib/api';
+import {
+  getCheckoutUrl,
+  getCurrentPixCharge,
+  getPlans,
+  type BillingPeriod,
+  type Plan,
+  type PixCharge,
+} from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatBRL } from '@/lib/format';
 import { useColors } from '@/lib/theme';
@@ -38,7 +45,7 @@ function PlanCard({ plan }: { plan: Plan }) {
       ? 'Reativar plano'
       : user?.plan
         ? 'Fazer upgrade'
-        : plan.key === 'start'
+        : plan.trialEligible
           ? 'Testar 15 dias grátis'
           : 'Assinar agora';
 
@@ -108,13 +115,20 @@ function PlanCard({ plan }: { plan: Plan }) {
       {isCustomPricing ? (
         <Text className="mt-2 text-2xl font-bold text-lucrei-text">Sob consulta</Text>
       ) : (
-        <View className="mt-2 flex-row items-baseline gap-2">
-          {plan.priceOriginal !== null && (
-            <Text className="text-sm text-lucrei-textMuted line-through">{formatBRL(plan.priceOriginal)}</Text>
+        <>
+          <View className="mt-2 flex-row items-baseline gap-2">
+            {plan.priceOriginal !== null && (
+              <Text className="text-sm text-lucrei-textMuted line-through">{formatBRL(plan.priceOriginal)}</Text>
+            )}
+            <Text className="text-2xl font-bold text-lucrei-text">{formatBRL(plan.priceCurrent!)}</Text>
+            <Text className="text-sm text-lucrei-textMuted">{plan.billingPeriod === 'annual' ? '/ano' : '/mês'}</Text>
+          </View>
+          {plan.billingPeriod === 'annual' && (
+            <Text className="mt-0.5 text-xs text-lucrei-textMuted">
+              equivale a {formatBRL(plan.priceCurrent! / 12)}/mês
+            </Text>
           )}
-          <Text className="text-2xl font-bold text-lucrei-text">{formatBRL(plan.priceCurrent!)}</Text>
-          <Text className="text-sm text-lucrei-textMuted">/mês</Text>
-        </View>
+        </>
       )}
 
       <View className="mt-4 gap-2">
@@ -178,7 +192,9 @@ function PlanCard({ plan }: { plan: Plan }) {
 
       {!isCustomPricing && (
         <Text className="mt-3 text-[11px] leading-4 text-lucrei-textMuted">
-          *no cartão a cobrança se repete todo mês até você cancelar. No Pix, um código novo é gerado a cada mês.
+          {plan.billingPeriod === 'annual'
+            ? '*no cartão a cobrança se repete todo ano até você cancelar. No Pix, um código novo é gerado a cada ano.'
+            : '*no cartão a cobrança se repete todo mês até você cancelar. No Pix, um código novo é gerado a cada mês.'}
         </Text>
       )}
 
@@ -199,11 +215,29 @@ function PlanCard({ plan }: { plan: Plan }) {
   );
 }
 
+const BILLING_PERIOD_OPTIONS: { key: BillingPeriod; label: string }[] = [
+  { key: 'monthly', label: 'Mensal' },
+  { key: 'annual', label: 'Anual' },
+];
+
 export default function PlanosScreen() {
   const router = useRouter();
   const Colors = useColors();
   const [state, setState] = useState<LoadState>('loading');
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>('monthly');
+
+  // Um "grupo" (Start, Pro, Master, Empresarial) tem uma linha de plano por
+  // período de cobrança - mostra a que combina com o seletor, caindo pra
+  // qualquer uma disponível no grupo se não existir a desse período
+  // (Empresarial só tem a mensal, por exemplo).
+  const visiblePlans = [...new Set(plans.map((p) => p.groupKey))]
+    .map(
+      (groupKey) =>
+        plans.find((p) => p.groupKey === groupKey && p.billingPeriod === billingPeriod) ??
+        plans.find((p) => p.groupKey === groupKey)
+    )
+    .filter((p): p is Plan => p !== undefined);
 
   useEffect(() => {
     let cancelled = false;
@@ -234,6 +268,24 @@ export default function PlanosScreen() {
         O plano Start inclui 15 dias grátis para testar. Escolha o plano ideal para o volume de vendas da sua loja.
       </Text>
 
+      <View className="mt-4 flex-row self-start rounded-full bg-lucrei-surface p-1">
+        {BILLING_PERIOD_OPTIONS.map((option) => {
+          const active = option.key === billingPeriod;
+          return (
+            <Pressable
+              key={option.key}
+              onPress={() => setBillingPeriod(option.key)}
+              className="rounded-full px-4 py-1.5"
+              style={{ backgroundColor: active ? Colors.gold : 'transparent' }}>
+              <Text className="text-xs font-medium" style={{ color: active ? Colors.onGold : Colors.textMuted }}>
+                {option.label}
+                {option.key === 'annual' ? ' · 2 meses grátis' : ''}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
       {state === 'loading' && (
         <View className="mt-10 items-center">
           <ActivityIndicator color={Colors.gold} />
@@ -248,7 +300,7 @@ export default function PlanosScreen() {
 
       {state === 'ready' && (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="pb-8">
-          {plans.map((plan) => (
+          {visiblePlans.map((plan) => (
             <PlanCard key={plan.key} plan={plan} />
           ))}
         </ScrollView>

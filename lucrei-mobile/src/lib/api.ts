@@ -222,8 +222,12 @@ export function syncOrders(token: string, shopId: string) {
   });
 }
 
+export type BillingPeriod = 'monthly' | 'annual';
 export type Plan = {
   key: string;
+  groupKey: string;
+  billingPeriod: BillingPeriod;
+  trialEligible: boolean;
   name: string;
   salesLimit: number | null;
   integrationsLimit: number | null;

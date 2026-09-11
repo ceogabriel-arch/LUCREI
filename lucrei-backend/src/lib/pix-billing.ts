@@ -2,7 +2,7 @@ import { prisma } from './prisma';
 import * as mercadopago from '../mercadopago-client';
 
 const PIX_EXPIRATION_MINUTES = 60 * 24;
-const CYCLE_DAYS = 30;
+export const CYCLE_DAYS_BY_PERIOD = { monthly: 30, annual: 365 } as const;
 
 function addDays(date: Date, days: number) {
   const result = new Date(date);
@@ -52,7 +52,7 @@ export async function ensureCurrentPixCharge(userId: string): Promise<CurrentPix
   if (!cycleDue) return null;
 
   const periodStart = latest?.status === 'approved' && subscription.currentPeriodEnd ? subscription.currentPeriodEnd : now;
-  const periodEnd = addDays(periodStart, CYCLE_DAYS);
+  const periodEnd = addDays(periodStart, CYCLE_DAYS_BY_PERIOD[plan.billingPeriod]);
 
   const pixPayment = await mercadopago.createPixPayment({
     amount: Number(plan.priceCurrent),

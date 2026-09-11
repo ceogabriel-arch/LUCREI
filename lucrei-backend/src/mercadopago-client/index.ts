@@ -39,6 +39,7 @@ export function createPreapproval(params: {
   trialDays: number;
   externalReference: string;
   backUrl: string;
+  frequencyMonths?: number;
 }) {
   return mpRequest<Preapproval>('/preapproval', {
     method: 'POST',
@@ -48,7 +49,7 @@ export function createPreapproval(params: {
       payer_email: params.payerEmail,
       back_url: params.backUrl,
       auto_recurring: {
-        frequency: 1,
+        frequency: params.frequencyMonths ?? 1,
         frequency_type: 'months',
         transaction_amount: params.value,
         currency_id: 'BRL',
