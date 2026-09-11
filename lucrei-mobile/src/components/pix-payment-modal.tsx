@@ -24,22 +24,30 @@ export function PixPaymentModal({
   visible,
   onClose,
   pix,
+  expectedPlanKey,
 }: {
   visible: boolean;
   onClose: () => void;
   pix: PixCharge | null;
+  // Só usado em upgrade de plano anual no meio do ciclo: nesse caso a
+  // assinatura já está "ativa" antes mesmo de pagar a diferença
+  // proporcional, então "confirmado" precisa checar se o plano mudou pro
+  // esperado, não o status da assinatura (que não muda nesse fluxo).
+  expectedPlanKey?: string;
 }) {
   const { state, refreshUser } = useAuth();
   const Colors = useColors();
   const [copied, setCopied] = useState(false);
 
-  const active = state.status === 'authenticated' && state.user.subscriptionStatus === 'active';
+  const confirmed =
+    state.status === 'authenticated' &&
+    (expectedPlanKey ? state.user.plan?.key === expectedPlanKey : state.user.subscriptionStatus === 'active');
 
   useEffect(() => {
-    if (!visible || !pix || active) return;
+    if (!visible || !pix || confirmed) return;
     const interval = setInterval(refreshUser, POLL_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [visible, pix, active, refreshUser]);
+  }, [visible, pix, confirmed, refreshUser]);
 
   async function handleCopy() {
     if (!pix) return;
@@ -60,12 +68,12 @@ export function PixPaymentModal({
           </View>
 
           <ScrollView contentContainerClassName="items-center p-6">
-            {active ? (
+            {confirmed ? (
               <View className="items-center py-6">
                 <Ionicons name="checkmark-circle" size={56} color={Colors.success} />
                 <Text className="mt-4 text-lg font-semibold text-lucrei-text">Pagamento confirmado!</Text>
                 <Text className="mt-1 text-center text-sm text-lucrei-textMuted">
-                  Sua assinatura já está ativa.
+                  {expectedPlanKey ? 'Seu upgrade já está ativo.' : 'Sua assinatura já está ativa.'}
                 </Text>
                 <Pressable onPress={onClose} className="mt-6 items-center rounded-xl bg-lucrei-gold px-6 py-3">
                   <Text className="text-sm font-semibold text-lucrei-onGold">Fechar</Text>

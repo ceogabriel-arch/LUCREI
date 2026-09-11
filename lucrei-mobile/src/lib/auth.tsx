@@ -4,6 +4,7 @@ import {
   ApiError,
   type AuthUser,
   type PixCharge,
+  type UserPlan,
   cancelPlan as apiCancelPlan,
   changePassword as apiChangePassword,
   deleteAccount as apiDeleteAccount,
@@ -24,9 +25,11 @@ type AuthState =
 
 type AuthResult = { ok: true } | { ok: false; message: string };
 type SelectPlanResult =
-  | { ok: true; checkoutUrl: string | null; trialEndsAt: string | null }
+  | { ok: true; checkoutUrl: string | null; trialEndsAt: string | null; pix: PixCharge | null; plan: UserPlan | null }
   | { ok: false; message: string };
-type SelectPlanPixResult = { ok: true; pix: PixCharge | null } | { ok: false; message: string };
+type SelectPlanPixResult =
+  | { ok: true; pix: PixCharge | null; plan: UserPlan | null }
+  | { ok: false; message: string };
 
 type AuthContextValue = {
   state: AuthState;
@@ -147,9 +150,15 @@ export function AuthProvider({ children }: PropsWithChildren) {
   async function selectPlan(key: string): Promise<SelectPlanResult> {
     if (state.status !== 'authenticated') return { ok: false, message: 'Não autenticado.' };
     try {
-      const { checkoutUrl, ...user } = await apiSelectPlan(state.token, key);
+      const { checkoutUrl, pix, ...user } = await apiSelectPlan(state.token, key);
       setState({ status: 'authenticated', token: state.token, user });
-      return { ok: true, checkoutUrl, trialEndsAt: user.trialEndsAt };
+      return {
+        ok: true,
+        checkoutUrl: checkoutUrl ?? null,
+        trialEndsAt: user.trialEndsAt,
+        pix: pix ?? null,
+        plan: user.plan,
+      };
     } catch (err) {
       return { ok: false, message: err instanceof ApiError ? err.message : 'Algo deu errado.' };
     }
@@ -160,7 +169,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     try {
       const { pix, ...user } = await apiSelectPlanPix(state.token, key);
       setState({ status: 'authenticated', token: state.token, user });
-      return { ok: true, pix };
+      return { ok: true, pix, plan: user.plan };
     } catch (err) {
       return { ok: false, message: err instanceof ApiError ? err.message : 'Algo deu errado.' };
     }

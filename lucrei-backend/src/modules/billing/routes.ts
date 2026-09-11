@@ -6,7 +6,7 @@ import { prisma } from '../../lib/prisma';
 import { ensureCurrentPixCharge } from '../../lib/pix-billing';
 import { formatBRL, sendPushNotification } from '../../lib/push-notifications';
 import { mapMercadoPagoStatus } from '../../lib/subscription-sync';
-import { getPayment, getPreapproval } from '../../mercadopago-client';
+import { getPayment, getPreapproval, updatePreapprovalValue } from '../../mercadopago-client';
 
 type WebhookBody = {
   type?: string;
@@ -46,6 +46,33 @@ async function handlePreapprovalEvent(app: FastifyInstance, dataId: string) {
   }
 }
 
+async function handleUpgradeChargePaid(app: FastifyInstance, charge: { id: string; subscriptionId: string; amount: unknown; targetPlanId: string }) {
+  const subscription = await prisma.subscription.findUniqueOrThrow({ where: { id: charge.subscriptionId } });
+  const targetPlan = await prisma.plan.findUnique({ where: { id: charge.targetPlanId } });
+  if (!targetPlan) return;
+
+  await prisma.pixCharge.update({ where: { id: charge.id }, data: { status: 'approved', paidAt: new Date() } });
+  const user = await prisma.user.update({ where: { id: subscription.userId }, data: { planId: targetPlan.id } });
+
+  // Assinatura por cartão continua cobrando na renovação anual - sem
+  // atualizar aqui, ela ia renovar no valor do plano antigo pra sempre.
+  if (subscription.provider === 'mercado_pago' && subscription.providerSubscriptionId && targetPlan.priceCurrent !== null) {
+    try {
+      await updatePreapprovalValue(subscription.providerSubscriptionId, Number(targetPlan.priceCurrent));
+    } catch (err) {
+      app.log.error(err);
+    }
+  }
+
+  if (user.pushToken) {
+    await sendPushNotification(
+      user.pushToken,
+      'Upgrade confirmado! 🎉',
+      `Você agora está no plano ${targetPlan.name}.`
+    ).catch((err) => app.log.error(err));
+  }
+}
+
 async function handlePaymentEvent(app: FastifyInstance, dataId: string) {
   const charge = await prisma.pixCharge.findUnique({ where: { mercadoPagoPaymentId: dataId } });
   if (!charge || charge.status === 'approved') return;
@@ -53,6 +80,11 @@ async function handlePaymentEvent(app: FastifyInstance, dataId: string) {
   try {
     const payment = await getPayment(dataId);
     if (payment.status !== 'approved') return;
+
+    if (charge.targetPlanId) {
+      await handleUpgradeChargePaid(app, { ...charge, targetPlanId: charge.targetPlanId });
+      return;
+    }
 
     const subscription = await prisma.subscription.update({
       where: { id: charge.subscriptionId },

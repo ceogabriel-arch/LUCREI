@@ -253,6 +253,10 @@ model PixCharge {
   periodEnd            DateTime
   expiresAt            DateTime
   paidAt               DateTime?
+  // Preenchido só em cobranças de "upgrade proporcional" (plano anual trocado
+  // no meio do ciclo) - ao confirmar o pagamento, aplica esse plano no lugar
+  // de só renovar o ciclo atual. Nulo em cobranças normais de renovação.
+  targetPlanId         String?
   createdAt            DateTime        @default(now())
 
   subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)

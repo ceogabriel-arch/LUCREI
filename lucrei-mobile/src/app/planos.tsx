@@ -35,6 +35,10 @@ function PlanCard({ plan }: { plan: Plan }) {
   const [savingMethod, setSavingMethod] = useState<'card' | 'pix' | null>(null);
   const [checkingInvoice, setCheckingInvoice] = useState(false);
   const [pixModal, setPixModal] = useState<PixCharge | null>(null);
+  // Preenchido só quando o Pix aberto é um upgrade proporcional (o plano
+  // ainda não mudou) - avisa o modal a checar isso em vez do status da
+  // assinatura pra saber quando o pagamento confirmou.
+  const [pixModalUpgradeTarget, setPixModalUpgradeTarget] = useState<string | null>(null);
   const user = state.status === 'authenticated' ? state.user : null;
   const isCustomPricing = plan.priceCurrent === null;
 
@@ -54,6 +58,14 @@ function PlanCard({ plan }: { plan: Plan }) {
     const result = await selectPlan(plan.key);
     setSavingMethod(null);
     if (result.ok) {
+      if (result.pix) {
+        // Upgrade de plano anual no meio do ciclo - precisa pagar a diferença
+        // proporcional antes do plano mudar de verdade. Se o plano na
+        // resposta ainda não é o escolhido, é isso que está acontecendo.
+        setPixModalUpgradeTarget(result.plan?.key !== plan.key ? plan.key : null);
+        setPixModal(result.pix);
+        return;
+      }
       Alert.alert(
         'Plano atualizado',
         result.trialEndsAt
@@ -74,6 +86,7 @@ function PlanCard({ plan }: { plan: Plan }) {
     setSavingMethod(null);
     if (result.ok) {
       if (result.pix) {
+        setPixModalUpgradeTarget(result.plan?.key !== plan.key ? plan.key : null);
         setPixModal(result.pix);
       } else {
         Alert.alert(
@@ -97,6 +110,7 @@ function PlanCard({ plan }: { plan: Plan }) {
       }
       const { pix } = await getCurrentPixCharge(state.token);
       if (pix) {
+        setPixModalUpgradeTarget(null);
         setPixModal(pix);
         return;
       }
@@ -210,7 +224,15 @@ function PlanCard({ plan }: { plan: Plan }) {
         </Pressable>
       )}
 
-      <PixPaymentModal visible={pixModal !== null} onClose={() => setPixModal(null)} pix={pixModal} />
+      <PixPaymentModal
+        visible={pixModal !== null}
+        onClose={() => {
+          setPixModal(null);
+          setPixModalUpgradeTarget(null);
+        }}
+        pix={pixModal}
+        expectedPlanKey={pixModalUpgradeTarget ?? undefined}
+      />
     </View>
   );
 }

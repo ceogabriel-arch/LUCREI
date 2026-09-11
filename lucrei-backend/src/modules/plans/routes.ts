@@ -4,6 +4,7 @@ import type { Plan, User } from '@prisma/client';
 import * as mercadopago from '../../mercadopago-client';
 import { prisma } from '../../lib/prisma';
 import { CYCLE_DAYS_BY_PERIOD } from '../../lib/pix-billing';
+import { createProratedUpgradeCharge } from '../../lib/plan-upgrade';
 import { serializeUser, userWithPlan } from './serialize-user';
 
 const TRIAL_DAYS = 15;
@@ -80,6 +81,16 @@ export async function plansRoutes(app: FastifyInstance) {
       }
 
       const user = await prisma.user.findUniqueOrThrow({ where: { id: request.user.sub }, include: { plan: true } });
+
+      try {
+        const upgradeCharge = await createProratedUpgradeCharge(user, plan);
+        if (upgradeCharge) {
+          return reply.send({ ...serializeUser(user), pix: upgradeCharge });
+        }
+      } catch (err) {
+        app.log.error(err);
+        return reply.status(502).send({ message: 'Não foi possível calcular o upgrade agora. Tente novamente em instantes.' });
+      }
 
       const existingSubscription = await prisma.subscription.findFirst({
         where: { userId: user.id, provider: 'mercado_pago' },
@@ -177,7 +188,18 @@ export async function plansRoutes(app: FastifyInstance) {
         return reply.status(400).send({ message: 'Este plano é sob consulta. Fale com nosso time de vendas.' });
       }
 
-      const user = await prisma.user.findUniqueOrThrow({ where: { id: request.user.sub } });
+      const user = await prisma.user.findUniqueOrThrow({ where: { id: request.user.sub }, include: { plan: true } });
+
+      try {
+        const upgradeCharge = await createProratedUpgradeCharge(user, plan);
+        if (upgradeCharge) {
+          return reply.send({ ...serializeUser(user), pix: upgradeCharge });
+        }
+      } catch (err) {
+        app.log.error(err);
+        return reply.status(502).send({ message: 'Não foi possível calcular o upgrade agora. Tente novamente em instantes.' });
+      }
+
       const trial = await resolveTrial(user, plan);
 
       const subscription = await prisma.subscription.create({
