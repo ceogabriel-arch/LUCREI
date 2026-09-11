@@ -76,3 +76,23 @@ export async function createProratedUpgradeCharge(
     amount: proratedAmount,
   };
 }
+
+/**
+ * O fluxo de Pix sempre cria uma assinatura nova do zero (ver ensureCurrentPixCharge)
+ * - ótimo pra assinar um plano novo, mas se a pessoa já está num plano anual pago
+ * (cartão ou Pix, não importa) e pede pra trocar por um de valor igual ou menor,
+ * isso jogaria fora o tempo já pago e cobraria o preço cheio do plano novo na
+ * hora. Upgrade de verdade (mais caro) já é tratado à parte por
+ * createProratedUpgradeCharge antes desse bloqueio entrar em ação.
+ */
+export async function findActiveAnnualCycle(user: User & { plan: Plan | null }) {
+  if (!user.plan || user.plan.billingPeriod !== 'annual') return null;
+
+  const subscription = await prisma.subscription.findFirst({
+    where: { userId: user.id, status: { not: 'canceled' }, provider: { in: ['mercado_pago', 'mercado_pago_pix'] } },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (!subscription?.currentPeriodEnd || subscription.currentPeriodEnd.getTime() <= Date.now()) return null;
+
+  return { ...subscription, currentPeriodEnd: subscription.currentPeriodEnd };
+}

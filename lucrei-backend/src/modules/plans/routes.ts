@@ -4,7 +4,7 @@ import type { Plan, User } from '@prisma/client';
 import * as mercadopago from '../../mercadopago-client';
 import { prisma } from '../../lib/prisma';
 import { CYCLE_DAYS_BY_PERIOD } from '../../lib/pix-billing';
-import { createProratedUpgradeCharge } from '../../lib/plan-upgrade';
+import { createProratedUpgradeCharge, findActiveAnnualCycle } from '../../lib/plan-upgrade';
 import { serializeUser, userWithPlan } from './serialize-user';
 
 const TRIAL_DAYS = 15;
@@ -198,6 +198,15 @@ export async function plansRoutes(app: FastifyInstance) {
       } catch (err) {
         app.log.error(err);
         return reply.status(502).send({ message: 'Não foi possível calcular o upgrade agora. Tente novamente em instantes.' });
+      }
+
+      if (user.plan && user.plan.id !== plan.id) {
+        const activeCycle = await findActiveAnnualCycle(user);
+        if (activeCycle) {
+          return reply.status(400).send({
+            message: `Seu plano anual já está pago até ${new Intl.DateTimeFormat('pt-BR').format(activeCycle.currentPeriodEnd)}. Pra não perder esse período, a troca para um plano de valor igual ou menor via Pix só é possível depois da renovação.`,
+          });
+        }
       }
 
       const trial = await resolveTrial(user, plan);
