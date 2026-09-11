@@ -8,6 +8,7 @@
 .env
 .env.*
 !.env.example
+!lucrei-mobile/.env.local-build.example
 
 # Expo
 /lucrei-mobile/.expo/
