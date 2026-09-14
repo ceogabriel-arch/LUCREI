@@ -98,11 +98,19 @@ export function createPixPayment(params: {
   payerEmail: string;
   externalReference: string;
   expiresInMinutes: number;
+  // Precisa ser estável entre tentativas do MESMO cobrança lógica (ex: nossa
+  // gravação no banco falhar depois do Mercado Pago já ter criado o
+  // pagamento, e a chamada ser repetida) - senão o Mercado Pago não tem como
+  // saber que é uma repetição e cria um segundo Pix real. Não pode ser só o
+  // externalReference puro porque isso é estável entre CICLOS diferentes
+  // (ex: mesma assinatura, mês que vem) e acabaria colando o pagamento novo
+  // no de um ciclo antigo.
+  idempotencyKey: string;
 }) {
   const expiresAt = new Date(Date.now() + params.expiresInMinutes * 60 * 1000);
   return mpRequest<PixPayment>('/v1/payments', {
     method: 'POST',
-    headers: { 'X-Idempotency-Key': `${params.externalReference}-${Date.now()}` },
+    headers: { 'X-Idempotency-Key': params.idempotencyKey },
     body: JSON.stringify({
       transaction_amount: params.amount,
       description: params.description,
@@ -112,6 +120,16 @@ export function createPixPayment(params: {
       date_of_expiration: expiresAt.toISOString(),
     }),
   });
+}
+
+// Chave de idempotência determinística: estável o bastante pra deduplicar
+// uma repetição da mesma tentativa de cobrança (ex: retry depois de um
+// timeout), mas muda a cada dia - como o Pix expira em 24h, isso garante que
+// pedir a cobrança de novo depois de expirada gera um QR code novo em vez de
+// devolver pra sempre o mesmo pagamento (já vencido) de uma tentativa antiga.
+export function pixIdempotencyKey(...parts: string[]) {
+  const today = new Date().toISOString().slice(0, 10);
+  return [...parts, today].join('-');
 }
 
 export function getPayment(id: string) {

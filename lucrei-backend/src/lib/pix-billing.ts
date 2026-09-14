@@ -60,6 +60,7 @@ export async function ensureCurrentPixCharge(userId: string): Promise<CurrentPix
     payerEmail: user.email,
     externalReference: subscription.id,
     expiresInMinutes: PIX_EXPIRATION_MINUTES,
+    idempotencyKey: mercadopago.pixIdempotencyKey(subscription.id, 'cycle'),
   });
 
   await prisma.pixCharge.create({

@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Plan, User } from '@prisma/client';
 
 import * as mercadopago from '../../mercadopago-client';
+import { cancelOtherProviderSubscription } from '../../lib/cancel-other-provider-subscription';
 import { prisma } from '../../lib/prisma';
 import { CYCLE_DAYS_BY_PERIOD } from '../../lib/pix-billing';
 import { createProratedUpgradeCharge, findActiveAnnualCycle } from '../../lib/plan-upgrade';
@@ -92,6 +93,19 @@ export async function plansRoutes(app: FastifyInstance) {
         return reply.status(502).send({ message: 'Não foi possível calcular o upgrade agora. Tente novamente em instantes.' });
       }
 
+      if (user.plan && user.plan.id !== plan.id) {
+        const activeCycle = await findActiveAnnualCycle(user);
+        if (activeCycle) {
+          return reply.status(400).send({
+            message: `Seu plano anual já está pago até ${new Intl.DateTimeFormat('pt-BR').format(activeCycle.currentPeriodEnd)}. Pra não perder esse período, a troca para um plano de valor igual ou menor só é possível depois da renovação.`,
+          });
+        }
+      }
+
+      // Trocar pra cartão com uma assinatura Pix ainda ativa cobraria nos dois
+      // ao mesmo tempo (o Pix continuaria gerando cobrança de ciclo sozinho).
+      await cancelOtherProviderSubscription(app, user.id, 'mercado_pago');
+
       const existingSubscription = await prisma.subscription.findFirst({
         where: { userId: user.id, provider: 'mercado_pago' },
         orderBy: { createdAt: 'desc' },
@@ -107,6 +121,9 @@ export async function plansRoutes(app: FastifyInstance) {
       // o trial (se houver) já foi travado na Mercado Pago na criação
       // original e não muda por trocar de plano.
       let trialEndsAt = user.trialEndsAt;
+      // null = não mexe no subscriptionStatus atual do usuário (caminho de
+      // só trocar o valor de uma assinatura já ativa/paga não muda o status).
+      let nextStatus: 'trialing' | 'past_due' | null = null;
 
       try {
         const description = `Lucrei - Plano ${plan.name}`;
@@ -117,11 +134,6 @@ export async function plansRoutes(app: FastifyInstance) {
             Number(plan.priceCurrent)
           );
           checkoutUrl = existingSubscription.lastInvoiceUrl;
-
-          await prisma.subscription.update({
-            where: { id: existingSubscription.id },
-            data: { status: 'trialing' },
-          });
         } else {
           if (existingSubscription?.providerSubscriptionId && existingSubscription.status !== 'canceled') {
             try {
@@ -135,6 +147,9 @@ export async function plansRoutes(app: FastifyInstance) {
           const trial = await resolveTrial(user, plan);
           trialEndsAt = trial.trialEndsAt;
           const trialDays = trial.eligibleForTrial ? TRIAL_DAYS : 0;
+          // Sem trial, a cobrança já sai imediata na criação - 'past_due' até
+          // o webhook confirmar o pagamento, igual o fluxo de Pix já faz.
+          nextStatus = trialDays > 0 ? 'trialing' : 'past_due';
           const preapproval = await mercadopago.createPreapproval({
             reason: description,
             payerEmail: user.email,
@@ -151,7 +166,7 @@ export async function plansRoutes(app: FastifyInstance) {
               userId: user.id,
               provider: 'mercado_pago',
               providerSubscriptionId: preapproval.id,
-              status: 'trialing',
+              status: nextStatus,
               currentPeriodEnd: trialEndsAt,
               lastInvoiceUrl: checkoutUrl,
             },
@@ -168,7 +183,7 @@ export async function plansRoutes(app: FastifyInstance) {
 
       const updated = await prisma.user.update({
         where: { id: user.id },
-        data: { planId: plan.id, subscriptionStatus: 'trialing', trialEndsAt },
+        data: { planId: plan.id, subscriptionStatus: nextStatus ?? user.subscriptionStatus, trialEndsAt },
         include: userWithPlan,
       });
 
@@ -209,6 +224,10 @@ export async function plansRoutes(app: FastifyInstance) {
         }
       }
 
+      // Trocar pro Pix com uma assinatura de cartão ainda ativa continuaria
+      // cobrando no cartão automaticamente enquanto o Pix também cobra.
+      await cancelOtherProviderSubscription(app, user.id, 'mercado_pago_pix');
+
       const trial = await resolveTrial(user, plan);
 
       const subscription = await prisma.subscription.create({
@@ -240,6 +259,7 @@ export async function plansRoutes(app: FastifyInstance) {
           payerEmail: user.email,
           externalReference: subscription.id,
           expiresInMinutes: PIX_EXPIRATION_MINUTES,
+          idempotencyKey: mercadopago.pixIdempotencyKey(subscription.id, 'initial'),
         });
       } catch (err) {
         app.log.error(err);

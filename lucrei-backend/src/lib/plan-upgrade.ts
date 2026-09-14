@@ -53,6 +53,7 @@ export async function createProratedUpgradeCharge(
     payerEmail: user.email,
     externalReference: subscription.id,
     expiresInMinutes: PIX_EXPIRATION_MINUTES,
+    idempotencyKey: mercadopago.pixIdempotencyKey(subscription.id, 'upgrade', newPlan.id),
   });
 
   await prisma.pixCharge.create({

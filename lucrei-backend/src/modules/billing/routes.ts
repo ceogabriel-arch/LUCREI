@@ -51,7 +51,6 @@ async function handleUpgradeChargePaid(app: FastifyInstance, charge: { id: strin
   const targetPlan = await prisma.plan.findUnique({ where: { id: charge.targetPlanId } });
   if (!targetPlan) return;
 
-  await prisma.pixCharge.update({ where: { id: charge.id }, data: { status: 'approved', paidAt: new Date() } });
   const user = await prisma.user.update({ where: { id: subscription.userId }, data: { planId: targetPlan.id } });
 
   // Assinatura por cartão continua cobrando na renovação anual - sem
@@ -81,6 +80,17 @@ async function handlePaymentEvent(app: FastifyInstance, dataId: string) {
     const payment = await getPayment(dataId);
     if (payment.status !== 'approved') return;
 
+    // Guarda atômica contra o Mercado Pago reenviar o mesmo webhook (eles
+    // avisam que isso acontece) - sem isso, dois eventos quase simultâneos
+    // passariam os dois pela checagem "status === 'approved'" lá em cima
+    // antes de qualquer um gravar, e processariam o mesmo pagamento 2x
+    // (notificação duplicada, chamada duplicada pra Mercado Pago no upgrade).
+    const claimed = await prisma.pixCharge.updateMany({
+      where: { id: charge.id, status: { not: 'approved' } },
+      data: { status: 'approved', paidAt: new Date() },
+    });
+    if (claimed.count === 0) return;
+
     if (charge.targetPlanId) {
       await handleUpgradeChargePaid(app, { ...charge, targetPlanId: charge.targetPlanId });
       return;
@@ -90,7 +100,6 @@ async function handlePaymentEvent(app: FastifyInstance, dataId: string) {
       where: { id: charge.subscriptionId },
       data: { status: 'active', currentPeriodEnd: charge.periodEnd },
     });
-    await prisma.pixCharge.update({ where: { id: charge.id }, data: { status: 'approved', paidAt: new Date() } });
     const user = await prisma.user.update({
       where: { id: subscription.userId },
       data: { subscriptionStatus: 'active' },
