@@ -27,7 +27,11 @@ export async function ensureCurrentPixCharge(userId: string): Promise<CurrentPix
   const subscription = await prisma.subscription.findFirst({
     where: { userId, provider: 'mercado_pago_pix', status: { not: 'canceled' } },
     orderBy: { createdAt: 'desc' },
-    include: { pixCharges: { orderBy: { createdAt: 'desc' }, take: 1 } },
+    // targetPlanId: null filtra cobranças avulsas de "upgrade proporcional" -
+    // uma dessas abandonada (expirada, nunca paga) não pode ser confundida
+    // com o estado do ciclo normal de renovação, senão dispara uma cobrança
+    // nova de ciclo completo achando que o período pago já venceu.
+    include: { pixCharges: { where: { targetPlanId: null }, orderBy: { createdAt: 'desc' }, take: 1 } },
   });
   if (!subscription) return null;
 
