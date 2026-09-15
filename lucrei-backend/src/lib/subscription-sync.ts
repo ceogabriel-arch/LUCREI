@@ -13,12 +13,16 @@ export function mapMercadoPagoStatus(mpStatus: string): 'active' | 'past_due' | 
  * observado no sandbox deles). Consulta o status real da assinatura direto
  * na API sempre que o nosso banco ainda não está num estado final.
  */
-export async function reconcileMercadoPagoSubscription(userId: string) {
+export async function reconcileMercadoPagoSubscription(userId: string, log?: { error: (obj: unknown, msg?: string) => void }) {
   const subscription = await prisma.subscription.findFirst({
     where: {
       userId,
       provider: 'mercado_pago',
-      status: { in: ['trialing', 'past_due'] },
+      // 'active' também não é final - um cartão recusado na renovação cancela
+      // a assinatura na Mercado Pago, e se o webhook desse evento se perder
+      // (já observado no sandbox deles), só reconciliar trialing/past_due
+      // nunca detectaria isso e o usuário ficaria com acesso pago pra sempre.
+      status: { in: ['trialing', 'past_due', 'active'] },
       providerSubscriptionId: { not: null },
     },
     orderBy: { createdAt: 'desc' },
@@ -30,9 +34,15 @@ export async function reconcileMercadoPagoSubscription(userId: string) {
     const status = mapMercadoPagoStatus(preapproval.status);
     if (!status || status === subscription.status) return;
 
-    await prisma.subscription.update({ where: { id: subscription.id }, data: { status } });
-    await prisma.user.update({ where: { id: userId }, data: { subscriptionStatus: status } });
-  } catch {
-    // Falha na consulta não deve quebrar a tela do usuário — tenta de novo na próxima chamada.
+    await prisma.$transaction([
+      prisma.subscription.update({ where: { id: subscription.id }, data: { status } }),
+      prisma.user.update({ where: { id: userId }, data: { subscriptionStatus: status } }),
+    ]);
+  } catch (err) {
+    // Falha na consulta não deve quebrar a tela do usuário - tenta de novo na
+    // próxima chamada. Mas precisa ficar visível: sem log aqui, um token de
+    // acesso expirado ou uma falha permanente na Mercado Pago passaria
+    // despercebido pra sempre, disfarçado de "falha transitória".
+    log?.error({ userId, err }, 'Falha ao reconciliar assinatura com a Mercado Pago');
   }
 }

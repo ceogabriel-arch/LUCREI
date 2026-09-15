@@ -28,22 +28,20 @@ function verifySignature(xSignature: string | undefined, xRequestId: string | un
   return computed.length === parts.v1.length && crypto.timingSafeEqual(Buffer.from(computed), Buffer.from(parts.v1));
 }
 
-async function handlePreapprovalEvent(app: FastifyInstance, dataId: string) {
+async function handlePreapprovalEvent(dataId: string) {
   const subscription = await prisma.subscription.findFirst({
     where: { provider: 'mercado_pago', providerSubscriptionId: dataId },
   });
   if (!subscription) return;
 
-  try {
-    const preapproval = await getPreapproval(dataId);
-    const status = mapMercadoPagoStatus(preapproval.status);
-    if (status) {
-      await prisma.subscription.update({ where: { id: subscription.id }, data: { status } });
-      await prisma.user.update({ where: { id: subscription.userId }, data: { subscriptionStatus: status } });
-    }
-  } catch (err) {
-    app.log.error(err);
-  }
+  const preapproval = await getPreapproval(dataId);
+  const status = mapMercadoPagoStatus(preapproval.status);
+  if (!status) return;
+
+  await prisma.$transaction([
+    prisma.subscription.update({ where: { id: subscription.id }, data: { status } }),
+    prisma.user.update({ where: { id: subscription.userId }, data: { subscriptionStatus: status } }),
+  ]);
 }
 
 async function handleUpgradeChargePaid(app: FastifyInstance, charge: { id: string; subscriptionId: string; amount: unknown; targetPlanId: string }) {
@@ -89,55 +87,75 @@ async function handleUpgradeChargePaid(app: FastifyInstance, charge: { id: strin
   }
 }
 
+// Revoga o acesso de uma cobrança estornada/contestada - sem isso, um pagamento
+// devolvido pelo Mercado Pago (chargeback, reembolso) nunca é detectado: o
+// handler só olhava pra status "approved" novo, então uma cobrança já
+// aprovada que depois vira "refunded"/"charged_back" ficava intocada pra
+// sempre, com a assinatura continuando "active".
+async function handleChargeReversed(app: FastifyInstance, charge: { id: string; subscriptionId: string }, mpStatus: string) {
+  await prisma.pixCharge.update({ where: { id: charge.id }, data: { status: 'canceled' } });
+  const subscription = await prisma.subscription.findUniqueOrThrow({ where: { id: charge.subscriptionId } });
+  await prisma.$transaction([
+    prisma.subscription.update({ where: { id: subscription.id }, data: { status: 'canceled' } }),
+    prisma.user.update({ where: { id: subscription.userId }, data: { subscriptionStatus: 'canceled' } }),
+  ]);
+  app.log.warn({ chargeId: charge.id, mpStatus }, 'Pagamento Pix estornado/contestado pela Mercado Pago - assinatura cancelada.');
+}
+
 async function handlePaymentEvent(app: FastifyInstance, dataId: string) {
   const charge = await prisma.pixCharge.findUnique({ where: { mercadoPagoPaymentId: dataId } });
-  if (!charge || charge.status === 'approved') return;
+  if (!charge) return;
 
-  try {
-    const payment = await getPayment(dataId);
-    if (payment.status !== 'approved') return;
+  const payment = await getPayment(dataId);
 
-    // Guarda atômica contra o Mercado Pago reenviar o mesmo webhook (eles
-    // avisam que isso acontece) - sem isso, dois eventos quase simultâneos
-    // passariam os dois pela checagem "status === 'approved'" lá em cima
-    // antes de qualquer um gravar, e processariam o mesmo pagamento 2x
-    // (notificação duplicada, chamada duplicada pra Mercado Pago no upgrade).
-    const claimed = await prisma.pixCharge.updateMany({
-      where: { id: charge.id, status: { not: 'approved' } },
-      data: { status: 'approved', paidAt: new Date() },
-    });
-    if (claimed.count === 0) return;
-
-    if (charge.targetPlanId) {
-      await handleUpgradeChargePaid(app, { ...charge, targetPlanId: charge.targetPlanId });
-      return;
+  if (payment.status === 'refunded' || payment.status === 'charged_back') {
+    if (charge.status !== 'canceled') {
+      await handleChargeReversed(app, charge, payment.status);
     }
+    return;
+  }
 
-    const existingSubscription = await prisma.subscription.findUniqueOrThrow({ where: { id: charge.subscriptionId } });
+  if (charge.status === 'approved') return;
+  if (payment.status !== 'approved') return;
 
-    // Numa transação: se travar entre as duas escritas, a assinatura não
-    // pode ficar "active" com o usuário ainda preso em "past_due" (ou
-    // vice-versa), travando acesso de quem já pagou.
-    const [, user] = await prisma.$transaction([
-      prisma.subscription.update({
-        where: { id: charge.subscriptionId },
-        data: { status: 'active', currentPeriodEnd: charge.periodEnd },
-      }),
-      prisma.user.update({
-        where: { id: existingSubscription.userId },
-        data: { subscriptionStatus: 'active' },
-      }),
-    ]);
+  // Guarda atômica contra o Mercado Pago reenviar o mesmo webhook (eles
+  // avisam que isso acontece) - sem isso, dois eventos quase simultâneos
+  // passariam os dois pela checagem "status === 'approved'" lá em cima
+  // antes de qualquer um gravar, e processariam o mesmo pagamento 2x
+  // (notificação duplicada, chamada duplicada pra Mercado Pago no upgrade).
+  const claimed = await prisma.pixCharge.updateMany({
+    where: { id: charge.id, status: { not: 'approved' } },
+    data: { status: 'approved', paidAt: new Date() },
+  });
+  if (claimed.count === 0) return;
 
-    if (user.pushToken) {
-      await sendPushNotification(
-        user.pushToken,
-        'Pagamento confirmado! 🎉',
-        `Recebemos seu Pix de ${formatBRL(Number(charge.amount))}. Sua assinatura Lucrei está ativa.`
-      ).catch((err) => app.log.error(err));
-    }
-  } catch (err) {
-    app.log.error(err);
+  if (charge.targetPlanId) {
+    await handleUpgradeChargePaid(app, { ...charge, targetPlanId: charge.targetPlanId });
+    return;
+  }
+
+  const existingSubscription = await prisma.subscription.findUniqueOrThrow({ where: { id: charge.subscriptionId } });
+
+  // Numa transação: se travar entre as duas escritas, a assinatura não
+  // pode ficar "active" com o usuário ainda preso em "past_due" (ou
+  // vice-versa), travando acesso de quem já pagou.
+  const [, user] = await prisma.$transaction([
+    prisma.subscription.update({
+      where: { id: charge.subscriptionId },
+      data: { status: 'active', currentPeriodEnd: charge.periodEnd },
+    }),
+    prisma.user.update({
+      where: { id: existingSubscription.userId },
+      data: { subscriptionStatus: 'active' },
+    }),
+  ]);
+
+  if (user.pushToken) {
+    await sendPushNotification(
+      user.pushToken,
+      'Pagamento confirmado! 🎉',
+      `Recebemos seu Pix de ${formatBRL(Number(charge.amount))}. Sua assinatura Lucrei está ativa.`
+    ).catch((err) => app.log.error(err));
   }
 }
 
@@ -146,7 +164,12 @@ export async function billingRoutes(app: FastifyInstance) {
     '/billing/mercadopago/webhook',
     async (request, reply) => {
       const type = request.body?.type || request.query.type;
-      const dataId = request.body?.data?.id || request.query['data.id'];
+      // Query primeiro, corpo como fallback - é a ordem que a documentação da
+      // Mercado Pago usa pro id que entra no cálculo da assinatura; inverter
+      // isso arrisca calcular o HMAC em cima do id errado e rejeitar um
+      // webhook legítimo (que a Mercado Pago não teria como saber reenviar
+      // de outro jeito, então ficaria rejeitado pra sempre).
+      const dataId = request.query['data.id'] || request.body?.data?.id;
 
       if (!dataId || (type !== 'subscription_preapproval' && type !== 'payment')) {
         return reply.send({ received: true });
@@ -167,10 +190,18 @@ export async function billingRoutes(app: FastifyInstance) {
         return reply.status(401).send({ message: 'Assinatura inválida.' });
       }
 
-      if (type === 'subscription_preapproval') {
-        await handlePreapprovalEvent(app, dataId);
-      } else {
-        await handlePaymentEvent(app, dataId);
+      try {
+        if (type === 'subscription_preapproval') {
+          await handlePreapprovalEvent(dataId);
+        } else {
+          await handlePaymentEvent(app, dataId);
+        }
+      } catch (err) {
+        app.log.error(err);
+        // 500 em vez de engolir o erro - assim a Mercado Pago reentrega o
+        // webhook depois de uma falha transitória (rede, DB, timeout) em vez
+        // de considerar entregue um evento que na prática não foi processado.
+        return reply.status(500).send({ message: 'Falha ao processar o webhook.' });
       }
 
       return reply.send({ received: true });

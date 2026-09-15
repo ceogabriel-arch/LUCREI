@@ -193,7 +193,7 @@ export async function authRoutes(app: FastifyInstance) {
   );
 
   app.get('/auth/me', { onRequest: [app.authenticate] }, async (request, reply) => {
-    await reconcileMercadoPagoSubscription(request.user.sub);
+    await reconcileMercadoPagoSubscription(request.user.sub, request.log);
     const user = await prisma.user.findUnique({ where: { id: request.user.sub }, include: userWithPlan });
     if (!user) {
       return reply.status(404).send({ message: 'Usuário não encontrado.' });

@@ -1,4 +1,5 @@
 const BASE_URL = 'https://api.mercadopago.com';
+const DEFAULT_TIMEOUT_MS = 15_000;
 
 function accessToken() {
   const token = process.env.MERCADOPAGO_ACCESS_TOKEN;
@@ -8,22 +9,60 @@ function accessToken() {
   return token;
 }
 
-async function mpRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken()}`,
-      ...init.headers,
-    },
-  });
+// Carrega o status HTTP junto do erro - sem isso, quem chama não tem como
+// diferenciar uma falha transitória (5xx, vale tentar de novo) de uma
+// permanente (401 token expirado, 404), e tudo cai no mesmo catch genérico.
+export class MercadoPagoError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'MercadoPagoError';
+    this.status = status;
+  }
+}
+
+// Sem timeout, uma resposta travada da Mercado Pago prende pra sempre a
+// requisição do webhook que a chamou - e como o handler do webhook não
+// devolve resposta até terminar, isso derruba a entrega pra Mercado Pago
+// também. Mesmo padrão já usado no cliente da Shopee.
+async function mpRequest<T>(path: string, init: RequestInit = {}, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  let res: Response;
+  try {
+    res = await fetch(`${BASE_URL}${path}`, {
+      ...init,
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken()}`,
+        ...init.headers,
+      },
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new MercadoPagoError('A Mercado Pago demorou demais pra responder.', 0);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 
   const body: any = await res.json().catch(() => null);
   if (!res.ok) {
     const message = body?.message || body?.error || `Erro Mercado Pago (${res.status})`;
-    throw new Error(message);
+    throw new MercadoPagoError(message, res.status);
   }
   return body as T;
+}
+
+// Blindagem de limite: os chamadores já arredondam antes de chegar aqui, mas
+// isso garante que nenhum valor tipo 19.999999999999996 (erro clássico de
+// ponto flutuante numa subtração de Decimal convertido pra Number) seja
+// mandado pra Mercado Pago por acidente.
+function roundCurrency(value: number) {
+  return Math.round(value * 100) / 100;
 }
 
 export type Preapproval = {
@@ -51,7 +90,7 @@ export function createPreapproval(params: {
       auto_recurring: {
         frequency: params.frequencyMonths ?? 1,
         frequency_type: 'months',
-        transaction_amount: params.value,
+        transaction_amount: roundCurrency(params.value),
         currency_id: 'BRL',
         ...(params.trialDays > 0
           ? { free_trial: { frequency: params.trialDays, frequency_type: 'days' } }
@@ -64,7 +103,7 @@ export function createPreapproval(params: {
 export function updatePreapprovalValue(id: string, value: number) {
   return mpRequest<Preapproval>(`/preapproval/${id}`, {
     method: 'PUT',
-    body: JSON.stringify({ auto_recurring: { transaction_amount: value } }),
+    body: JSON.stringify({ auto_recurring: { transaction_amount: roundCurrency(value) } }),
   });
 }
 
@@ -112,7 +151,7 @@ export function createPixPayment(params: {
     method: 'POST',
     headers: { 'X-Idempotency-Key': params.idempotencyKey },
     body: JSON.stringify({
-      transaction_amount: params.amount,
+      transaction_amount: roundCurrency(params.amount),
       description: params.description,
       payment_method_id: 'pix',
       payer: { email: params.payerEmail },
