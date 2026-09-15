@@ -118,6 +118,25 @@ export async function shopRoutes(app: FastifyInstance) {
         if (owner?.subscriptionStatus === 'trialing' && owner.trialEndsAt && owner.trialEndsAt > new Date()) {
           await prisma.shop.update({ where: { id: shop.id }, data: { trialConsumedAt: new Date() } });
         }
+      } else {
+        // Essa loja já tinha consumido teste antes (em qualquer conta). A
+        // única forma da conta atual estar em teste agora é a loja ter sido
+        // conectada DEPOIS de escolher o plano - resolveTrial só enxerga as
+        // lojas já conectadas na hora da escolha, então essa reconexão é
+        // exatamente a brecha que a regra "1 teste por loja, pra sempre"
+        // deveria impedir. Revoga o teste concedido indevidamente (só o
+        // status local - não mexe em nada na Mercado Pago).
+        const owner = await prisma.user.findUnique({ where: { id: userId } });
+        if (owner?.subscriptionStatus === 'trialing' && owner.trialEndsAt && owner.trialEndsAt > new Date()) {
+          await prisma.user.update({
+            where: { id: userId },
+            data: { subscriptionStatus: 'past_due', trialEndsAt: new Date() },
+          });
+          await prisma.subscription.updateMany({
+            where: { userId, status: 'trialing' },
+            data: { status: 'past_due' },
+          });
+        }
       }
 
       const now = Date.now();

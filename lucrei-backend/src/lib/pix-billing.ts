@@ -34,6 +34,10 @@ export async function ensureCurrentPixCharge(userId: string): Promise<CurrentPix
     include: { pixCharges: { where: { targetPlanId: null }, orderBy: { createdAt: 'desc' }, take: 1 } },
   });
   if (!subscription) return null;
+  // Em teste grátis ainda não há nada pra cobrar - sem essa checagem, só
+  // abrir a tela de fatura durante o trial já geraria uma cobrança Pix real
+  // e derrubaria o status pra "past_due", cancelando o teste na hora.
+  if (subscription.status === 'trialing') return null;
 
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user?.planId) return null;

@@ -49,19 +49,36 @@ async function handlePreapprovalEvent(app: FastifyInstance, dataId: string) {
 async function handleUpgradeChargePaid(app: FastifyInstance, charge: { id: string; subscriptionId: string; amount: unknown; targetPlanId: string }) {
   const subscription = await prisma.subscription.findUniqueOrThrow({ where: { id: charge.subscriptionId } });
   const targetPlan = await prisma.plan.findUnique({ where: { id: charge.targetPlanId } });
-  if (!targetPlan) return;
-
-  const user = await prisma.user.update({ where: { id: subscription.userId }, data: { planId: targetPlan.id } });
+  if (!targetPlan) {
+    // O dinheiro já foi capturado (a cobrança chegou até aqui como aprovada)
+    // mas não tem mais plano pra aplicar - fica só o log mesmo, precisa de
+    // reconciliação manual. Não tenta de novo sozinho: a Mercado Pago não
+    // reenvia o webhook de pagamento indefinidamente pra ficar re-tentando.
+    app.log.error(
+      { chargeId: charge.id, targetPlanId: charge.targetPlanId },
+      'Cobrança de upgrade aprovada mas o plano de destino não existe mais - upgrade não aplicado.'
+    );
+    return;
+  }
 
   // Assinatura por cartão continua cobrando na renovação anual - sem
-  // atualizar aqui, ela ia renovar no valor do plano antigo pra sempre.
+  // atualizar o valor lá antes de aplicar o plano novo aqui, o cliente ficaria
+  // com os recursos do plano caro mas continuaria sendo cobrado o valor do
+  // plano antigo pra sempre. Só aplica o plano localmente depois de confirmar
+  // que a Mercado Pago aceitou o novo valor.
   if (subscription.provider === 'mercado_pago' && subscription.providerSubscriptionId && targetPlan.priceCurrent !== null) {
     try {
       await updatePreapprovalValue(subscription.providerSubscriptionId, Number(targetPlan.priceCurrent));
     } catch (err) {
-      app.log.error(err);
+      app.log.error(
+        { err, subscriptionId: subscription.id, targetPlanId: targetPlan.id },
+        'Falha ao atualizar o valor da assinatura no cartão após upgrade pago - plano NÃO aplicado, precisa de retry manual.'
+      );
+      return;
     }
   }
+
+  const user = await prisma.user.update({ where: { id: subscription.userId }, data: { planId: targetPlan.id } });
 
   if (user.pushToken) {
     await sendPushNotification(
@@ -96,14 +113,21 @@ async function handlePaymentEvent(app: FastifyInstance, dataId: string) {
       return;
     }
 
-    const subscription = await prisma.subscription.update({
-      where: { id: charge.subscriptionId },
-      data: { status: 'active', currentPeriodEnd: charge.periodEnd },
-    });
-    const user = await prisma.user.update({
-      where: { id: subscription.userId },
-      data: { subscriptionStatus: 'active' },
-    });
+    const existingSubscription = await prisma.subscription.findUniqueOrThrow({ where: { id: charge.subscriptionId } });
+
+    // Numa transação: se travar entre as duas escritas, a assinatura não
+    // pode ficar "active" com o usuário ainda preso em "past_due" (ou
+    // vice-versa), travando acesso de quem já pagou.
+    const [, user] = await prisma.$transaction([
+      prisma.subscription.update({
+        where: { id: charge.subscriptionId },
+        data: { status: 'active', currentPeriodEnd: charge.periodEnd },
+      }),
+      prisma.user.update({
+        where: { id: existingSubscription.userId },
+        data: { subscriptionStatus: 'active' },
+      }),
+    ]);
 
     if (user.pushToken) {
       await sendPushNotification(

@@ -228,6 +228,15 @@ export async function plansRoutes(app: FastifyInstance) {
       // cobrando no cartão automaticamente enquanto o Pix também cobra.
       await cancelOtherProviderSubscription(app, user.id, 'mercado_pago_pix');
 
+      // Também cancela qualquer assinatura Pix anterior ainda ativa antes de
+      // criar uma nova - senão um QR code antigo abandonado, se pago por
+      // engano depois, reativaria essa assinatura velha e sobrescreveria o
+      // plano que o usuário está escolhendo agora.
+      await prisma.subscription.updateMany({
+        where: { userId: user.id, provider: 'mercado_pago_pix', status: { not: 'canceled' } },
+        data: { status: 'canceled' },
+      });
+
       const trial = await resolveTrial(user, plan);
 
       const subscription = await prisma.subscription.create({
