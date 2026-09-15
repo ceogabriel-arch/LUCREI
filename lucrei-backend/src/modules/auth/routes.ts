@@ -166,6 +166,13 @@ export async function authRoutes(app: FastifyInstance) {
       if (!payload?.sub || !payload.email) {
         return reply.status(401).send({ message: 'Token do Google inválido.' });
       }
+      // Sem isso, um e-mail não verificado no lado do Google (acontece em
+      // certas contas corporativas/Workspace) seria suficiente pra vincular
+      // automaticamente numa conta existente criada por senha logo abaixo -
+      // um jeito clássico de sequestrar a conta de outra pessoa.
+      if (!payload.email_verified) {
+        return reply.status(401).send({ message: 'E-mail do Google não verificado.' });
+      }
 
       const googleId = payload.sub;
       const email = payload.email.trim().toLowerCase();
