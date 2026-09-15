@@ -222,7 +222,13 @@ export function syncOrders(token: string, shopId: string) {
   });
 }
 
-export type SalesUsage = { ordersThisMonth: number; salesLimit: number | null };
+export type SalesUsage = {
+  ordersThisMonth: number;
+  salesLimit: number | null;
+  overLimit: boolean;
+  blocked: boolean;
+  graceDaysLeft: number | null;
+};
 
 export function getSalesUsage(token: string) {
   return request<SalesUsage>('/plans/usage', {

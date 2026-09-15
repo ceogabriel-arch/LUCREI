@@ -108,9 +108,8 @@ function UsageBar({ usage }: { usage: SalesUsage }) {
   if (usage.salesLimit == null) return null;
 
   const fraction = Math.min(1, usage.ordersThisMonth / usage.salesLimit);
-  const atLimit = usage.ordersThisMonth >= usage.salesLimit;
-  const nearLimit = !atLimit && fraction >= 0.8;
-  const barColor = atLimit ? Colors.danger : nearLimit ? Colors.gold : Colors.success;
+  const nearLimit = !usage.overLimit && fraction >= 0.8;
+  const barColor = usage.overLimit ? Colors.danger : nearLimit ? Colors.gold : Colors.success;
 
   return (
     <View className="mt-4 rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
@@ -123,9 +122,15 @@ function UsageBar({ usage }: { usage: SalesUsage }) {
       <View className="mt-2 h-2 overflow-hidden rounded-full bg-lucrei-surfaceAlt">
         <View style={{ width: `${fraction * 100}%`, backgroundColor: barColor }} className="h-full rounded-full" />
       </View>
-      {atLimit && (
+      {usage.blocked && (
         <Text className="mt-2 text-xs" style={{ color: Colors.danger }}>
-          Limite atingido — novos pedidos não sincronizam até você fazer upgrade.
+          Limite atingido — novos pedidos não sincronizam mais até você fazer upgrade.
+        </Text>
+      )}
+      {usage.overLimit && !usage.blocked && (
+        <Text className="mt-2 text-xs" style={{ color: Colors.danger }}>
+          Limite atingido — valores ocultos. Você tem {usage.graceDaysLeft}{' '}
+          {usage.graceDaysLeft === 1 ? 'dia' : 'dias'} pra fazer upgrade antes da sincronização travar.
         </Text>
       )}
       {nearLimit && (
@@ -135,7 +140,14 @@ function UsageBar({ usage }: { usage: SalesUsage }) {
   );
 }
 
-function OrderRow({ order, onPress }: { order: Order; onPress: () => void }) {
+// Placeholder no lugar do valor real quando a conta está sobre o limite (na
+// carência) - cria a mesma sensação de "borrado" sem depender de blur/filtro
+// de CSS, que não é suportado de forma consistente no nativo.
+function BlurredValue({ width }: { width: number }) {
+  return <View style={{ width, height: 14, borderRadius: 4, opacity: 0.35 }} className="bg-lucrei-textMuted" />;
+}
+
+function OrderRow({ order, onPress, locked }: { order: Order; onPress: () => void; locked: boolean }) {
   const Colors = useColors();
   const hasProfit = order.profit !== null;
 
@@ -154,15 +166,24 @@ function OrderRow({ order, onPress }: { order: Order; onPress: () => void }) {
             {STATUS_LABELS[order.orderStatus] ?? order.orderStatus}
           </Text>
         </View>
-        <Text className="text-sm text-lucrei-textMuted">Venda: {formatBRL(order.revenue)}</Text>
+        {locked ? <BlurredValue width={80} /> : (
+          <Text className="text-sm text-lucrei-textMuted">Venda: {formatBRL(order.revenue)}</Text>
+        )}
       </View>
 
       <View className="mt-2 flex-row items-center justify-between">
-        <Text className="text-base font-semibold" style={{ color: hasProfit ? Colors.success : Colors.textMuted }}>
-          {hasProfit ? `Lucro: ${formatBRL(order.profit!)}` : 'Custo não informado'}
-        </Text>
+        {locked ? (
+          <View className="flex-row items-center gap-1.5">
+            <Ionicons name="lock-closed" size={13} color={Colors.textMuted} />
+            <BlurredValue width={100} />
+          </View>
+        ) : (
+          <Text className="text-base font-semibold" style={{ color: hasProfit ? Colors.success : Colors.textMuted }}>
+            {hasProfit ? `Lucro: ${formatBRL(order.profit!)}` : 'Custo não informado'}
+          </Text>
+        )}
         <View className="flex-row items-center gap-1">
-          {order.itemsMissingCost > 0 && hasProfit && (
+          {!locked && order.itemsMissingCost > 0 && hasProfit && (
             <Text className="text-xs text-lucrei-textMuted">{order.itemsMissingCost} item(ns) sem custo</Text>
           )}
           <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} />
@@ -185,6 +206,7 @@ export default function PedidosScreen() {
   const [search, setSearch] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const { toast, opacity: toastOpacity, show: showToast } = useToast();
+  const isOverLimit = usage?.overLimit ?? false;
 
   const filteredOrders = orders.filter((o) =>
     o.shopeeOrderSn.toLowerCase().includes(search.trim().toLowerCase())
@@ -343,7 +365,22 @@ export default function PedidosScreen() {
               <Text className="text-sm text-lucrei-textMuted">Nenhum pedido encontrado pra "{search}".</Text>
             ) : (
               filteredOrders.map((order) => (
-                <OrderRow key={order.id} order={order} onPress={() => setSelectedOrder(order)} />
+                <OrderRow
+                  key={order.id}
+                  order={order}
+                  locked={isOverLimit}
+                  onPress={() => {
+                    if (isOverLimit) {
+                      showToast({
+                        title: 'Valores ocultos',
+                        message: 'Faça upgrade do seu plano pra ver o detalhe de lucro desse pedido.',
+                        tone: 'error',
+                      });
+                      return;
+                    }
+                    setSelectedOrder(order);
+                  }}
+                />
               ))
             )}
           </ScrollView>

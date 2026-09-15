@@ -69,6 +69,11 @@ model User {
   // reenviar toda sincronização depois de passar de 80%. Comparado sempre
   // contra o início do mês atual, então reseta sozinho todo mês.
   salesLimitWarnedAt           DateTime?
+  // Marca quando a conta bateu o limite mensal de vendas pela primeira vez -
+  // começa a contar os 7 dias de carência (dados borrados, mas sync continua)
+  // antes do bloqueio de verdade. Comparado contra o início do mês atual,
+  // então reseta sozinho todo mês, igual salesLimitWarnedAt.
+  salesLimitReachedAt          DateTime?
   // Marca que já avisamos essa conta que o teste grátis está acabando -
   // dispara uma vez só por trial (não reseta, porque cada Shopee shop só
   // ganha um teste grátis na vida, ver Shop.trialConsumedAt).

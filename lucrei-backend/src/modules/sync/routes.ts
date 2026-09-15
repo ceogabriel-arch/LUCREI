@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 
-import { getOrdersThisMonth } from '../../lib/sales-usage';
+import { getSalesLimitStatus } from '../../lib/sales-usage';
 import { startOfCurrentMonth } from '../../lib/period';
 import { prisma } from '../../lib/prisma';
 import { sendPushNotification } from '../../lib/push-notifications';
@@ -28,24 +28,32 @@ export async function syncRoutes(app: FastifyInstance) {
       });
 
       if (user?.plan?.salesLimit != null) {
-        const ordersThisMonth = await getOrdersThisMonth(request.user.sub);
-        if (ordersThisMonth >= user.plan.salesLimit) {
-          return reply.status(403).send({
-            message: `Seu plano ${user.plan.name} permite até ${user.plan.salesLimit} vendas/mês e você já atingiu esse limite. Faça upgrade pra continuar sincronizando pedidos.`,
-            code: 'sales_limit_reached',
-          });
-        }
+        const status = await getSalesLimitStatus(user);
 
-        const alreadyWarnedThisMonth =
-          user.salesLimitWarnedAt != null && user.salesLimitWarnedAt >= startOfCurrentMonth();
-        if (!alreadyWarnedThisMonth && ordersThisMonth >= user.plan.salesLimit * WARNING_THRESHOLD) {
-          await prisma.user.update({ where: { id: user.id }, data: { salesLimitWarnedAt: new Date() } });
-          if (user.pushToken) {
-            await sendPushNotification(
-              user.pushToken,
-              'Quase no limite do plano ⚠️',
-              `Você já usou ${ordersThisMonth} das ${user.plan.salesLimit} vendas do plano ${user.plan.name} esse mês. Considere fazer upgrade pra não travar a sincronização.`
-            ).catch((err) => app.log.error(err));
+        if (status.overLimit) {
+          if (status.blocked) {
+            return reply.status(403).send({
+              message: `Seu plano ${user.plan.name} permite até ${user.plan.salesLimit} vendas/mês e o prazo de carência já acabou. Faça upgrade pra continuar sincronizando pedidos.`,
+              code: 'sales_limit_reached',
+            });
+          }
+          // Dentro da carência (ou acabou de bater o limite agora) - grava
+          // quando começou, se ainda não tinha, e segue pro sync normal.
+          if (!user.salesLimitReachedAt || user.salesLimitReachedAt < startOfCurrentMonth()) {
+            await prisma.user.update({ where: { id: user.id }, data: { salesLimitReachedAt: new Date() } });
+          }
+        } else {
+          const alreadyWarnedThisMonth =
+            user.salesLimitWarnedAt != null && user.salesLimitWarnedAt >= startOfCurrentMonth();
+          if (!alreadyWarnedThisMonth && status.ordersThisMonth >= user.plan.salesLimit * WARNING_THRESHOLD) {
+            await prisma.user.update({ where: { id: user.id }, data: { salesLimitWarnedAt: new Date() } });
+            if (user.pushToken) {
+              await sendPushNotification(
+                user.pushToken,
+                'Quase no limite do plano ⚠️',
+                `Você já usou ${status.ordersThisMonth} das ${user.plan.salesLimit} vendas do plano ${user.plan.name} esse mês. Considere fazer upgrade pra não travar a sincronização.`
+              ).catch((err) => app.log.error(err));
+            }
           }
         }
       }
