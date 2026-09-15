@@ -73,3 +73,59 @@ export async function sendPasswordResetEmail(app: FastifyInstance, to: string, r
     app.log.error(`Falha ao enviar e-mail de redefinição de senha: ${response.status} ${body}`);
   }
 }
+
+const SUPPORT_EMAIL = 'suporte@lucreiapp.com';
+
+// Sem painel administrativo pro programa de conquistas - o time recebe o
+// pedido de resgate direto por e-mail e trata manualmente (fica também
+// gravado no banco via RewardClaim, então não se perde se o e-mail falhar).
+export async function sendRewardClaimEmail(
+  app: FastifyInstance,
+  claim: {
+    userEmail: string;
+    tierThreshold: number;
+    reward: string;
+    fullName: string;
+    phone: string | null;
+    addressLine: string;
+    city: string;
+    state: string;
+    zipCode: string;
+  }
+) {
+  const apiKey = process.env.RESEND_API_KEY;
+  const subject = `Resgate de recompensa: ${claim.reward} (${claim.userEmail})`;
+  const details =
+    `Usuário: ${claim.userEmail}\n` +
+    `Patamar: R$ ${claim.tierThreshold.toLocaleString('pt-BR')}\n` +
+    `Recompensa: ${claim.reward}\n` +
+    `Nome: ${claim.fullName}\n` +
+    `Telefone: ${claim.phone || '(não informado)'}\n` +
+    `Endereço: ${claim.addressLine}, ${claim.city} - ${claim.state}, ${claim.zipCode}`;
+
+  if (!apiKey) {
+    app.log.info(`[email] RESEND_API_KEY não configurado — resgate de recompensa:\n${details}`);
+    return;
+  }
+
+  const html = `<pre style="font-family:Arial,Helvetica,sans-serif;font-size:14px;white-space:pre-wrap;">${details.replace(/</g, '&lt;')}</pre>`;
+
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: process.env.RESEND_FROM_EMAIL || 'Lucrei <onboarding@resend.dev>',
+      to: SUPPORT_EMAIL,
+      subject,
+      html,
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    app.log.error(`Falha ao enviar e-mail de resgate de recompensa: ${response.status} ${body}`);
+  }
+}

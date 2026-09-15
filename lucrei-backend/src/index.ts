@@ -16,6 +16,7 @@ import { orderRoutes } from './modules/orders/routes';
 import { passwordResetRoutes } from './modules/password-reset/routes';
 import { plansRoutes } from './modules/plans/routes';
 import { productRoutes } from './modules/products/routes';
+import { rewardsRoutes } from './modules/rewards/routes';
 import { shopRoutes } from './modules/shops/routes';
 import { summaryRoutes } from './modules/summary/routes';
 import { syncRoutes } from './modules/sync/routes';
@@ -108,6 +109,7 @@ async function main() {
   await app.register(legalRoutes);
   await app.register(passwordResetRoutes);
   await app.register(billingRoutes);
+  await app.register(rewardsRoutes);
 
   const port = Number(process.env.PORT ?? 3000);
   await app.listen({ port, host: '0.0.0.0' });

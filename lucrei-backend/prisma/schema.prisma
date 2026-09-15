@@ -84,9 +84,32 @@ model User {
   plan          Plan?           @relation(fields: [planId], references: [id])
   shops         Shop[]
   subscriptions Subscription[]
+  rewardClaims  RewardClaim[]
 
   @@index([planId])
   @@index([passwordResetTokenHash])
+}
+
+// Pedido de resgate de uma recompensa física do programa de conquistas (ver
+// TIERS em achievements-card.tsx no app). Sem painel administrativo por
+// enquanto - o time recebe por e-mail e trata manualmente; isso só registra
+// o pedido e impede resgatar o mesmo patamar duas vezes.
+model RewardClaim {
+  id            String   @id @default(cuid())
+  userId        String
+  tierThreshold Int
+  fullName      String
+  phone         String?
+  addressLine   String
+  city          String
+  state         String
+  zipCode       String
+  createdAt     DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tierThreshold])
+  @@index([userId])
 }
 
 model Shop {

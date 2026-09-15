@@ -293,3 +293,27 @@ export function cancelPlan(token: string) {
     body: '{}',
   });
 }
+
+export function getClaimedRewardTiers(token: string) {
+  return request<{ claimedTiers: number[] }>('/rewards/claims', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export type ClaimRewardInput = {
+  tierThreshold: number;
+  fullName: string;
+  phone?: string;
+  addressLine: string;
+  city: string;
+  state: string;
+  zipCode: string;
+};
+
+export function claimReward(token: string, input: ClaimRewardInput) {
+  return request<{ ok: true }>('/rewards/claim', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(input),
+  });
+}
