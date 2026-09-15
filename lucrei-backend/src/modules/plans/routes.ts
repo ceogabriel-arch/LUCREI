@@ -4,15 +4,13 @@ import type { Plan, User } from '@prisma/client';
 import * as mercadopago from '../../mercadopago-client';
 import { cancelOtherProviderSubscription } from '../../lib/cancel-other-provider-subscription';
 import { prisma } from '../../lib/prisma';
-import { CYCLE_DAYS_BY_PERIOD } from '../../lib/pix-billing';
+import { addDays, createOrGetPixCharge, CYCLE_DAYS_BY_PERIOD } from '../../lib/pix-billing';
 import { createProratedUpgradeCharge, findActiveAnnualCycle } from '../../lib/plan-upgrade';
 import { getSalesLimitStatus } from '../../lib/sales-usage';
 import { serializeUser, userWithPlan } from './serialize-user';
 
 const TRIAL_DAYS = 15;
 const BACK_URL = process.env.PUBLIC_APP_URL || 'https://lucrei-production-bce6.up.railway.app';
-// Prazo pra pagar o QR code de um ciclo antes dele expirar e um novo ser gerado.
-const PIX_EXPIRATION_MINUTES = 60 * 24;
 
 const selectPlanSchema = {
   type: 'object',
@@ -23,12 +21,6 @@ const selectPlanSchema = {
 } as const;
 
 type SelectPlanBody = { key: string };
-
-function addDays(date: Date, days: number) {
-  const result = new Date(date);
-  result.setDate(result.getDate() + days);
-  return result;
-}
 
 // Uma loja Shopee que já consumiu o teste grátis (em qualquer conta Lucrei -
 // o shopeeShopId é único e persiste ao trocar de dono) não libera um novo
@@ -105,12 +97,26 @@ export async function plansRoutes(app: FastifyInstance) {
 
       // Trocar pra cartão com uma assinatura Pix ainda ativa cobraria nos dois
       // ao mesmo tempo (o Pix continuaria gerando cobrança de ciclo sozinho).
-      await cancelOtherProviderSubscription(app, user.id, 'mercado_pago');
+      try {
+        await cancelOtherProviderSubscription(app, user.id, 'mercado_pago');
+      } catch (err) {
+        app.log.error(err);
+        return reply.status(502).send({ message: 'Não foi possível cancelar sua assinatura anterior. Tente novamente em instantes.' });
+      }
 
       const existingSubscription = await prisma.subscription.findFirst({
         where: { userId: user.id, provider: 'mercado_pago' },
         orderBy: { createdAt: 'desc' },
       });
+
+      // Retry de uma requisição que já tinha ido pra frente antes (timeout no
+      // cliente, duplo toque) - o plano já é este e já existe uma assinatura
+      // pra ele, então só devolve o que já existe em vez de criar uma
+      // segunda assinatura de verdade na Mercado Pago.
+      if (existingSubscription && existingSubscription.status !== 'canceled' && user.plan?.id === plan.id) {
+        return reply.send({ ...serializeUser(user), checkoutUrl: existingSubscription.lastInvoiceUrl });
+      }
+
       // Só reaproveita a assinatura existente (só troca o valor) se o ciclo de
       // cobrança continuar o mesmo - mensal->anual (ou vice-versa) precisa de
       // uma assinatura nova, porque muda a frequência de cobrança na Mercado
@@ -227,48 +233,68 @@ export async function plansRoutes(app: FastifyInstance) {
 
       // Trocar pro Pix com uma assinatura de cartão ainda ativa continuaria
       // cobrando no cartão automaticamente enquanto o Pix também cobra.
-      await cancelOtherProviderSubscription(app, user.id, 'mercado_pago_pix');
+      try {
+        await cancelOtherProviderSubscription(app, user.id, 'mercado_pago_pix');
+      } catch (err) {
+        app.log.error(err);
+        return reply.status(502).send({ message: 'Não foi possível cancelar sua assinatura anterior. Tente novamente em instantes.' });
+      }
 
-      // Também cancela qualquer assinatura Pix anterior ainda ativa antes de
-      // criar uma nova - senão um QR code antigo abandonado, se pago por
-      // engano depois, reativaria essa assinatura velha e sobrescreveria o
-      // plano que o usuário está escolhendo agora.
-      await prisma.subscription.updateMany({
+      const existingPixSubscription = await prisma.subscription.findFirst({
         where: { userId: user.id, provider: 'mercado_pago_pix', status: { not: 'canceled' } },
-        data: { status: 'canceled' },
+        orderBy: { createdAt: 'desc' },
       });
 
-      const trial = await resolveTrial(user, plan);
+      let subscription = existingPixSubscription;
+      let trialEndsAt = user.trialEndsAt;
 
-      const subscription = await prisma.subscription.create({
-        data: {
-          userId: user.id,
-          provider: 'mercado_pago_pix',
-          status: trial.eligibleForTrial ? 'trialing' : 'past_due',
-          currentPeriodEnd: trial.trialEndsAt,
-        },
-      });
+      // Reaproveita a assinatura Pix já existente se for pro MESMO plano
+      // (retry depois de um timeout, duplo toque em "Pix") - assim a chave
+      // de idempotência (baseada no id da assinatura) protege de verdade
+      // contra duplicar a cobrança. Pedir um plano DIFERENTE cancela a
+      // anterior, senão ela fica solta com uma cobrança pendente que
+      // poderia reativar sozinha se fosse paga depois.
+      if (!subscription || user.plan?.id !== plan.id) {
+        if (subscription) {
+          await prisma.subscription.update({ where: { id: subscription.id }, data: { status: 'canceled' } });
+        }
 
-      if (trial.eligibleForTrial) {
-        await markShopsTrialConsumed(user.id);
+        const trial = await resolveTrial(user, plan);
+        trialEndsAt = trial.trialEndsAt;
+        subscription = await prisma.subscription.create({
+          data: {
+            userId: user.id,
+            provider: 'mercado_pago_pix',
+            status: trial.eligibleForTrial ? 'trialing' : 'past_due',
+            currentPeriodEnd: trial.trialEndsAt,
+          },
+        });
+
+        if (trial.eligibleForTrial) {
+          await markShopsTrialConsumed(user.id);
+        }
+      }
+
+      if (subscription.status === 'trialing') {
         const updated = await prisma.user.update({
           where: { id: user.id },
-          data: { planId: plan.id, subscriptionStatus: 'trialing', trialEndsAt: trial.trialEndsAt },
+          data: { planId: plan.id, subscriptionStatus: 'trialing', trialEndsAt },
           include: userWithPlan,
         });
         return reply.send({ ...serializeUser(updated), pix: null });
       }
 
-      const now = new Date();
-      const periodEnd = addDays(now, CYCLE_DAYS_BY_PERIOD[plan.billingPeriod]);
-      let pixPayment;
+      const periodStart = new Date();
+      const periodEnd = addDays(periodStart, CYCLE_DAYS_BY_PERIOD[plan.billingPeriod]);
+      let charge;
       try {
-        pixPayment = await mercadopago.createPixPayment({
+        charge = await createOrGetPixCharge({
+          subscriptionId: subscription.id,
           amount: Number(plan.priceCurrent),
           description: `Lucrei - Plano ${plan.name}`,
           payerEmail: user.email,
-          externalReference: subscription.id,
-          expiresInMinutes: PIX_EXPIRATION_MINUTES,
+          periodStart,
+          periodEnd,
           idempotencyKey: mercadopago.pixIdempotencyKey(subscription.id, 'initial'),
         });
       } catch (err) {
@@ -276,34 +302,13 @@ export async function plansRoutes(app: FastifyInstance) {
         return reply.status(502).send({ message: 'Não foi possível gerar o Pix agora. Tente novamente em instantes.' });
       }
 
-      await prisma.pixCharge.create({
-        data: {
-          subscriptionId: subscription.id,
-          mercadoPagoPaymentId: String(pixPayment.id),
-          amount: plan.priceCurrent,
-          qrCode: pixPayment.point_of_interaction.transaction_data.qr_code,
-          qrCodeBase64: pixPayment.point_of_interaction.transaction_data.qr_code_base64,
-          periodStart: now,
-          periodEnd,
-          expiresAt: new Date(pixPayment.date_of_expiration),
-        },
-      });
-
       const updated = await prisma.user.update({
         where: { id: user.id },
-        data: { planId: plan.id, subscriptionStatus: 'past_due', trialEndsAt: trial.trialEndsAt },
+        data: { planId: plan.id, subscriptionStatus: 'past_due', trialEndsAt },
         include: userWithPlan,
       });
 
-      return reply.send({
-        ...serializeUser(updated),
-        pix: {
-          qrCode: pixPayment.point_of_interaction.transaction_data.qr_code,
-          qrCodeBase64: pixPayment.point_of_interaction.transaction_data.qr_code_base64,
-          expiresAt: pixPayment.date_of_expiration,
-          amount: Number(plan.priceCurrent),
-        },
-      });
+      return reply.send({ ...serializeUser(updated), pix: charge });
     }
   );
 

@@ -1,17 +1,22 @@
 import type { Plan, User } from '@prisma/client';
 
-import * as mercadopago from '../mercadopago-client';
+import { pixIdempotencyKey } from '../mercadopago-client';
+import { createOrGetPixCharge, type PixChargeResponse } from './pix-billing';
 import { prisma } from './prisma';
 
-const PIX_EXPIRATION_MINUTES = 60 * 24;
 const YEAR_MS = 365 * 24 * 60 * 60 * 1000;
 
-export type ProrationCharge = {
-  qrCode: string;
-  qrCodeBase64: string;
-  expiresAt: string;
-  amount: number;
-} | null;
+export type ProrationCharge = PixChargeResponse | null;
+
+// Assinatura 'trialing' ainda não pagou nada - currentPeriodEnd nela é
+// trialEndsAt, não uma data paga. Tratar isso como "ciclo anual já pago"
+// cobraria (ou bloquearia troca de) alguém que está de graça no teste.
+async function findLatestPaidSubscription(userId: string) {
+  return prisma.subscription.findFirst({
+    where: { userId, status: { in: ['active', 'past_due'] }, provider: { in: ['mercado_pago', 'mercado_pago_pix'] } },
+    orderBy: { createdAt: 'desc' },
+  });
+}
 
 /**
  * Plano anual trocado no meio do ciclo por um mais caro precisa de uma
@@ -36,14 +41,7 @@ export async function createProratedUpgradeCharge(
   const priceDiff = Number(newPlan.priceCurrent) - Number(user.plan.priceCurrent);
   if (priceDiff <= 0) return null;
 
-  const subscription = await prisma.subscription.findFirst({
-    where: {
-      userId: user.id,
-      status: { notIn: ['canceled', 'trialing'] },
-      provider: { in: ['mercado_pago', 'mercado_pago_pix'] },
-    },
-    orderBy: { createdAt: 'desc' },
-  });
+  const subscription = await findLatestPaidSubscription(user.id);
   if (!subscription?.currentPeriodEnd) return null;
 
   const remainingMs = subscription.currentPeriodEnd.getTime() - Date.now();
@@ -53,35 +51,16 @@ export async function createProratedUpgradeCharge(
   const proratedAmount = Math.round(priceDiff * remainingFraction * 100) / 100;
   if (proratedAmount <= 0) return null;
 
-  const pixPayment = await mercadopago.createPixPayment({
+  return createOrGetPixCharge({
+    subscriptionId: subscription.id,
     amount: proratedAmount,
     description: `Lucrei - Upgrade proporcional para ${newPlan.name}`,
     payerEmail: user.email,
-    externalReference: subscription.id,
-    expiresInMinutes: PIX_EXPIRATION_MINUTES,
-    idempotencyKey: mercadopago.pixIdempotencyKey(subscription.id, 'upgrade', newPlan.id),
+    periodStart: new Date(),
+    periodEnd: subscription.currentPeriodEnd,
+    idempotencyKey: pixIdempotencyKey(subscription.id, 'upgrade', newPlan.id),
+    targetPlanId: newPlan.id,
   });
-
-  await prisma.pixCharge.create({
-    data: {
-      subscriptionId: subscription.id,
-      mercadoPagoPaymentId: String(pixPayment.id),
-      amount: proratedAmount,
-      qrCode: pixPayment.point_of_interaction.transaction_data.qr_code,
-      qrCodeBase64: pixPayment.point_of_interaction.transaction_data.qr_code_base64,
-      periodStart: new Date(),
-      periodEnd: subscription.currentPeriodEnd,
-      expiresAt: new Date(pixPayment.date_of_expiration),
-      targetPlanId: newPlan.id,
-    },
-  });
-
-  return {
-    qrCode: pixPayment.point_of_interaction.transaction_data.qr_code,
-    qrCodeBase64: pixPayment.point_of_interaction.transaction_data.qr_code_base64,
-    expiresAt: pixPayment.date_of_expiration,
-    amount: proratedAmount,
-  };
 }
 
 /**
@@ -90,21 +69,14 @@ export async function createProratedUpgradeCharge(
  * (cartão ou Pix, não importa) e pede pra trocar por um de valor igual ou menor,
  * isso jogaria fora o tempo já pago e cobraria o preço cheio do plano novo na
  * hora. Upgrade de verdade (mais caro) já é tratado à parte por
- * createProratedUpgradeCharge antes desse bloqueio entrar em ação. Ignora
- * assinatura em teste grátis - nada foi pago ainda, então não há período
- * pago pra proteger, e travar a troca aí só atrapalharia à toa.
+ * createProratedUpgradeCharge antes desse bloqueio entrar em ação. Só se
+ * aplica a quem JÁ PAGOU o ciclo atual (ver findLatestPaidSubscription) -
+ * ninguém em teste grátis "já pagou" nada, então nunca é bloqueado.
  */
 export async function findActiveAnnualCycle(user: User & { plan: Plan | null }) {
   if (!user.plan || user.plan.billingPeriod !== 'annual') return null;
 
-  const subscription = await prisma.subscription.findFirst({
-    where: {
-      userId: user.id,
-      status: { notIn: ['canceled', 'trialing'] },
-      provider: { in: ['mercado_pago', 'mercado_pago_pix'] },
-    },
-    orderBy: { createdAt: 'desc' },
-  });
+  const subscription = await findLatestPaidSubscription(user.id);
   if (!subscription?.currentPeriodEnd || subscription.currentPeriodEnd.getTime() <= Date.now()) return null;
 
   return { ...subscription, currentPeriodEnd: subscription.currentPeriodEnd };

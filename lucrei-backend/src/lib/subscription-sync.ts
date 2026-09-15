@@ -29,14 +29,36 @@ export async function reconcileMercadoPagoSubscription(userId: string, log?: { e
   });
   if (!subscription?.providerSubscriptionId) return;
 
+  // Assinatura ativa com data de renovação ainda no futuro não precisa
+  // consultar a Mercado Pago de novo - evita bater na API deles a cada
+  // /auth/me só pra confirmar o que já sabemos que está certo.
+  const periodEndIsFresh =
+    subscription.status === 'active' &&
+    subscription.currentPeriodEnd !== null &&
+    subscription.currentPeriodEnd.getTime() > Date.now();
+  if (periodEndIsFresh) return;
+
   try {
     const preapproval = await getPreapproval(subscription.providerSubscriptionId);
     const status = mapMercadoPagoStatus(preapproval.status);
-    if (!status || status === subscription.status) return;
+    // A cada renovação de cartão a Mercado Pago não manda um webhook novo (o
+    // preapproval continua 'authorized') - sem atualizar isso aqui também,
+    // currentPeriodEnd travava pra sempre na data do fim do trial (ou nulo,
+    // pra quem nunca teve trial), e o upgrade/downgrade de plano anual nunca
+    // conseguia saber até quando o cartão já estava pago.
+    const nextPeriodEnd = preapproval.next_payment_date ? new Date(preapproval.next_payment_date) : undefined;
+
+    const statusChanged = status !== null && status !== subscription.status;
+    const periodChanged =
+      nextPeriodEnd !== undefined && nextPeriodEnd.getTime() !== (subscription.currentPeriodEnd?.getTime() ?? -1);
+    if (!statusChanged && !periodChanged) return;
 
     await prisma.$transaction([
-      prisma.subscription.update({ where: { id: subscription.id }, data: { status } }),
-      prisma.user.update({ where: { id: userId }, data: { subscriptionStatus: status } }),
+      prisma.subscription.update({
+        where: { id: subscription.id },
+        data: { ...(statusChanged ? { status: status! } : {}), ...(periodChanged ? { currentPeriodEnd: nextPeriodEnd } : {}) },
+      }),
+      ...(statusChanged ? [prisma.user.update({ where: { id: userId }, data: { subscriptionStatus: status! } })] : []),
     ]);
   } catch (err) {
     // Falha na consulta não deve quebrar a tela do usuário - tenta de novo na

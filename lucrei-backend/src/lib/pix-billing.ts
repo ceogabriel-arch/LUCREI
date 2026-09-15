@@ -1,21 +1,89 @@
 import { prisma } from './prisma';
 import * as mercadopago from '../mercadopago-client';
 
-const PIX_EXPIRATION_MINUTES = 60 * 24;
+export const PIX_EXPIRATION_MINUTES = 60 * 24;
 export const CYCLE_DAYS_BY_PERIOD = { monthly: 30, annual: 365 } as const;
 
-function addDays(date: Date, days: number) {
+export function addDays(date: Date, days: number) {
   const result = new Date(date);
   result.setDate(result.getDate() + days);
   return result;
 }
 
-export type CurrentPixCharge = {
+export type PixChargeResponse = {
   qrCode: string;
   qrCodeBase64: string;
   expiresAt: string;
   amount: number;
-} | null;
+};
+
+export type CurrentPixCharge = PixChargeResponse | null;
+
+/**
+ * Cria o Pix na Mercado Pago e persiste o PixCharge - usado por todo mundo que
+ * gera uma cobrança Pix (assinatura nova, renovação de ciclo, upgrade
+ * proporcional) pra não reimplementar 3x a mesma sequência.
+ *
+ * Duas defesas importantes aqui:
+ * - a Mercado Pago só preenche point_of_interaction/qr_code quando o
+ *   pagamento fica 'pending' - um pagamento recusado na hora (dado do
+ *   pagador rejeitado, regra antifraude, etc.) volta com esses campos
+ *   ausentes, então checamos antes de acessar em vez de deixar estourar um
+ *   TypeError.
+ * - com a chave de idempotência estável, um retry legítimo do MESMO
+ *   pagamento faz a Mercado Pago devolver o pagamento JÁ EXISTENTE (mesmo
+ *   id) - sem o findUnique antes do create, isso bateria no índice único de
+ *   mercadoPagoPaymentId e quebraria com um erro confuso em vez de
+ *   simplesmente devolver a cobrança que já tínhamos salvo.
+ */
+export async function createOrGetPixCharge(params: {
+  subscriptionId: string;
+  amount: number;
+  description: string;
+  payerEmail: string;
+  periodStart: Date;
+  periodEnd: Date;
+  idempotencyKey: string;
+  targetPlanId?: string;
+}): Promise<PixChargeResponse> {
+  const pixPayment = await mercadopago.createPixPayment({
+    amount: params.amount,
+    description: params.description,
+    payerEmail: params.payerEmail,
+    externalReference: params.subscriptionId,
+    expiresInMinutes: PIX_EXPIRATION_MINUTES,
+    idempotencyKey: params.idempotencyKey,
+  });
+
+  if (pixPayment.status !== 'pending' || !pixPayment.point_of_interaction) {
+    throw new Error(
+      `Pix criado com status inesperado na Mercado Pago (${pixPayment.status}/${pixPayment.status_detail}) - sem QR code pra devolver.`
+    );
+  }
+
+  const qrCode = pixPayment.point_of_interaction.transaction_data.qr_code;
+  const qrCodeBase64 = pixPayment.point_of_interaction.transaction_data.qr_code_base64;
+  const expiresAt = pixPayment.date_of_expiration;
+
+  const existing = await prisma.pixCharge.findUnique({ where: { mercadoPagoPaymentId: String(pixPayment.id) } });
+  if (!existing) {
+    await prisma.pixCharge.create({
+      data: {
+        subscriptionId: params.subscriptionId,
+        mercadoPagoPaymentId: String(pixPayment.id),
+        amount: params.amount,
+        qrCode,
+        qrCodeBase64,
+        periodStart: params.periodStart,
+        periodEnd: params.periodEnd,
+        expiresAt: new Date(expiresAt),
+        targetPlanId: params.targetPlanId,
+      },
+    });
+  }
+
+  return { qrCode, qrCodeBase64, expiresAt, amount: params.amount };
+}
 
 /**
  * Pix não tem cobrança automática recorrente como cartão - cada ciclo precisa
@@ -56,41 +124,24 @@ export async function ensureCurrentPixCharge(userId: string): Promise<CurrentPix
     };
   }
 
-  const cycleDue = !latest || latest.status !== 'approved' || subscription.currentPeriodEnd === null || subscription.currentPeriodEnd <= now;
+  const cycleDue = latest?.status !== 'approved' || subscription.currentPeriodEnd === null || subscription.currentPeriodEnd <= now;
   if (!cycleDue) return null;
 
   const periodStart = latest?.status === 'approved' && subscription.currentPeriodEnd ? subscription.currentPeriodEnd : now;
   const periodEnd = addDays(periodStart, CYCLE_DAYS_BY_PERIOD[plan.billingPeriod]);
 
-  const pixPayment = await mercadopago.createPixPayment({
+  const charge = await createOrGetPixCharge({
+    subscriptionId: subscription.id,
     amount: Number(plan.priceCurrent),
     description: `Lucrei - Plano ${plan.name}`,
     payerEmail: user.email,
-    externalReference: subscription.id,
-    expiresInMinutes: PIX_EXPIRATION_MINUTES,
+    periodStart,
+    periodEnd,
     idempotencyKey: mercadopago.pixIdempotencyKey(subscription.id, 'cycle'),
-  });
-
-  await prisma.pixCharge.create({
-    data: {
-      subscriptionId: subscription.id,
-      mercadoPagoPaymentId: String(pixPayment.id),
-      amount: plan.priceCurrent,
-      qrCode: pixPayment.point_of_interaction.transaction_data.qr_code,
-      qrCodeBase64: pixPayment.point_of_interaction.transaction_data.qr_code_base64,
-      periodStart,
-      periodEnd,
-      expiresAt: new Date(pixPayment.date_of_expiration),
-    },
   });
 
   await prisma.subscription.update({ where: { id: subscription.id }, data: { status: 'past_due' } });
   await prisma.user.update({ where: { id: userId }, data: { subscriptionStatus: 'past_due' } });
 
-  return {
-    qrCode: pixPayment.point_of_interaction.transaction_data.qr_code,
-    qrCodeBase64: pixPayment.point_of_interaction.transaction_data.qr_code_base64,
-    expiresAt: pixPayment.date_of_expiration,
-    amount: Number(plan.priceCurrent),
-  };
+  return charge;
 }

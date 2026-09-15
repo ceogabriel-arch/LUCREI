@@ -32,15 +32,27 @@ async function handlePreapprovalEvent(dataId: string) {
   const subscription = await prisma.subscription.findFirst({
     where: { provider: 'mercado_pago', providerSubscriptionId: dataId },
   });
-  if (!subscription) return;
+  // Já cancelamos essa assinatura por aqui (troca de método de pagamento,
+  // cancelamento pelo usuário) - um webhook atrasado ou reenviado pela
+  // Mercado Pago não deve reativar ela sozinho.
+  if (!subscription || subscription.status === 'canceled') return;
 
   const preapproval = await getPreapproval(dataId);
   const status = mapMercadoPagoStatus(preapproval.status);
-  if (!status) return;
+  // A cada renovação a Mercado Pago não manda um webhook novo de status (o
+  // preapproval continua 'authorized') - por isso guardamos aqui a próxima
+  // data de cobrança sempre que consultamos, não só quando o status muda.
+  // É isso que createProratedUpgradeCharge/findActiveAnnualCycle usam pra
+  // saber até quando uma assinatura de cartão está paga.
+  const nextPeriodEnd = preapproval.next_payment_date ? new Date(preapproval.next_payment_date) : undefined;
+  if (!status && !nextPeriodEnd) return;
 
   await prisma.$transaction([
-    prisma.subscription.update({ where: { id: subscription.id }, data: { status } }),
-    prisma.user.update({ where: { id: subscription.userId }, data: { subscriptionStatus: status } }),
+    prisma.subscription.update({
+      where: { id: subscription.id },
+      data: { ...(status ? { status } : {}), ...(nextPeriodEnd ? { currentPeriodEnd: nextPeriodEnd } : {}) },
+    }),
+    ...(status ? [prisma.user.update({ where: { id: subscription.userId }, data: { subscriptionStatus: status } })] : []),
   ]);
 }
 

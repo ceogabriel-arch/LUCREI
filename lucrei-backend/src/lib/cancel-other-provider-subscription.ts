@@ -9,6 +9,14 @@ import { prisma } from './prisma';
  * (o cartão renova automático, o Pix gera um novo ciclo sempre que a tela de
  * planos é aberta) enquanto a nova também cobra, dobrando o valor pago.
  */
+/**
+ * Lança se a assinatura antiga era por cartão e a Mercado Pago recusar
+ * cancelar de verdade - propositalmente barulhento, porque marcar como
+ * cancelado no nosso banco sem o cartão ter sido cancelado de verdade
+ * recria o exato problema de cobrança dupla que essa função existe pra
+ * evitar (a chamadora deve devolver um erro pro usuário tentar de novo, em
+ * vez de seguir criando uma segunda assinatura por cima da zumbi).
+ */
 export async function cancelOtherProviderSubscription(
   app: FastifyInstance,
   userId: string,
@@ -26,6 +34,7 @@ export async function cancelOtherProviderSubscription(
       await mercadopago.cancelPreapproval(existing.providerSubscriptionId);
     } catch (err) {
       app.log.error(err);
+      throw new Error('Não foi possível cancelar sua assinatura anterior na Mercado Pago.');
     }
   }
   await prisma.subscription.update({ where: { id: existing.id }, data: { status: 'canceled' } });

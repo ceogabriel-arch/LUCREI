@@ -69,6 +69,7 @@ export type Preapproval = {
   id: string;
   init_point: string;
   status: string;
+  next_payment_date?: string | null;
 };
 
 export function createPreapproval(params: {
@@ -123,7 +124,11 @@ export type PixPayment = {
   status: string;
   status_detail: string;
   date_of_expiration: string;
-  point_of_interaction: {
+  external_reference?: string;
+  // Só vem preenchido quando o pagamento fica 'pending' - um pagamento
+  // recusado na hora (dado do pagador rejeitado, regra antifraude, etc.)
+  // volta com isso ausente, mesmo com a chamada HTTP tendo dado certo.
+  point_of_interaction?: {
     transaction_data: {
       qr_code: string;
       qr_code_base64: string;
