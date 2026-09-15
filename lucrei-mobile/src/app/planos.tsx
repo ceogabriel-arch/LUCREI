@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 
 import { PixPaymentModal } from '@/components/pix-payment-modal';
@@ -19,6 +19,8 @@ import { formatBRL } from '@/lib/format';
 import { useColors } from '@/lib/theme';
 
 type LoadState = 'loading' | 'ready' | 'error';
+
+const SUPPORT_EMAIL = 'suporte@lucreiapp.com';
 
 function formatSalesLimit(limit: number | null) {
   return limit === null ? 'Sob consulta' : `${limit.toLocaleString('pt-BR')}/mês`;
@@ -161,7 +163,9 @@ function PlanCard({ plan }: { plan: Plan }) {
       {isCustomPricing ? (
         <Pressable
           onPress={() =>
-            Alert.alert('Plano Empresarial', 'Entre em contato com nosso time para um plano sob medida para o seu volume.')
+            Linking.openURL(
+              `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(`Interesse no plano ${plan.name}`)}`
+            )
           }
           className="mt-5 items-center rounded-xl bg-lucrei-gold py-3">
           <Text className="text-sm font-semibold text-lucrei-onGold">Falar com vendas</Text>
