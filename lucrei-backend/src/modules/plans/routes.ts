@@ -6,6 +6,7 @@ import { cancelOtherProviderSubscription } from '../../lib/cancel-other-provider
 import { prisma } from '../../lib/prisma';
 import { CYCLE_DAYS_BY_PERIOD } from '../../lib/pix-billing';
 import { createProratedUpgradeCharge, findActiveAnnualCycle } from '../../lib/plan-upgrade';
+import { getOrdersThisMonth } from '../../lib/sales-usage';
 import { serializeUser, userWithPlan } from './serialize-user';
 
 const TRIAL_DAYS = 15;
@@ -305,6 +306,12 @@ export async function plansRoutes(app: FastifyInstance) {
       });
     }
   );
+
+  app.get('/plans/usage', { onRequest: [app.authenticate] }, async (request, reply) => {
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: request.user.sub }, include: { plan: true } });
+    const ordersThisMonth = await getOrdersThisMonth(request.user.sub);
+    return reply.send({ ordersThisMonth, salesLimit: user.plan?.salesLimit ?? null });
+  });
 
   app.get('/plans/checkout-url', { onRequest: [app.authenticate] }, async (request, reply) => {
     const subscription = await prisma.subscription.findFirst({

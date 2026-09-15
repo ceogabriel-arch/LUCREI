@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Screen } from '@/components/screen';
 import { ToastBanner, useToast } from '@/components/toast';
-import { ApiError, getOrders, syncOrders, type Order, type OrderLineItem } from '@/lib/api';
+import { ApiError, getOrders, getSalesUsage, syncOrders, type Order, type OrderLineItem, type SalesUsage } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatBRL } from '@/lib/format';
 import { PERIOD_TO_API, PERIODS, usePeriod } from '@/lib/period';
@@ -101,6 +101,40 @@ function OrderDetailModal({ order, onClose }: { order: Order | null; onClose: ()
   );
 }
 
+// Sem limite (salesLimit null) não mostra nada - não faz sentido uma barra
+// de progresso pra um teto que não existe.
+function UsageBar({ usage }: { usage: SalesUsage }) {
+  const Colors = useColors();
+  if (usage.salesLimit == null) return null;
+
+  const fraction = Math.min(1, usage.ordersThisMonth / usage.salesLimit);
+  const atLimit = usage.ordersThisMonth >= usage.salesLimit;
+  const nearLimit = !atLimit && fraction >= 0.8;
+  const barColor = atLimit ? Colors.danger : nearLimit ? Colors.gold : Colors.success;
+
+  return (
+    <View className="mt-4 rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+      <View className="flex-row items-center justify-between">
+        <Text className="text-xs font-medium text-lucrei-textMuted">Vendas do mês</Text>
+        <Text className="text-xs font-semibold" style={{ color: barColor }}>
+          {usage.ordersThisMonth} / {usage.salesLimit}
+        </Text>
+      </View>
+      <View className="mt-2 h-2 overflow-hidden rounded-full bg-lucrei-surfaceAlt">
+        <View style={{ width: `${fraction * 100}%`, backgroundColor: barColor }} className="h-full rounded-full" />
+      </View>
+      {atLimit && (
+        <Text className="mt-2 text-xs" style={{ color: Colors.danger }}>
+          Limite atingido — novos pedidos não sincronizam até você fazer upgrade.
+        </Text>
+      )}
+      {nearLimit && (
+        <Text className="mt-2 text-xs text-lucrei-textMuted">Quase no limite do seu plano.</Text>
+      )}
+    </View>
+  );
+}
+
 function OrderRow({ order, onPress }: { order: Order; onPress: () => void }) {
   const Colors = useColors();
   const hasProfit = order.profit !== null;
@@ -145,6 +179,7 @@ export default function PedidosScreen() {
   const { period, setPeriod } = usePeriod();
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [orders, setOrders] = useState<Order[]>([]);
+  const [usage, setUsage] = useState<SalesUsage | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
@@ -163,8 +198,12 @@ export default function PedidosScreen() {
     }
     setLoadState((prev) => (prev === 'ready' ? prev : 'loading'));
     try {
-      const { orders } = await getOrders(state.token, selectedShop.id, PERIOD_TO_API[period]);
+      const [{ orders }, salesUsage] = await Promise.all([
+        getOrders(state.token, selectedShop.id, PERIOD_TO_API[period]),
+        getSalesUsage(state.token),
+      ]);
       setOrders(orders);
+      setUsage(salesUsage);
       setLoadState('ready');
     } catch {
       setLoadState('error');
@@ -235,6 +274,8 @@ export default function PedidosScreen() {
           </Pressable>
         )}
       </View>
+
+      {usage && <UsageBar usage={usage} />}
 
       <View className="mt-5 flex-row self-start rounded-full bg-lucrei-surface p-1">
         {PERIODS.map((p) => {

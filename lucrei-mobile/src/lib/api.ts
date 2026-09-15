@@ -222,6 +222,14 @@ export function syncOrders(token: string, shopId: string) {
   });
 }
 
+export type SalesUsage = { ordersThisMonth: number; salesLimit: number | null };
+
+export function getSalesUsage(token: string) {
+  return request<SalesUsage>('/plans/usage', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 export type BillingPeriod = 'monthly' | 'annual';
 export type Plan = {
   key: string;
