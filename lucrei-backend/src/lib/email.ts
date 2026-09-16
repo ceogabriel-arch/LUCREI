@@ -74,6 +74,68 @@ export async function sendPasswordResetEmail(app: FastifyInstance, to: string, r
   }
 }
 
+export async function sendShopReconnectAttemptEmail(app: FastifyInstance, to: string, shopName: string) {
+  const apiKey = process.env.RESEND_API_KEY;
+  const html = `<meta charset="utf-8">
+<meta name="color-scheme" content="light only">
+<meta name="supported-color-schemes" content="light only">
+<style>
+  .lucrei-wrap, .lucrei-card, [data-ogsb] { background-color:#FFFFFF !important; }
+  .lucrei-page { background-color:#F7F7F5 !important; }
+  .lucrei-text, [data-ogsc] { color:#1a1a1a !important; }
+</style>
+<body class="lucrei-page" style="background-color:#F7F7F5;margin:0;padding:0;">
+<table role="presentation" width="100%" bgcolor="#F7F7F5" class="lucrei-page" style="background-color:#F7F7F5;padding:32px 0;">
+  <tr>
+    <td align="center">
+      <table role="presentation" width="480" bgcolor="#FFFFFF" class="lucrei-card" style="background-color:#FFFFFF;max-width:480px;padding:32px 24px;border-radius:16px;font-family:Arial,Helvetica,sans-serif;color:#1a1a1a;">
+        <tr>
+          <td align="center" bgcolor="#FFFFFF" class="lucrei-card" style="background-color:#FFFFFF;padding-bottom:24px;">
+            <img src="${LOGO_URL}" alt="Lucrei" width="120" style="display:block;" />
+          </td>
+        </tr>
+        <tr>
+          <td bgcolor="#FFFFFF" class="lucrei-card">
+            <p class="lucrei-text" style="color:#1a1a1a;">Alguém tentou conectar a loja Shopee <strong>${shopName}</strong> em outra conta Lucrei, mas ela já está conectada na sua conta - por isso bloqueamos a tentativa.</p>
+            <p class="lucrei-text" style="color:#1a1a1a;">Se foi você mesmo (por exemplo, testando em outra conta), pode ignorar este e-mail. Se não reconhece essa tentativa, recomendamos trocar a senha da sua conta Shopee.</p>
+          </td>
+        </tr>
+        <tr>
+          <td bgcolor="#FFFFFF" class="lucrei-card">
+            <p style="color:#666;font-size:13px;">Dúvidas? Fale com a gente em suporte@lucreiapp.com.</p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>`;
+
+  if (!apiKey) {
+    app.log.info(`[email] RESEND_API_KEY não configurado — alerta de tentativa de reconexão para ${to} (loja ${shopName})`);
+    return;
+  }
+
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: process.env.RESEND_FROM_EMAIL || 'Lucrei <onboarding@resend.dev>',
+      to,
+      subject: `Tentativa de conectar ${shopName} em outra conta`,
+      html,
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    app.log.error(`Falha ao enviar alerta de tentativa de reconexão: ${response.status} ${body}`);
+  }
+}
+
 const SUPPORT_EMAIL = 'suporte@lucreiapp.com';
 
 // Sem painel administrativo pro programa de conquistas - o time recebe o

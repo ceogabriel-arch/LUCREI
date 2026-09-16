@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 
 import { encrypt } from '../../lib/crypto';
+import { sendShopReconnectAttemptEmail } from '../../lib/email';
 import { formatBRL, sendPushNotification } from '../../lib/push-notifications';
 import { prisma } from '../../lib/prisma';
 import { exchangeCodeForToken, getAuthorizationUrl, getShopInfo } from '../../shopee-client';
@@ -93,6 +94,21 @@ export async function shopRoutes(app: FastifyInstance) {
     }
 
     const shopId = Number(shopIdRaw);
+
+    // Sem essa checagem, qualquer conta Lucrei que reconectasse a mesma loja
+    // Shopee assumiria o dono automaticamente (upsert por shopeeShopId) - e
+    // junto levaria todo o histórico de pedidos/lucro já sincronizado, sem o
+    // dono atual saber ou aprovar. O dono atual precisa desconectar a loja
+    // primeiro (em Configurações) antes dela poder ser reivindicada por
+    // outra conta.
+    const existingShop = await prisma.shop.findUnique({ where: { shopeeShopId: String(shopId) } });
+    if (existingShop && existingShop.status === 'active' && existingShop.userId !== userId) {
+      const currentOwner = await prisma.user.findUnique({ where: { id: existingShop.userId } });
+      if (currentOwner) {
+        await sendShopReconnectAttemptEmail(app, currentOwner.email, existingShop.shopName);
+      }
+      return reply.redirect(`${returnUrl}?status=error&reason=shop_taken`);
+    }
 
     try {
       const token = await exchangeCodeForToken(code, shopId);

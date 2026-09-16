@@ -73,7 +73,14 @@ export default function InicioScreen() {
         Alert.alert('Loja conectada!', 'Sua loja Shopee foi conectada com sucesso.');
         await refreshShops();
       } else if (result.status === 'error') {
-        Alert.alert('Não foi possível conectar', 'Tente novamente em instantes.');
+        if (result.reason === 'shop_taken') {
+          Alert.alert(
+            'Loja já conectada em outra conta',
+            'Essa loja Shopee já está conectada em outra conta Lucrei. Peça para desconectá-la lá (em Configurações) antes de conectar aqui.'
+          );
+        } else {
+          Alert.alert('Não foi possível conectar', 'Tente novamente em instantes.');
+        }
       }
     } catch (err) {
       Alert.alert('Erro', err instanceof ApiError ? err.message : 'Algo deu errado.');

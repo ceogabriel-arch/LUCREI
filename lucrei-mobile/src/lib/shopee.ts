@@ -5,7 +5,7 @@ import { ApiError } from '@/lib/api';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
-export type ConnectShopeeResult = { status: 'success' | 'error' | 'cancelled' };
+export type ConnectShopeeResult = { status: 'success' | 'error' | 'cancelled'; reason?: string };
 
 export async function connectShopeeStore(token: string): Promise<ConnectShopeeResult> {
   if (!API_URL) throw new ApiError('Servidor não configurado.');
@@ -27,5 +27,6 @@ export async function connectShopeeStore(token: string): Promise<ConnectShopeeRe
   }
 
   const { queryParams } = Linking.parse(result.url);
-  return { status: queryParams?.status === 'success' ? 'success' : 'error' };
+  if (queryParams?.status === 'success') return { status: 'success' };
+  return { status: 'error', reason: typeof queryParams?.reason === 'string' ? queryParams.reason : undefined };
 }
