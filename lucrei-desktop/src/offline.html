@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<title>Lucrei</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: #0A0A0B;
+    color: #F5F5F4;
+    font-family: -apple-system, Segoe UI, Arial, sans-serif;
+  }
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    text-align: center;
+    padding: 24px;
+  }
+  img { width: 140px; opacity: 0.9; }
+  h1 { font-size: 17px; font-weight: 600; margin: 0; }
+  p { font-size: 13px; color: #A1A1AA; margin: 0; max-width: 320px; line-height: 1.5; }
+  button {
+    margin-top: 8px;
+    background: #D4AF37;
+    color: #0A0A0B;
+    border: none;
+    font-weight: 700;
+    font-size: 14px;
+    padding: 12px 28px;
+    border-radius: 12px;
+    cursor: pointer;
+  }
+  button:active { opacity: 0.8; }
+  .spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid #3f3f46;
+    border-top-color: #D4AF37;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    display: none;
+  }
+  .spinner.visible { display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+  <img src="assets/logo.png" alt="Lucrei" />
+  <h1>Sem conexão com o Lucrei</h1>
+  <p>Não conseguimos carregar o app. Verifique sua internet - vamos tentar de novo automaticamente.</p>
+  <button id="retry">Tentar novamente</button>
+  <div class="spinner" id="spinner"></div>
+
+<script>
+  const APP_URL = 'https://app.lucreiapp.com/';
+  const spinner = document.getElementById('spinner');
+
+  function retry() {
+    spinner.classList.add('visible');
+    window.location.href = APP_URL;
+  }
+
+  document.getElementById('retry').addEventListener('click', retry);
+  setInterval(retry, 6000);
+</script>
+</body>
+</html>
