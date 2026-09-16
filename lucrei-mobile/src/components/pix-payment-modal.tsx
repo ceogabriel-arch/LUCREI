@@ -59,7 +59,7 @@ export function PixPaymentModal({
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View className={`flex-1 ${modal.overlayClassName} bg-black/60`}>
+      <View className={`flex-1 ${modal.overlayClassName} ${modal.overlayBgClassName}`}>
         <SafeAreaView edges={['bottom']} style={{ maxHeight: '90%', ...modal.panelWidthStyle }} className={`${modal.panelClassName} bg-lucrei-bg`}>
           <View className="flex-row items-center justify-between border-b border-lucrei-border px-5 py-4">
             <Text className="text-base font-semibold text-lucrei-text">Pagar com Pix</Text>

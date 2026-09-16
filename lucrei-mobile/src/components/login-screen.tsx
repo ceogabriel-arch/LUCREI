@@ -11,7 +11,7 @@ import { Sparkline } from '@/components/sparkline';
 import { TextField } from '@/components/text-field';
 import { requestPasswordReset } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { useModalPresentation, webCapWidth } from '@/lib/responsive';
+import { fullscreenOverlayStyle, useModalPresentation, webCapWidth } from '@/lib/responsive';
 import { useAppTheme } from '@/lib/theme';
 
 const LOGO_LIGHT = require('../../assets/images/lucrei-logo-light.png');
@@ -71,8 +71,8 @@ function ForgotPasswordModal({ visible, onClose }: { visible: boolean; onClose: 
 
   return (
     <View
-      style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-      className={`${modal.overlayClassName} bg-black/60`}>
+      style={fullscreenOverlayStyle}
+      className={`${modal.overlayClassName} ${modal.overlayBgClassName}`}>
       <KeyboardAvoidingView behavior="padding">
         <SafeAreaView edges={['bottom']} style={modal.panelWidthStyle} className={`${modal.panelClassName} bg-lucrei-bg`}>
           <View className="flex-row items-center justify-between border-b border-lucrei-border px-5 py-4">

@@ -76,7 +76,7 @@ function OrderDetailModal({ order, onClose }: { order: Order | null; onClose: ()
   const modal = useModalPresentation();
   return (
     <Modal visible={order != null} animationType="slide" transparent onRequestClose={onClose}>
-      <View className={`flex-1 ${modal.overlayClassName} bg-black/60`}>
+      <View className={`flex-1 ${modal.overlayClassName} ${modal.overlayBgClassName}`}>
         <SafeAreaView
           edges={['bottom']}
           style={{ maxHeight: Dimensions.get('window').height * 0.85, ...modal.panelWidthStyle }}

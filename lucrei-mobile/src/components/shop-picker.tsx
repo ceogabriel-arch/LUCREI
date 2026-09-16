@@ -24,7 +24,7 @@ export function ShopPicker() {
       </Pressable>
 
       <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
-        <View className={`flex-1 ${modal.overlayClassName} bg-black/60`}>
+        <View className={`flex-1 ${modal.overlayClassName} ${modal.overlayBgClassName}`}>
           <SafeAreaView edges={['bottom']} style={{ maxHeight: '70%', ...modal.panelWidthStyle }} className={`${modal.panelClassName} bg-lucrei-bg`}>
             <View className="flex-row items-center justify-between border-b border-lucrei-border px-5 py-4">
               <Text className="text-base font-semibold text-lucrei-text">Suas lojas</Text>
