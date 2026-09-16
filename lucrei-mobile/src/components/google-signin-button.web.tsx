@@ -89,7 +89,9 @@ export function GoogleSignInButton({
     node.innerHTML = '';
     window.google!.accounts.id.renderButton(node, {
       type: 'standard',
-      theme: 'outline',
+      // 'outline' força fundo branco sempre - 'filled_black' é o único tema
+      // do Google que combina com o resto do app no modo escuro.
+      theme: 'filled_black',
       size: 'large',
       shape: 'pill',
       text: 'continue_with',
