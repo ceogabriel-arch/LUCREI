@@ -113,7 +113,10 @@ export function GoogleSignInButton({
       shape: 'rectangular',
       text: 'continue_with',
       logo_alignment: 'center',
-      width: 360,
+      // Sem width fixo: o iframe do Google tem fundo branco, e no size
+      // 'medium' o botão não se estica para preencher uma largura forçada -
+      // sobrava uma moldura branca ao redor. Sem width, o iframe fica do
+      // tamanho exato do botão, sem essa sobra.
     });
   }, [ready]);
 
