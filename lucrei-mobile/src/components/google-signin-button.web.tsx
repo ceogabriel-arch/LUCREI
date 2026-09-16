@@ -101,7 +101,12 @@ export function GoogleSignInButton({
       // 'outline' força fundo branco sempre - 'filled_black' é o único tema
       // do Google que combina com o resto do app no modo escuro.
       theme: 'filled_black',
-      size: 'large',
+      // O Google documenta que size 'large' habilita o botão "personalizado"
+      // (foto + nome + email) quando o usuário já tem sessão ativa no Google -
+      // e essa variante não respeita o theme, sempre aparece clara, ficando
+      // bicolor. 'medium'/'small' forçam o botão genérico sempre, então nunca
+      // quebra o tema escuro.
+      size: 'medium',
       // 'pill' deixa o iframe do Google maior que a pílula arredondada, com
       // fundo branco vazando nos cantos - 'rectangular' preenche o container
       // inteiro, sem esse vazamento.
