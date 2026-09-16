@@ -4,6 +4,7 @@ import { usePathname, useRouter } from 'expo-router';
 import type { PropsWithChildren } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
+import { useAuth } from '@/lib/auth';
 import { useIsDesktopWeb } from '@/lib/responsive';
 import { useAppTheme } from '@/lib/theme';
 
@@ -37,37 +38,47 @@ export function DesktopShell({ children }: PropsWithChildren) {
 
 function DesktopShellInner({ children }: PropsWithChildren) {
   const { scheme, colors: Colors } = useAppTheme();
+  const { logout } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
 
   return (
     <View className="flex-1 flex-row bg-lucrei-bg">
-      <View className="w-60 border-r border-lucrei-border px-4 py-6">
-        <View style={{ width: LOGO_WIDTH, height: LOGO_HEIGHT, marginLeft: 8, marginBottom: 28 }}>
-          <Image
-            source={scheme === 'dark' ? LOGO_DARK : LOGO_LIGHT}
-            style={{ width: '100%', height: '100%' }}
-            contentFit="contain"
-          />
+      <View className="w-60 justify-between border-r border-lucrei-border px-4 py-6">
+        <View>
+          <View style={{ width: LOGO_WIDTH, height: LOGO_HEIGHT, marginLeft: 8, marginBottom: 28 }}>
+            <Image
+              source={scheme === 'dark' ? LOGO_DARK : LOGO_LIGHT}
+              style={{ width: '100%', height: '100%' }}
+              contentFit="contain"
+            />
+          </View>
+
+          <View className="gap-1">
+            {NAV_ITEMS.map((item) => {
+              const isActive = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
+              return (
+                <Pressable
+                  key={item.href}
+                  onPress={() => router.push(item.href)}
+                  className="flex-row items-center gap-3 rounded-xl px-3 py-2.5"
+                  style={{ backgroundColor: isActive ? Colors.surfaceAlt : 'transparent' }}>
+                  <Ionicons name={isActive ? item.active : item.inactive} size={18} color={isActive ? Colors.gold : Colors.textMuted} />
+                  <Text style={{ color: isActive ? Colors.gold : Colors.textMuted, fontWeight: isActive ? '600' : '400', fontSize: 14 }}>
+                    {item.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
 
-        <View className="gap-1">
-          {NAV_ITEMS.map((item) => {
-            const isActive = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
-            return (
-              <Pressable
-                key={item.href}
-                onPress={() => router.push(item.href)}
-                className="flex-row items-center gap-3 rounded-xl px-3 py-2.5"
-                style={{ backgroundColor: isActive ? Colors.surfaceAlt : 'transparent' }}>
-                <Ionicons name={isActive ? item.active : item.inactive} size={18} color={isActive ? Colors.gold : Colors.textMuted} />
-                <Text style={{ color: isActive ? Colors.gold : Colors.textMuted, fontWeight: isActive ? '600' : '400', fontSize: 14 }}>
-                  {item.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+        <Pressable
+          onPress={logout}
+          className="flex-row items-center gap-3 rounded-xl border border-lucrei-border px-3 py-2.5">
+          <Ionicons name="log-out-outline" size={18} color={Colors.danger} />
+          <Text style={{ color: Colors.danger, fontWeight: '600', fontSize: 14 }}>Sair da conta</Text>
+        </Pressable>
       </View>
 
       <View className="flex-1">{children}</View>

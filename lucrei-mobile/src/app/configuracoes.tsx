@@ -20,7 +20,7 @@ import { Screen } from '@/components/screen';
 import { ToastBanner, useToast } from '@/components/toast';
 import { API_URL, disconnectShop, type AuthUser, type Shop } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { webCapWidth } from '@/lib/responsive';
+import { useIsDesktopWeb, webCapWidth } from '@/lib/responsive';
 import { useSelectedShop } from '@/lib/selected-shop';
 import { useAppTheme, useColors, type ThemePreference } from '@/lib/theme';
 
@@ -526,6 +526,7 @@ export default function ConfiguracoesScreen() {
   const { state, logout } = useAuth();
   const user = state.status === 'authenticated' ? state.user : null;
   const [openMenu, setOpenMenu] = useState<MenuKey>(null);
+  const isDesktop = useIsDesktopWeb();
 
   return (
     <>
@@ -554,13 +555,17 @@ export default function ConfiguracoesScreen() {
         <MenuRow icon="document-text-outline" label="Termos de uso" onPress={() => Linking.openURL(`${API_URL}/termos`)} />
         <MenuRow icon="shield-checkmark-outline" label="Política de privacidade" onPress={() => Linking.openURL(`${API_URL}/privacidade`)} />
 
-        <Pressable
-          onPress={logout}
-          className="mt-6 items-center rounded-2xl border border-lucrei-border py-4">
-          <Text className="text-base font-semibold text-lucrei-danger">Sair da conta</Text>
-        </Pressable>
+        {/* No desktop largo, sair da conta já mora fixo no rodapé do menu
+            lateral - manter aqui também seria duplicado. */}
+        {!isDesktop && (
+          <Pressable
+            onPress={logout}
+            className="mt-6 items-center rounded-2xl border border-lucrei-border py-4">
+            <Text className="text-base font-semibold text-lucrei-danger">Sair da conta</Text>
+          </Pressable>
+        )}
 
-        <Pressable onPress={() => setOpenMenu('deleteAccount')} className="mt-4 items-center py-2">
+        <Pressable onPress={() => setOpenMenu('deleteAccount')} className={`${isDesktop ? 'mt-6' : 'mt-4'} items-center py-2`}>
           <Text className="text-xs font-medium text-lucrei-danger">Excluir conta</Text>
         </Pressable>
       </ScrollView>
