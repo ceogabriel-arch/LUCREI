@@ -11,7 +11,7 @@ import { Sparkline } from '@/components/sparkline';
 import { TextField } from '@/components/text-field';
 import { requestPasswordReset } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { webCapWidth } from '@/lib/responsive';
+import { useModalPresentation, webCapWidth } from '@/lib/responsive';
 import { useAppTheme } from '@/lib/theme';
 
 const LOGO_LIGHT = require('../../assets/images/lucrei-logo-light.png');
@@ -29,6 +29,7 @@ type LoginScreenProps = {
 
 function ForgotPasswordModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { colors: Colors } = useAppTheme();
+  const modal = useModalPresentation();
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
@@ -71,9 +72,9 @@ function ForgotPasswordModal({ visible, onClose }: { visible: boolean; onClose: 
   return (
     <View
       style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-      className="justify-end bg-black/60">
+      className={`${modal.overlayClassName} bg-black/60`}>
       <KeyboardAvoidingView behavior="padding">
-        <SafeAreaView edges={['bottom']} className="rounded-t-3xl bg-lucrei-bg">
+        <SafeAreaView edges={['bottom']} style={modal.panelWidthStyle} className={`${modal.panelClassName} bg-lucrei-bg`}>
           <View className="flex-row items-center justify-between border-b border-lucrei-border px-5 py-4">
             <Text className="text-base font-semibold text-lucrei-text">Esqueci minha senha</Text>
             <Pressable onPress={handleClose} hitSlop={8}>

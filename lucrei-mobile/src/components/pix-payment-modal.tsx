@@ -8,7 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { type PixCharge } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatBRL } from '@/lib/format';
-import { webCapWidth } from '@/lib/responsive';
+import { useModalPresentation } from '@/lib/responsive';
 import { useColors } from '@/lib/theme';
 
 const POLL_INTERVAL_MS = 5000;
@@ -37,6 +37,7 @@ export function PixPaymentModal({
 }) {
   const { state, refreshUser } = useAuth();
   const Colors = useColors();
+  const modal = useModalPresentation();
   const [copied, setCopied] = useState(false);
 
   const confirmed =
@@ -58,8 +59,8 @@ export function PixPaymentModal({
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View className="flex-1 justify-end bg-black/60">
-        <SafeAreaView edges={['bottom']} style={{ maxHeight: '90%', ...webCapWidth() }} className="rounded-t-3xl bg-lucrei-bg">
+      <View className={`flex-1 ${modal.overlayClassName} bg-black/60`}>
+        <SafeAreaView edges={['bottom']} style={{ maxHeight: '90%', ...modal.panelWidthStyle }} className={`${modal.panelClassName} bg-lucrei-bg`}>
           <View className="flex-row items-center justify-between border-b border-lucrei-border px-5 py-4">
             <Text className="text-base font-semibold text-lucrei-text">Pagar com Pix</Text>
             <Pressable onPress={onClose} hitSlop={8}>

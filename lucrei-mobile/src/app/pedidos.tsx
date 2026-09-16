@@ -10,7 +10,7 @@ import { ApiError, getOrders, getSalesUsage, syncOrders, type Order, type OrderL
 import { useAuth } from '@/lib/auth';
 import { formatBRL } from '@/lib/format';
 import { PERIOD_TO_API, PERIODS, usePeriod } from '@/lib/period';
-import { webCapWidth } from '@/lib/responsive';
+import { useModalPresentation } from '@/lib/responsive';
 import { useSelectedShop } from '@/lib/selected-shop';
 import { useColors } from '@/lib/theme';
 
@@ -73,13 +73,14 @@ function ItemBreakdown({ item }: { item: OrderLineItem }) {
 
 function OrderDetailModal({ order, onClose }: { order: Order | null; onClose: () => void }) {
   const Colors = useColors();
+  const modal = useModalPresentation();
   return (
     <Modal visible={order != null} animationType="slide" transparent onRequestClose={onClose}>
-      <View className="flex-1 justify-end bg-black/60">
+      <View className={`flex-1 ${modal.overlayClassName} bg-black/60`}>
         <SafeAreaView
           edges={['bottom']}
-          style={{ maxHeight: Dimensions.get('window').height * 0.85, ...webCapWidth() }}
-          className="rounded-t-3xl bg-lucrei-bg">
+          style={{ maxHeight: Dimensions.get('window').height * 0.85, ...modal.panelWidthStyle }}
+          className={`${modal.panelClassName} bg-lucrei-bg`}>
           <View className="flex-row items-center justify-between border-b border-lucrei-border px-5 py-4">
             <View>
               <Text className="text-base font-semibold text-lucrei-text">{order?.shopeeOrderSn}</Text>

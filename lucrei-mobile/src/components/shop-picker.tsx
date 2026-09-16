@@ -3,13 +3,14 @@ import { useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { webCapWidth } from '@/lib/responsive';
+import { useModalPresentation } from '@/lib/responsive';
 import { useSelectedShop } from '@/lib/selected-shop';
 import { useColors } from '@/lib/theme';
 
 export function ShopPicker() {
   const { shops, selectedShop, selectShop } = useSelectedShop();
   const Colors = useColors();
+  const modal = useModalPresentation();
   const [open, setOpen] = useState(false);
 
   return (
@@ -23,8 +24,8 @@ export function ShopPicker() {
       </Pressable>
 
       <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
-        <View className="flex-1 justify-end bg-black/60">
-          <SafeAreaView edges={['bottom']} style={{ maxHeight: '70%', ...webCapWidth() }} className="rounded-t-3xl bg-lucrei-bg">
+        <View className={`flex-1 ${modal.overlayClassName} bg-black/60`}>
+          <SafeAreaView edges={['bottom']} style={{ maxHeight: '70%', ...modal.panelWidthStyle }} className={`${modal.panelClassName} bg-lucrei-bg`}>
             <View className="flex-row items-center justify-between border-b border-lucrei-border px-5 py-4">
               <Text className="text-base font-semibold text-lucrei-text">Suas lojas</Text>
               <Pressable onPress={() => setOpen(false)} hitSlop={8}>

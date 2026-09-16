@@ -28,3 +28,28 @@ export function useIsDesktopWeb() {
   const { width } = useWindowDimensions();
   return Platform.OS === 'web' && width >= DESKTOP_BREAKPOINT;
 }
+
+const MODAL_DESKTOP_WIDTH = 480;
+
+/**
+ * Todos os modais do app são "bottom sheets" (colados embaixo, só cantos de
+ * cima arredondados) - certo pra celular, mas numa janela larga de desktop
+ * isso vira uma folha esticada colada no rodapé de uma tela gigante, muito
+ * feio. No desktop, vira um diálogo flutuante centralizado de verdade.
+ */
+export function useModalPresentation() {
+  const isDesktop = useIsDesktopWeb();
+  return isDesktop
+    ? {
+        isDesktop,
+        overlayClassName: 'items-center justify-center',
+        panelClassName: 'rounded-3xl',
+        panelWidthStyle: { width: '100%' as const, maxWidth: MODAL_DESKTOP_WIDTH, alignSelf: 'center' as const },
+      }
+    : {
+        isDesktop,
+        overlayClassName: 'justify-end',
+        panelClassName: 'rounded-t-3xl',
+        panelWidthStyle: webCapWidth(),
+      };
+}

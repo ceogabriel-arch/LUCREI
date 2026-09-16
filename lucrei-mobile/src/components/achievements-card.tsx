@@ -8,7 +8,7 @@ import { claimReward, getClaimedRewardTiers, ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { TextField } from '@/components/text-field';
 import { formatBRL } from '@/lib/format';
-import { webCapWidth } from '@/lib/responsive';
+import { useModalPresentation } from '@/lib/responsive';
 import { useColors } from '@/lib/theme';
 
 type IconName = keyof typeof Ionicons.glyphMap;
@@ -151,6 +151,7 @@ function ClaimFormModal({
 }) {
   const { state: authState } = useAuth();
   const Colors = useColors();
+  const modal = useModalPresentation();
   const [form, setForm] = useState<ClaimFormState>(EMPTY_CLAIM_FORM);
   const [submitting, setSubmitting] = useState(false);
 
@@ -190,11 +191,11 @@ function ClaimFormModal({
 
   return (
     <Modal visible={tier != null} animationType="slide" transparent onRequestClose={onClose}>
-      <View className="flex-1 justify-end bg-black/60">
+      <View className={`flex-1 ${modal.overlayClassName} bg-black/60`}>
         <SafeAreaView
           edges={['bottom']}
-          style={{ maxHeight: '90%', ...webCapWidth() }}
-          className="rounded-t-3xl bg-lucrei-bg">
+          style={{ maxHeight: '90%', ...modal.panelWidthStyle }}
+          className={`${modal.panelClassName} bg-lucrei-bg`}>
           <View className="flex-row items-center justify-between border-b border-lucrei-border px-5 py-4">
             <View>
               <Text className="text-base font-semibold text-lucrei-text">Resgatar recompensa</Text>
@@ -268,6 +269,7 @@ export function AchievementsCard({
 }) {
   const { state: authState } = useAuth();
   const Colors = useColors();
+  const modal = useModalPresentation();
   const [expanded, setExpanded] = useState(false);
   const [claimedTiers, setClaimedTiers] = useState<number[]>([]);
   const [claimingTier, setClaimingTier] = useState<Tier | null>(null);
@@ -341,8 +343,8 @@ export function AchievementsCard({
       </Pressable>
 
       <Modal visible={expanded} animationType="slide" transparent onRequestClose={() => setExpanded(false)}>
-        <View className="flex-1 justify-end bg-black/60">
-          <SafeAreaView edges={['bottom']} style={{ maxHeight: '85%', ...webCapWidth() }} className="rounded-t-3xl bg-lucrei-bg">
+        <View className={`flex-1 ${modal.overlayClassName} bg-black/60`}>
+          <SafeAreaView edges={['bottom']} style={{ maxHeight: '85%', ...modal.panelWidthStyle }} className={`${modal.panelClassName} bg-lucrei-bg`}>
             <View className="flex-row items-center justify-between border-b border-lucrei-border px-5 py-4">
               <Text className="text-base font-semibold text-lucrei-text">Conquistas Lucrei</Text>
               <Pressable onPress={() => setExpanded(false)} hitSlop={8}>

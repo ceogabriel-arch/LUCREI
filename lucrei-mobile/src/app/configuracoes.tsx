@@ -20,7 +20,7 @@ import { Screen } from '@/components/screen';
 import { ToastBanner, useToast } from '@/components/toast';
 import { API_URL, disconnectShop, type AuthUser, type Shop } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { useIsDesktopWeb, webCapWidth } from '@/lib/responsive';
+import { useIsDesktopWeb, useModalPresentation, webCapWidth } from '@/lib/responsive';
 import { useSelectedShop } from '@/lib/selected-shop';
 import { useAppTheme, useColors, type ThemePreference } from '@/lib/theme';
 
@@ -180,6 +180,7 @@ function SettingsModal({
   children: React.ReactNode;
 }) {
   const Colors = useColors();
+  const modal = useModalPresentation();
 
   // Um <Modal> nativo é uma janela Android separada que não participa do
   // resize da Activity quando o teclado abre - por isso KeyboardAvoidingView
@@ -198,9 +199,9 @@ function SettingsModal({
   if (!visible) return null;
 
   return (
-    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} className="justify-end bg-black/60">
+    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} className={`${modal.overlayClassName} bg-black/60`}>
       <KeyboardAvoidingView behavior="padding">
-        <SafeAreaView edges={['bottom']} style={{ maxHeight: '85%', ...webCapWidth() }} className="rounded-t-3xl bg-lucrei-bg">
+        <SafeAreaView edges={['bottom']} style={{ maxHeight: '85%', ...modal.panelWidthStyle }} className={`${modal.panelClassName} bg-lucrei-bg`}>
           <View className="flex-row items-center justify-between border-b border-lucrei-border px-5 py-4">
             <Text className="text-base font-semibold text-lucrei-text">{title}</Text>
             <Pressable onPress={onClose} hitSlop={8}>
