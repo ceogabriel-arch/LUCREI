@@ -3,7 +3,7 @@ import { Tabs } from 'expo-router';
 import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { webCapWidth } from '@/lib/responsive';
+import { useIsDesktopWeb, webCapWidth } from '@/lib/responsive';
 import { useColors } from '@/lib/theme';
 
 type IconName = keyof typeof Ionicons.glyphMap;
@@ -26,7 +26,12 @@ const TAB_META: Record<string, { active: IconName; inactive: IconName; label: st
 function CustomTabBar({ state, navigation }: TabBarProps) {
   const insets = useSafeAreaInsets();
   const Colors = useColors();
+  const isDesktop = useIsDesktopWeb();
   const visibleRoutes = state.routes.filter((route) => TAB_META[route.name]);
+
+  // Numa janela larga de desktop, a navegação já é o menu lateral do
+  // DesktopShell - a barra de baixo some pra não duplicar.
+  if (isDesktop) return null;
 
   return (
     <View style={{ paddingBottom: insets.bottom || 12, paddingHorizontal: 14, paddingTop: 4, ...webCapWidth() }}>

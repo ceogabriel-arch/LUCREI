@@ -9,6 +9,7 @@ import { View } from 'react-native';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 import AppTabs from '@/components/app-tabs';
+import { DesktopShell } from '@/components/desktop-shell';
 import { LoginScreen } from '@/components/login-screen';
 import { SignupScreen } from '@/components/signup-screen';
 import { DarkCssVars, LightCssVars } from '@/constants/theme';
@@ -54,7 +55,11 @@ function RootNavigator() {
   }
 
   if (state.status === 'authenticated') {
-    return <AppTabs />;
+    return (
+      <DesktopShell>
+        <AppTabs />
+      </DesktopShell>
+    );
   }
 
   return screen === 'login' ? (
