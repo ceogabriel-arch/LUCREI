@@ -14,7 +14,11 @@ declare global {
     google?: {
       accounts: {
         id: {
-          initialize: (config: { client_id: string; callback: (response: { credential?: string }) => void }) => void;
+          initialize: (config: {
+            client_id: string;
+            callback: (response: { credential?: string }) => void;
+            use_fedcm_for_button?: boolean;
+          }) => void;
           renderButton: (parent: HTMLElement, options: Record<string, unknown>) => void;
         };
       };
@@ -61,6 +65,11 @@ export function GoogleSignInButton({
         if (cancelled) return;
         window.google!.accounts.id.initialize({
           client_id: clientId,
+          // Sem isso, quando o usuário já tem sessão ativa no Google/Chrome,
+          // o navegador troca o botão pelo chip nativo do FedCM ("Continuar
+          // como Fulano"), que ignora nosso tema escuro e mistura fundo
+          // branco com o quadrado escuro do G, ficando bicolor e quebrado.
+          use_fedcm_for_button: false,
           callback: (response) => {
             if (response.credential) {
               onIdToken(response.credential);
