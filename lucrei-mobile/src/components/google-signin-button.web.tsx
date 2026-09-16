@@ -107,7 +107,7 @@ export function GoogleSignInButton({
     <View
       ref={containerRef}
       className="mt-5 items-center overflow-hidden rounded-2xl"
-      style={{ minHeight: 44 }}
+      style={{ minHeight: 52 }}
     />
   );
 }
