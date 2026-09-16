@@ -11,15 +11,13 @@ import { Sparkline } from '@/components/sparkline';
 import { TextField } from '@/components/text-field';
 import { requestPasswordReset } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { fullscreenOverlayStyle, useModalPresentation, webCapWidth } from '@/lib/responsive';
+import { fullscreenOverlayStyle, useIsDesktopWeb, useModalPresentation, webCapWidth } from '@/lib/responsive';
 import { useAppTheme } from '@/lib/theme';
 
 const LOGO_LIGHT = require('../../assets/images/lucrei-logo-light.png');
 const LOGO_DARK = require('../../assets/images/lucrei-logo.png');
 
 const LOGO_ASPECT = 449 / 153;
-const LOGO_WIDTH = 180;
-const LOGO_HEIGHT = LOGO_WIDTH / LOGO_ASPECT;
 
 const TREND = [18, 32, 27, 41, 38, 55, 49, 68, 63, 82, 76, 93];
 
@@ -130,6 +128,15 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [forgotPasswordVisible, setForgotPasswordVisible] = useState(false);
+  const isDesktop = useIsDesktopWeb();
+
+  // Numa janela larga de desktop, a logo/gráfico em tamanho de celular
+  // ficavam perdidos no meio de tanto espaço vazio - aumenta os dois, e
+  // deixa o botão "Entrar" um pouco mais compacto (o padding grande é
+  // pensado pra dedo, não faz sentido tão grande com mouse).
+  const logoWidth = isDesktop ? 240 : 180;
+  const logoHeight = logoWidth / LOGO_ASPECT;
+  const sparklineSize = isDesktop ? { width: 340, height: 80 } : { width: 260, height: 60 };
 
   const canSubmit = email.length > 0 && password.length > 0;
 
@@ -158,7 +165,7 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
           contentContainerStyle={webCapWidth()}
           keyboardShouldPersistTaps="handled">
           <View className="items-center">
-            <View style={{ width: LOGO_WIDTH, height: LOGO_HEIGHT }}>
+            <View style={{ width: logoWidth, height: logoHeight }}>
               <Image
                 source={scheme === 'dark' ? LOGO_DARK : LOGO_LIGHT}
                 style={{ width: '100%', height: '100%' }}
@@ -166,8 +173,8 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
               />
             </View>
             <View className="mt-2 items-center">
-              <Text className="text-2xl font-bold text-lucrei-gold">+93%</Text>
-              <Sparkline data={TREND} width={260} height={60} />
+              <Text className={isDesktop ? 'text-3xl font-bold text-lucrei-gold' : 'text-2xl font-bold text-lucrei-gold'}>+93%</Text>
+              <Sparkline data={TREND} width={sparklineSize.width} height={sparklineSize.height} />
             </View>
           </View>
 
@@ -209,7 +216,7 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
             <Pressable
               onPress={handleSubmit}
               disabled={submitting || !canSubmit}
-              className="mt-2 items-center rounded-2xl bg-lucrei-gold py-4"
+              className={`mt-2 items-center rounded-2xl bg-lucrei-gold ${isDesktop ? 'py-3' : 'py-4'}`}
               style={{ opacity: submitting || !canSubmit ? 0.6 : 1 }}>
               {submitting ? (
                 <ActivityIndicator color={Colors.onGold} />
