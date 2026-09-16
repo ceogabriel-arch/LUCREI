@@ -66,9 +66,8 @@ export function GoogleSignInButton({
         window.google!.accounts.id.initialize({
           client_id: clientId,
           // Sem isso, quando o usuário já tem sessão ativa no Google/Chrome,
-          // o navegador troca o botão pelo chip nativo do FedCM ("Continuar
-          // como Fulano"), que ignora nosso tema escuro e mistura fundo
-          // branco com o quadrado escuro do G, ficando bicolor e quebrado.
+          // o navegador troca nosso botão pelo chip nativo do FedCM
+          // ("Continuar como Fulano"), fora do nosso controle de estilo.
           use_fedcm_for_button: false,
           callback: (response) => {
             if (response.credential) {
@@ -98,33 +97,18 @@ export function GoogleSignInButton({
     node.innerHTML = '';
     window.google!.accounts.id.renderButton(node, {
       type: 'standard',
-      // 'outline' força fundo branco sempre - 'filled_black' é o único tema
-      // do Google que combina com o resto do app no modo escuro.
-      theme: 'filled_black',
-      // O Google documenta que size 'large' habilita o botão "personalizado"
-      // (foto + nome + email) quando o usuário já tem sessão ativa no Google -
-      // e essa variante não respeita o theme, sempre aparece clara, ficando
-      // bicolor. 'medium'/'small' forçam o botão genérico sempre, então nunca
-      // quebra o tema escuro.
-      size: 'medium',
-      // 'pill' deixa o iframe do Google maior que a pílula arredondada, com
-      // fundo branco vazando nos cantos - 'rectangular' preenche o container
-      // inteiro, sem esse vazamento.
+      // O iframe do Google não dá pra estilizar por fora, e o tema
+      // 'filled_black' deixava sobras brancas em vários cenários (cantos,
+      // estado "personalizado" com conta ativa, largura fixa) - 'outline' é
+      // o tema oficial mais testado do Google, sem esses residuais.
+      theme: 'outline',
+      size: 'large',
       shape: 'rectangular',
       text: 'continue_with',
       logo_alignment: 'center',
-      // Sem width fixo: o iframe do Google tem fundo branco, e no size
-      // 'medium' o botão não se estica para preencher uma largura forçada -
-      // sobrava uma moldura branca ao redor. Sem width, o iframe fica do
-      // tamanho exato do botão, sem essa sobra.
+      width: 360,
     });
   }, [ready]);
 
-  return (
-    <View
-      ref={containerRef}
-      className="mt-5 items-center overflow-hidden rounded-2xl"
-      style={{ minHeight: 52 }}
-    />
-  );
+  return <View ref={containerRef} className="mt-5 items-center" />;
 }
