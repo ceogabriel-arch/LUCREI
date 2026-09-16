@@ -187,6 +187,7 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
               keyboardType="email-address"
               value={email}
               onChangeText={setEmail}
+              compact={isDesktop}
             />
             <PasswordField
               label="Senha"
@@ -194,6 +195,7 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
               value={password}
               onChangeText={setPassword}
               autoComplete="off"
+              compact={isDesktop}
             />
 
             <View className="mb-2 flex-row items-center justify-between">

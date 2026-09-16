@@ -18,9 +18,12 @@ type PasswordFieldProps = {
   onChangeText: (value: string) => void;
   autoComplete?: 'password' | 'password-new' | 'off';
   placeholder?: string;
+  // Só usado no login/cadastro numa janela larga de desktop - o padding
+  // padrão é pensado pra toque no celular, fica exagerado com mouse.
+  compact?: boolean;
 };
 
-export function PasswordField({ label, value, onChangeText, autoComplete, placeholder }: PasswordFieldProps) {
+export function PasswordField({ label, value, onChangeText, autoComplete, placeholder, compact }: PasswordFieldProps) {
   const Colors = useColors();
   const [visible, setVisible] = useState(false);
 
@@ -37,7 +40,7 @@ export function PasswordField({ label, value, onChangeText, autoComplete, placeh
           importantForAutofill="no"
           placeholder={placeholder}
           placeholderTextColor={Colors.textMuted}
-          className="flex-1 border-0 bg-transparent py-3 text-base text-lucrei-text"
+          className={`flex-1 border-0 bg-transparent text-lucrei-text ${compact ? 'py-2 text-sm' : 'py-3 text-base'}`}
           style={Platform.OS === 'web' ? ({ outlineStyle: 'none' } as unknown as TextStyle) : undefined}
         />
         <Pressable onPress={() => setVisible((v) => !v)} hitSlop={8}>
