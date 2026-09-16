@@ -93,12 +93,21 @@ export function GoogleSignInButton({
       // do Google que combina com o resto do app no modo escuro.
       theme: 'filled_black',
       size: 'large',
-      shape: 'pill',
+      // 'pill' deixa o iframe do Google maior que a pílula arredondada, com
+      // fundo branco vazando nos cantos - 'rectangular' preenche o container
+      // inteiro, sem esse vazamento.
+      shape: 'rectangular',
       text: 'continue_with',
       logo_alignment: 'center',
       width: 360,
     });
   }, [ready]);
 
-  return <View ref={containerRef} className="mt-5 items-center" style={{ minHeight: 44 }} />;
+  return (
+    <View
+      ref={containerRef}
+      className="mt-5 items-center overflow-hidden rounded-2xl"
+      style={{ minHeight: 44 }}
+    />
+  );
 }
