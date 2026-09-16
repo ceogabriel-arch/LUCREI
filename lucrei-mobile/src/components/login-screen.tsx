@@ -1,17 +1,16 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import * as Sentry from '@sentry/react-native';
 import { Image } from 'expo-image';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, BackHandler, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { GoogleSignInButton } from '@/components/google-signin-button';
 import { PasswordField } from '@/components/password-field';
 import { Sparkline } from '@/components/sparkline';
 import { TextField } from '@/components/text-field';
 import { requestPasswordReset } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { signInWithGoogle } from '@/lib/google-auth';
 import { webCapWidth } from '@/lib/responsive';
 import { useAppTheme } from '@/lib/theme';
 
@@ -128,7 +127,6 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [googleSubmitting, setGoogleSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [forgotPasswordVisible, setForgotPasswordVisible] = useState(false);
 
@@ -145,22 +143,10 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
     }
   }
 
-  async function handleGoogleSignIn() {
+  async function handleGoogleIdToken(idToken: string) {
     setError(null);
-    setGoogleSubmitting(true);
-    try {
-      const idToken = await signInWithGoogle();
-      if (idToken) {
-        const result = await loginWithGoogle(idToken);
-        if (!result.ok) setError(result.message);
-      }
-    } catch (err) {
-      const code = typeof err === 'object' && err !== null && 'code' in err ? String(err.code) : undefined;
-      Sentry.captureException(err, { tags: { flow: 'google_sign_in', google_error_code: code } });
-      setError('Não foi possível entrar com o Google agora.');
-    } finally {
-      setGoogleSubmitting(false);
-    }
+    const result = await loginWithGoogle(idToken);
+    if (!result.ok) setError(result.message);
   }
 
   return (
@@ -238,20 +224,7 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
             <View className="h-px flex-1 bg-lucrei-border" />
           </View>
 
-          <Pressable
-            onPress={handleGoogleSignIn}
-            disabled={googleSubmitting}
-            className="mt-5 flex-row items-center justify-center gap-2 rounded-2xl border border-lucrei-border bg-lucrei-surface py-4"
-            style={{ opacity: googleSubmitting ? 0.6 : 1 }}>
-            {googleSubmitting ? (
-              <ActivityIndicator color={Colors.text} />
-            ) : (
-              <>
-                <Ionicons name="logo-google" size={18} color={Colors.text} />
-                <Text className="text-base font-semibold text-lucrei-text">Continuar com Google</Text>
-              </>
-            )}
-          </Pressable>
+          <GoogleSignInButton onIdToken={handleGoogleIdToken} onError={setError} />
 
           <View className="mt-8 flex-row justify-center gap-1">
             <Text className="text-sm text-lucrei-textMuted">Ainda não tem conta?</Text>
