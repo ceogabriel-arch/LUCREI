@@ -10,6 +10,7 @@ function buildUser(overrides: Partial<UserWithPlan> = {}): UserWithPlan {
     id: 'user_1',
     email: 'ana@example.com',
     passwordHash: 'super-secret-hash',
+    hasPassword: true,
     name: 'Ana',
     subscriptionStatus: 'trialing',
     planId: null,

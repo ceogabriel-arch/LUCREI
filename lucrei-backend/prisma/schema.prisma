@@ -51,6 +51,12 @@ model User {
   id                           String              @id @default(cuid())
   email                        String              @unique
   passwordHash                 String
+  // false só pra contas criadas via Google que nunca definiram uma senha de
+  // verdade (passwordHash é um valor aleatório inventado, que o usuário
+  // nunca viu) - sem isso, "Alterar senha" e "Excluir conta" ficavam sem
+  // saída pra essas contas, já que pedem a senha atual pra confirmar.
+  // Vira true pra sempre assim que a conta define uma senha real.
+  hasPassword                  Boolean             @default(true)
   name                         String?
   subscriptionStatus           SubscriptionStatus  @default(trialing)
   planId                       String?

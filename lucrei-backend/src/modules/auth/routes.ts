@@ -13,13 +13,13 @@ import { serializeUser, userWithPlan } from '../plans/serialize-user';
 
 const deleteAccountSchema = {
   type: 'object',
-  required: ['password'],
   properties: {
+    // Ausente pra contas Google sem senha de verdade (ver User.hasPassword).
     password: { type: 'string', minLength: 1 },
   },
 } as const;
 
-type DeleteAccountBody = { password: string };
+type DeleteAccountBody = { password?: string };
 
 const googleAuthSchema = {
   type: 'object',
@@ -67,8 +67,10 @@ const updateNameSchema = {
 
 const changePasswordSchema = {
   type: 'object',
-  required: ['currentPassword', 'newPassword'],
+  required: ['newPassword'],
   properties: {
+    // Ausente pra contas Google que nunca tiveram senha de verdade (ver
+    // User.hasPassword) - não tem "senha atual" pra confirmar nesse caso.
     currentPassword: { type: 'string', minLength: 1 },
     newPassword: { type: 'string', minLength: 6 },
   },
@@ -93,7 +95,7 @@ function loginRateLimitKey(request: FastifyRequest) {
 type Credentials = { email: string; password: string };
 type SignupBody = { name: string; email: string; password: string };
 type UpdateNameBody = { name: string };
-type ChangePasswordBody = { currentPassword: string; newPassword: string };
+type ChangePasswordBody = { currentPassword?: string; newPassword: string };
 type PushTokenBody = { token: string };
 
 export async function authRoutes(app: FastifyInstance) {
@@ -188,7 +190,7 @@ export async function authRoutes(app: FastifyInstance) {
         } else {
           const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
           user = await prisma.user.create({
-            data: { email, name: payload.name || email, passwordHash, googleId },
+            data: { email, name: payload.name || email, passwordHash, googleId, hasPassword: false },
             include: userWithPlan,
           });
         }
@@ -244,15 +246,20 @@ export async function authRoutes(app: FastifyInstance) {
         return reply.status(404).send({ message: 'Usuário não encontrado.' });
       }
 
-      const valid = await bcrypt.compare(request.body.currentPassword, user.passwordHash);
-      if (!valid) {
-        return reply.status(401).send({ message: 'Senha atual incorreta.' });
+      if (user.hasPassword) {
+        if (!request.body.currentPassword) {
+          return reply.status(400).send({ message: 'Informe a senha atual.' });
+        }
+        const valid = await bcrypt.compare(request.body.currentPassword, user.passwordHash);
+        if (!valid) {
+          return reply.status(401).send({ message: 'Senha atual incorreta.' });
+        }
       }
 
       const passwordHash = await bcrypt.hash(request.body.newPassword, 10);
       const updated = await prisma.user.update({
         where: { id: user.id },
-        data: { passwordHash, tokenVersion: { increment: 1 } },
+        data: { passwordHash, hasPassword: true, tokenVersion: { increment: 1 } },
       });
 
       // Derruba qualquer outro token emitido antes da troca (ex: um token
@@ -271,9 +278,14 @@ export async function authRoutes(app: FastifyInstance) {
         return reply.status(404).send({ message: 'Usuário não encontrado.' });
       }
 
-      const valid = await bcrypt.compare(request.body.password, user.passwordHash);
-      if (!valid) {
-        return reply.status(401).send({ message: 'Senha incorreta.' });
+      if (user.hasPassword) {
+        if (!request.body.password) {
+          return reply.status(400).send({ message: 'Informe sua senha.' });
+        }
+        const valid = await bcrypt.compare(request.body.password, user.passwordHash);
+        if (!valid) {
+          return reply.status(401).send({ message: 'Senha incorreta.' });
+        }
       }
 
       const subscription = await prisma.subscription.findFirst({

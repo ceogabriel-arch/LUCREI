@@ -290,8 +290,12 @@ function PasswordSection() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [saving, setSaving] = useState(false);
   const { toast, opacity, show } = useToast();
+  // Conta criada via Google sem senha de verdade nunca definida - não tem
+  // "senha atual" pra pedir aqui (ver User.hasPassword no backend).
+  const needsCurrentPassword = state.status === 'authenticated' ? state.user.hasPassword : true;
 
-  const canSave = currentPassword.length > 0 && newPassword.length >= 6 && newPassword === confirmPassword;
+  const canSave =
+    (!needsCurrentPassword || currentPassword.length > 0) && newPassword.length >= 6 && newPassword === confirmPassword;
 
   async function handleSave() {
     if (state.status !== 'authenticated') return;
@@ -300,7 +304,7 @@ function PasswordSection() {
       return;
     }
     setSaving(true);
-    const result = await changePassword(currentPassword, newPassword);
+    const result = await changePassword(needsCurrentPassword ? currentPassword : undefined, newPassword);
     setSaving(false);
     if (result.ok) {
       show({ title: 'Senha alterada', message: 'Sua senha foi atualizada com sucesso.', tone: 'success' });
@@ -315,14 +319,20 @@ function PasswordSection() {
   return (
     <View>
       <ToastBanner toast={toast} opacity={opacity} />
-      <TextInput
-        value={currentPassword}
-        onChangeText={setCurrentPassword}
-        placeholder="Senha atual"
-        placeholderTextColor={Colors.textMuted}
-        secureTextEntry
-        className="mb-2.5 rounded-xl border border-lucrei-border bg-lucrei-surface px-4 py-3 text-sm text-lucrei-text"
-      />
+      {needsCurrentPassword ? (
+        <TextInput
+          value={currentPassword}
+          onChangeText={setCurrentPassword}
+          placeholder="Senha atual"
+          placeholderTextColor={Colors.textMuted}
+          secureTextEntry
+          className="mb-2.5 rounded-xl border border-lucrei-border bg-lucrei-surface px-4 py-3 text-sm text-lucrei-text"
+        />
+      ) : (
+        <Text className="mb-2.5 text-xs text-lucrei-textMuted">
+          Sua conta usa login com Google e ainda não tem senha - defina uma abaixo.
+        </Text>
+      )}
       <TextInput
         value={newPassword}
         onChangeText={setNewPassword}
@@ -431,11 +441,14 @@ function ShopsList() {
 }
 
 function DeleteAccountSection() {
-  const { deleteAccount } = useAuth();
+  const { state, deleteAccount } = useAuth();
   const Colors = useColors();
   const [password, setPassword] = useState('');
   const [deleting, setDeleting] = useState(false);
   const { toast, opacity, show } = useToast();
+  // Conta criada via Google sem senha de verdade nunca definida - não tem
+  // "senha atual" pra pedir aqui (ver User.hasPassword no backend).
+  const needsPassword = state.status === 'authenticated' ? state.user.hasPassword : true;
 
   function confirmDelete() {
     Alert.alert(
@@ -450,7 +463,7 @@ function DeleteAccountSection() {
 
   async function handleDelete() {
     setDeleting(true);
-    const result = await deleteAccount(password);
+    const result = await deleteAccount(needsPassword ? password : undefined);
     setDeleting(false);
     if (!result.ok) {
       show({ title: 'Não foi possível excluir', message: result.message, tone: 'error' });
@@ -464,20 +477,24 @@ function DeleteAccountSection() {
         Essa ação é permanente. Todos os seus dados — lojas conectadas, pedidos, produtos e assinatura — serão
         apagados e não podem ser recuperados.
       </Text>
-      <Text className="mb-1.5 text-xs text-lucrei-textMuted">Confirme sua senha</Text>
-      <TextInput
-        value={password}
-        onChangeText={setPassword}
-        placeholder="Sua senha"
-        placeholderTextColor={Colors.textMuted}
-        secureTextEntry
-        className="mb-4 rounded-xl border border-lucrei-border bg-lucrei-surface px-4 py-3 text-sm text-lucrei-text"
-      />
+      {needsPassword && (
+        <>
+          <Text className="mb-1.5 text-xs text-lucrei-textMuted">Confirme sua senha</Text>
+          <TextInput
+            value={password}
+            onChangeText={setPassword}
+            placeholder="Sua senha"
+            placeholderTextColor={Colors.textMuted}
+            secureTextEntry
+            className="mb-4 rounded-xl border border-lucrei-border bg-lucrei-surface px-4 py-3 text-sm text-lucrei-text"
+          />
+        </>
+      )}
       <Pressable
         onPress={confirmDelete}
-        disabled={password.length === 0 || deleting}
+        disabled={(needsPassword && password.length === 0) || deleting}
         className="items-center rounded-xl bg-lucrei-danger py-3"
-        style={{ opacity: password.length === 0 || deleting ? 0.4 : 1 }}>
+        style={{ opacity: (needsPassword && password.length === 0) || deleting ? 0.4 : 1 }}>
         {deleting ? <ActivityIndicator size="small" color="#FFFFFF" /> : (
           <Text className="text-sm font-semibold text-white">Excluir conta permanentemente</Text>
         )}

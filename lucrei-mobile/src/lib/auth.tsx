@@ -38,8 +38,8 @@ type AuthContextValue = {
   signup: (name: string, email: string, password: string) => Promise<AuthResult>;
   logout: () => Promise<void>;
   updateName: (name: string) => Promise<AuthResult>;
-  changePassword: (currentPassword: string, newPassword: string) => Promise<AuthResult>;
-  deleteAccount: (password: string) => Promise<AuthResult>;
+  changePassword: (currentPassword: string | undefined, newPassword: string) => Promise<AuthResult>;
+  deleteAccount: (password?: string) => Promise<AuthResult>;
   selectPlan: (key: string) => Promise<SelectPlanResult>;
   selectPlanPix: (key: string) => Promise<SelectPlanPixResult>;
   cancelPlan: () => Promise<AuthResult>;
@@ -119,7 +119,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
   }
 
-  async function changePassword(currentPassword: string, newPassword: string): Promise<AuthResult> {
+  async function changePassword(currentPassword: string | undefined, newPassword: string): Promise<AuthResult> {
     if (state.status !== 'authenticated') return { ok: false, message: 'Não autenticado.' };
     try {
       const { token } = await apiChangePassword(state.token, currentPassword, newPassword);
@@ -128,14 +128,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
       if (await getToken()) {
         await setToken(token);
       }
-      setState({ status: 'authenticated', token, user: state.user });
+      // Definir uma senha agora torna hasPassword true no backend - atualiza
+      // localmente também, senão "Excluir conta" continuaria achando que a
+      // conta não tem senha até o próximo /auth/me.
+      setState({ status: 'authenticated', token, user: { ...state.user, hasPassword: true } });
       return { ok: true };
     } catch (err) {
       return { ok: false, message: err instanceof ApiError ? err.message : 'Algo deu errado.' };
     }
   }
 
-  async function deleteAccount(password: string): Promise<AuthResult> {
+  async function deleteAccount(password?: string): Promise<AuthResult> {
     if (state.status !== 'authenticated') return { ok: false, message: 'Não autenticado.' };
     try {
       await apiDeleteAccount(state.token, password);

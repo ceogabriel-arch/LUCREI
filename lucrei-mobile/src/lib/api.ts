@@ -8,6 +8,7 @@ export type AuthUser = {
   id: string;
   name: string;
   email: string;
+  hasPassword: boolean;
   createdAt: string;
   subscriptionStatus: SubscriptionStatus;
   trialEndsAt: string | null;
@@ -83,7 +84,7 @@ export function updateName(token: string, name: string) {
   });
 }
 
-export function changePassword(token: string, currentPassword: string, newPassword: string) {
+export function changePassword(token: string, currentPassword: string | undefined, newPassword: string) {
   return request<{ ok: true; token: string }>('/auth/change-password', {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
@@ -91,7 +92,7 @@ export function changePassword(token: string, currentPassword: string, newPasswo
   });
 }
 
-export function deleteAccount(token: string, password: string) {
+export function deleteAccount(token: string, password: string | undefined) {
   return request<{ ok: true }>('/auth/me', {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${token}` },

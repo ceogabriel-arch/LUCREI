@@ -9,6 +9,7 @@ export function serializeUser(user: UserWithPlan) {
     id: user.id,
     name: user.name,
     email: user.email,
+    hasPassword: user.hasPassword,
     createdAt: user.createdAt,
     subscriptionStatus: user.subscriptionStatus,
     trialEndsAt: user.trialEndsAt,
