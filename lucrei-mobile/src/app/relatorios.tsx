@@ -6,7 +6,15 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } 
 import { DailyProfitChart } from '@/components/daily-profit-chart';
 import { Screen } from '@/components/screen';
 import type { ThemeColors } from '@/constants/theme';
-import { ApiError, getShopeeProducts, getSummary, getSummaryRange, type ShopeeProduct, type Summary } from '@/lib/api';
+import {
+  ApiError,
+  getShopeeProducts,
+  getSummary,
+  getSummaryRange,
+  syncOrdersHistory,
+  type ShopeeProduct,
+  type Summary,
+} from '@/lib/api';
 import { showAlert } from '@/lib/alert';
 import { useAuth } from '@/lib/auth';
 import { exportOrdersCsv } from '@/lib/export-csv';
@@ -146,6 +154,7 @@ function ReportRangeCard({
   const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
 
   const range = useMemo(() => {
     if (mode === 'lifetime') return { from: new Date(connectedAt), to: new Date() };
@@ -208,6 +217,24 @@ function ReportRangeCard({
       showAlert('Não foi possível exportar', err instanceof ApiError ? err.message : 'Tenta de novo em instantes.');
     } finally {
       setExporting(false);
+    }
+  }
+
+  async function handleBackfill() {
+    setBackfilling(true);
+    try {
+      const result = await syncOrdersHistory(token, shopId);
+      showAlert(
+        'Histórico sincronizado',
+        result.ordersSynced === 0
+          ? 'Nenhum pedido novo encontrado no último ano.'
+          : `${result.ordersSynced} pedido(s) do último ano foram trazidos pro Lucrei.`
+      );
+      await load();
+    } catch (err) {
+      showAlert('Não foi possível sincronizar o histórico', err instanceof ApiError ? err.message : 'Tenta de novo em instantes.');
+    } finally {
+      setBackfilling(false);
     }
   }
 
@@ -281,6 +308,21 @@ function ReportRangeCard({
           <Ionicons name="download-outline" size={16} color={Colors.gold} />
         )}
         <Text className="text-sm font-medium text-lucrei-gold">Exportar CSV</Text>
+      </Pressable>
+
+      <Pressable
+        onPress={handleBackfill}
+        disabled={backfilling}
+        className="mt-2 flex-row items-center justify-center gap-2 rounded-xl px-4 py-3"
+        style={{ opacity: backfilling ? 0.6 : 1 }}>
+        {backfilling ? (
+          <ActivityIndicator size="small" color={Colors.textMuted} />
+        ) : (
+          <Ionicons name="time-outline" size={16} color={Colors.textMuted} />
+        )}
+        <Text className="text-xs text-lucrei-textMuted">
+          {backfilling ? 'Buscando histórico na Shopee, pode levar alguns minutos...' : 'Sincronizar histórico completo (último ano)'}
+        </Text>
       </Pressable>
     </View>
   );

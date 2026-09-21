@@ -233,6 +233,18 @@ export function syncOrders(token: string, shopId: string) {
   });
 }
 
+// Sync normal só cobre os últimos 15 dias (limite da própria API da
+// Shopee) - esse backfill varre até 1 ano pra trás em blocos de 15 dias,
+// pra relatórios de mês/ano específico terem dado de verdade. Pode demorar
+// bastante numa loja com muito histórico.
+export function syncOrdersHistory(token: string, shopId: string) {
+  return request<SyncResult>(`/shops/${shopId}/sync/history`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: '{}',
+  });
+}
+
 export type SalesUsage = {
   ordersThisMonth: number;
   salesLimit: number | null;

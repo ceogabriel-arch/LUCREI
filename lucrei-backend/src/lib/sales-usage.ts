@@ -57,3 +57,29 @@ export async function getSalesLimitStatus(user: User & { plan: Plan | null }): P
   const graceDaysLeft = Math.ceil((graceExpiresAt.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
   return { ordersThisMonth, salesLimit, overLimit: true, blocked: false, graceDaysLeft };
 }
+
+// Bloqueio de "carência esgotada" reaproveitado pelas duas rotas que
+// sincronizam pedidos (sync do dia a dia e backfill de histórico) - sem
+// isso, o backfill seria uma forma de continuar sincronizando pedidos do mês
+// corrente mesmo com a conta bloqueada por limite de vendas.
+export async function checkSalesLimitBlock(
+  userId: string
+): Promise<{ blocked: false } | { blocked: true; message: string }> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, include: { plan: true } });
+  if (!user || user.plan?.salesLimit == null) return { blocked: false };
+
+  const status = await getSalesLimitStatus(user);
+  if (!status.overLimit) return { blocked: false };
+
+  if (status.blocked) {
+    return {
+      blocked: true,
+      message: `Seu plano ${user.plan.name} permite até ${user.plan.salesLimit} vendas/mês e o prazo de carência já acabou. Faça upgrade pra continuar sincronizando pedidos.`,
+    };
+  }
+
+  if (!user.salesLimitReachedAt || user.salesLimitReachedAt < startOfCurrentMonth()) {
+    await prisma.user.update({ where: { id: user.id }, data: { salesLimitReachedAt: new Date() } });
+  }
+  return { blocked: false };
+}

@@ -96,12 +96,12 @@ export async function syncOneOrder(shopId: string, orderSn: string, orderStatus:
   return processOrder(shopId, shopeeShopId, accessToken, orderSn, orderStatus, detail?.create_time);
 }
 
-export async function syncShopOrders(shopId: string) {
-  const { accessToken, shopeeShopId } = await getValidAccessToken(shopId);
+// get_order_list da Shopee só aceita um intervalo de até 15 dias por
+// chamada - por isso a sincronização do dia a dia (abaixo) e o backfill de
+// histórico (mais abaixo) precisam varrer o tempo em blocos desse tamanho.
+const WINDOW_SECONDS = 15 * 24 * 60 * 60;
 
-  const timeTo = Math.floor(Date.now() / 1000);
-  const timeFrom = timeTo - 15 * 24 * 60 * 60;
-
+async function syncWindow(shopId: string, shopeeShopId: number, accessToken: string, timeFrom: number, timeTo: number) {
   let cursor = '';
   let hasMore = true;
   let ordersSeen = 0;
@@ -136,6 +136,42 @@ export async function syncShopOrders(shopId: string) {
 
     hasMore = page.more;
     cursor = page.next_cursor;
+  }
+
+  return { ordersSeen, ordersSynced };
+}
+
+export async function syncShopOrders(shopId: string) {
+  const { accessToken, shopeeShopId } = await getValidAccessToken(shopId);
+
+  const timeTo = Math.floor(Date.now() / 1000);
+  const timeFrom = timeTo - WINDOW_SECONDS;
+
+  const result = await syncWindow(shopId, shopeeShopId, accessToken, timeFrom, timeTo);
+
+  await prisma.shop.update({ where: { id: shopId }, data: { lastSyncedAt: new Date() } });
+
+  return result;
+}
+
+// Backfill manual (botão "Sincronizar histórico" em Relatórios) - a
+// sincronização normal acima só cobre os últimos 15 dias, então pedidos mais
+// antigos que isso nunca entram no banco sozinhos. Varre de trás pra frente
+// (mais recente primeiro) até "sinceDate", em blocos de 15 dias.
+export async function syncShopOrdersHistory(shopId: string, sinceDate: Date) {
+  const { accessToken, shopeeShopId } = await getValidAccessToken(shopId);
+
+  const sinceSec = Math.floor(sinceDate.getTime() / 1000);
+  let windowEnd = Math.floor(Date.now() / 1000);
+  let ordersSeen = 0;
+  let ordersSynced = 0;
+
+  while (windowEnd > sinceSec) {
+    const windowStart = Math.max(sinceSec, windowEnd - WINDOW_SECONDS);
+    const result = await syncWindow(shopId, shopeeShopId, accessToken, windowStart, windowEnd);
+    ordersSeen += result.ordersSeen;
+    ordersSynced += result.ordersSynced;
+    windowEnd = windowStart;
   }
 
   await prisma.shop.update({ where: { id: shopId }, data: { lastSyncedAt: new Date() } });
