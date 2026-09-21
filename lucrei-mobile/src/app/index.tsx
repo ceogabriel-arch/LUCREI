@@ -15,6 +15,7 @@ import { ApiError, getSummary, type Summary } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatBRL } from '@/lib/format';
 import { PERIOD_TO_API, PERIODS, usePeriod } from '@/lib/period';
+import { useIsDesktopWeb } from '@/lib/responsive';
 import { useSelectedShop } from '@/lib/selected-shop';
 import { connectShopeeStore } from '@/lib/shopee';
 import { useAppTheme } from '@/lib/theme';
@@ -55,6 +56,7 @@ export default function InicioScreen() {
   const { state, refreshUser } = useAuth();
   const router = useRouter();
   const { scheme, colors: Colors } = useAppTheme();
+  const isDesktop = useIsDesktopWeb();
   const { shops, selectedShop, loaded: shopsLoaded, refresh: refreshShops } = useSelectedShop();
   const { period, setPeriod } = usePeriod();
   const [backendStatus, setBackendStatus] = useState<BackendStatus>('checking');
@@ -160,6 +162,16 @@ export default function InicioScreen() {
       .catch(() => setBackendStatus('offline'));
   }, []);
 
+  const kpiTiles = showingRealData
+    ? [
+        { label: 'Faturamento', value: formatBRL(summary!.revenue) },
+        { label: 'Custos totais', value: formatBRL(summary!.cost), positiveIsGood: false },
+        { label: 'Pedidos', value: String(summary!.ordersCount) },
+        { label: 'Ticket médio', value: formatBRL(summary!.avgTicket) },
+        { label: 'Margem de lucro', value: `${summary!.profitMargin.toFixed(1)}%` },
+      ]
+    : MOCK_KPIS;
+
   return (
     <Screen>
       <ScrollView
@@ -254,61 +266,62 @@ export default function InicioScreen() {
             end={{ x: 1, y: 1 }}
             style={StyleSheet.absoluteFill}
           />
-          <View className="p-6">
-            <View className="flex-row items-center gap-2">
-              <Text className="text-sm text-lucrei-textMuted">Você lucrou</Text>
-              {!stillLoading && summaryLoading && <ActivityIndicator size="small" color={Colors.textMuted} />}
-              {!stillLoading && !showingRealData && (
-                <View className="rounded-full px-2 py-0.5" style={{ backgroundColor: Colors.surfaceAlt }}>
-                  <Text className="text-[10px] font-semibold uppercase tracking-wide text-lucrei-textMuted">
-                    Exemplo
-                  </Text>
+          <View className={isDesktop ? 'flex-row items-center justify-between p-8' : 'p-6'}>
+            <View className={isDesktop ? 'flex-1' : undefined}>
+              <View className="flex-row items-center gap-2">
+                <Text className="text-sm text-lucrei-textMuted">Você lucrou</Text>
+                {!stillLoading && summaryLoading && <ActivityIndicator size="small" color={Colors.textMuted} />}
+                {!stillLoading && !showingRealData && (
+                  <View className="rounded-full px-2 py-0.5" style={{ backgroundColor: Colors.surfaceAlt }}>
+                    <Text className="text-[10px] font-semibold uppercase tracking-wide text-lucrei-textMuted">
+                      Exemplo
+                    </Text>
+                  </View>
+                )}
+              </View>
+              {stillLoading ? (
+                <View className="mt-3 h-[52px] justify-center">
+                  <ActivityIndicator color={Colors.gold} />
+                </View>
+              ) : (
+                <Text className={isDesktop ? 'mt-1 text-6xl font-bold text-lucrei-gold' : 'mt-1 text-5xl font-bold text-lucrei-gold'}>
+                  {formatBRL(showingRealData ? summary!.profit : 40250)}
+                </Text>
+              )}
+              {!stillLoading && !showingRealData && <DeltaBadge label="+18,7% vs período anterior" direction="up" />}
+              {!stillLoading && showingRealData && summary!.itemsMissingCost > 0 && (
+                <Text className="mt-2 text-xs text-lucrei-textMuted">
+                  {summary!.itemsMissingCost} item(ns) sem custo cadastrado, não entram nesse total.
+                </Text>
+              )}
+
+              {!stillLoading && !isDesktop && (
+                <View className="mt-5">
+                  <Sparkline data={showingRealData ? summary!.trend.map((t) => t.profit) : MOCK_TREND} />
                 </View>
               )}
             </View>
-            {stillLoading ? (
-              <View className="mt-3 h-[52px] justify-center">
-                <ActivityIndicator color={Colors.gold} />
-              </View>
-            ) : (
-              <Text className="mt-1 text-5xl font-bold text-lucrei-gold">
-                {formatBRL(showingRealData ? summary!.profit : 40250)}
-              </Text>
-            )}
-            {!stillLoading && !showingRealData && <DeltaBadge label="+18,7% vs período anterior" direction="up" />}
-            {!stillLoading && showingRealData && summary!.itemsMissingCost > 0 && (
-              <Text className="mt-2 text-xs text-lucrei-textMuted">
-                {summary!.itemsMissingCost} item(ns) sem custo cadastrado, não entram nesse total.
-              </Text>
-            )}
 
-            {!stillLoading && (
-              <View className="mt-5">
-                <Sparkline data={showingRealData ? summary!.trend.map((t) => t.profit) : MOCK_TREND} />
-              </View>
+            {!stillLoading && isDesktop && (
+              <Sparkline data={showingRealData ? summary!.trend.map((t) => t.profit) : MOCK_TREND} width={380} height={110} />
             )}
           </View>
         </View>
 
         <Text className="mt-6 text-sm font-medium text-lucrei-textMuted">Resumo do período</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          className="-mx-5 mt-3"
-          contentContainerClassName="gap-3 px-5">
-          {stillLoading
-            ? null
-            : (showingRealData
-                ? [
-                    { label: 'Faturamento', value: formatBRL(summary!.revenue) },
-                    { label: 'Custos totais', value: formatBRL(summary!.cost), positiveIsGood: false },
-                    { label: 'Pedidos', value: String(summary!.ordersCount) },
-                    { label: 'Ticket médio', value: formatBRL(summary!.avgTicket) },
-                    { label: 'Margem de lucro', value: `${summary!.profitMargin.toFixed(1)}%` },
-                  ]
-                : MOCK_KPIS
-              ).map((kpi) => <StatTile key={kpi.label} {...kpi} />)}
-        </ScrollView>
+        {isDesktop ? (
+          <View className="mt-3 flex-row flex-wrap gap-3">
+            {!stillLoading && kpiTiles.map((kpi) => <StatTile key={kpi.label} {...kpi} />)}
+          </View>
+        ) : (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            className="-mx-5 mt-3"
+            contentContainerClassName="gap-3 px-5">
+            {!stillLoading && kpiTiles.map((kpi) => <StatTile key={kpi.label} {...kpi} />)}
+          </ScrollView>
+        )}
 
         {state.status === 'authenticated' && hasShop && lifetimeProfit !== null && (
           <AchievementsCard totalProfit={lifetimeProfit} accountCreatedAt={state.user.createdAt} />
@@ -317,8 +330,8 @@ export default function InicioScreen() {
         <Pressable
           onPress={handleConnectShopee}
           disabled={connecting}
-          className="mt-8 flex-row items-center justify-center gap-2 rounded-2xl bg-lucrei-gold py-4"
-          style={{ opacity: connecting ? 0.7 : 1 }}>
+          className="mt-8 flex-row items-center justify-center gap-2 self-center rounded-2xl bg-lucrei-gold py-4"
+          style={{ opacity: connecting ? 0.7 : 1, width: isDesktop ? 360 : '100%' }}>
           {connecting ? (
             <ActivityIndicator color={Colors.onGold} />
           ) : (
