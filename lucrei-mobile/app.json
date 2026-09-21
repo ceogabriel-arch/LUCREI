@@ -33,7 +33,7 @@
         {
           "backgroundColor": "#0A0A0B",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "imageWidth": 140
         }
       ],
       "expo-secure-store",
