@@ -68,7 +68,25 @@ export async function shopRoutes(app: FastifyInstance) {
   app.get<{ Querystring: AuthorizeUrlQuery }>(
     '/shopee/authorize-url',
     { onRequest: [app.authenticate] },
-    async (request) => {
+    async (request, reply) => {
+      // Bloqueia aqui, antes de mandar pro login da Shopee - sem isso o
+      // usuário passava por login, SMS e tela de autorização só pra
+      // descobrir no final que não podia conectar mais uma loja.
+      const user = await prisma.user.findUnique({ where: { id: request.user.sub }, include: { plan: true } });
+      const integrationsLimit = user?.plan?.integrationsLimit ?? null;
+
+      if (integrationsLimit != null) {
+        const activeShops = await prisma.shop.count({ where: { userId: request.user.sub, status: 'active' } });
+        if (activeShops >= integrationsLimit) {
+          return reply.status(403).send({
+            message:
+              `Seu plano ${user?.plan?.name ?? ''} permite conectar até ${integrationsLimit} loja${integrationsLimit === 1 ? '' : 's'} Shopee. ` +
+              'Faça upgrade pra um plano com mais integrações pra conectar outra loja.',
+            code: 'integrations_limit_reached',
+          });
+        }
+      }
+
       const returnUrl = request.query.returnUrl || DEFAULT_RETURN_URL;
       const state = app.jwt.sign({ sub: request.user.sub, returnUrl }, { expiresIn: '15m' });
       const url = getAuthorizationUrl(state);
