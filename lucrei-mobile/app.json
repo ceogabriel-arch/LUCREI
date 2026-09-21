@@ -9,10 +9,9 @@
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#0A0A0B",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/images/icon.png"
     },
     "android": {
-      "versionCode": 7,
       "adaptiveIcon": {
         "backgroundColor": "#0A0A0B",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
