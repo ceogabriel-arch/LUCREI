@@ -99,7 +99,7 @@ export async function syncOneOrder(shopId: string, orderSn: string, orderStatus:
 // get_order_list da Shopee só aceita um intervalo de até 15 dias por
 // chamada - por isso a sincronização do dia a dia (abaixo) e o backfill de
 // histórico (mais abaixo) precisam varrer o tempo em blocos desse tamanho.
-const WINDOW_SECONDS = 15 * 24 * 60 * 60;
+export const WINDOW_SECONDS = 15 * 24 * 60 * 60;
 
 // Teto de segurança contra um cursor que nunca avança de verdade (a Shopee
 // devolver "more: true" com o mesmo next_cursor, por exemplo) - sem isso essa
@@ -222,6 +222,7 @@ export async function runHistoryBackfill(shopId: string, sinceDate: Date) {
       historyBackfillStartedAt: new Date(),
       historyBackfillDoneAt: null,
       historyBackfillSynced: 0,
+      historyBackfillWindowsDone: 0,
       historyBackfillError: null,
     },
   });
@@ -232,6 +233,7 @@ export async function runHistoryBackfill(shopId: string, sinceDate: Date) {
     const sinceSec = Math.floor(sinceDate.getTime() / 1000);
     let windowEnd = Math.floor(Date.now() / 1000);
     let ordersSynced = 0;
+    let windowsDone = 0;
     let windowsFailed = 0;
     let lastError: unknown = null;
 
@@ -247,15 +249,19 @@ export async function runHistoryBackfill(shopId: string, sinceDate: Date) {
         windowsFailed++;
         lastError = err;
       }
+      windowsDone++;
       // historyBackfillStartedAt também funciona como "último sinal de vida"
       // aqui (ver isBackfillStale em routes.ts) - reescrever a cada bloco, e
       // não só uma vez no início, evita que um backfill de loja grande (pode
       // legitimamente passar de 20min no total, com vários blocos de 10min
       // cada) seja confundido com travado enquanto ainda está progredindo de
-      // verdade.
+      // verdade. windowsDone (contra o total fixo de ~25 blocos pra 1 ano)
+      // é o que vira a barra de progresso no app - diferente da contagem de
+      // pedidos, esse número sobe de forma previsível independente de quão
+      // cheio de vendas cada bloco é.
       await prisma.shop.update({
         where: { id: shopId },
-        data: { historyBackfillSynced: ordersSynced, historyBackfillStartedAt: new Date() },
+        data: { historyBackfillSynced: ordersSynced, historyBackfillWindowsDone: windowsDone, historyBackfillStartedAt: new Date() },
       });
       windowEnd = windowStart;
     }

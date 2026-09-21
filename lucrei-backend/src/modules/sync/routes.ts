@@ -4,7 +4,7 @@ import { checkSalesLimitBlock, getSalesLimitStatus } from '../../lib/sales-usage
 import { startOfCurrentMonth } from '../../lib/period';
 import { prisma } from '../../lib/prisma';
 import { sendPushNotification } from '../../lib/push-notifications';
-import { runHistoryBackfill, syncShopOrders } from './service';
+import { runHistoryBackfill, syncShopOrders, WINDOW_SECONDS } from './service';
 
 // Avisa a conta quando ela cruza esse percentual do limite mensal do plano,
 // uma vez por mês, pra dar tempo de fazer upgrade antes do bloqueio total em 100%.
@@ -15,6 +15,12 @@ const WARNING_THRESHOLD = 0.8;
 // antigos, e ir além disso só deixaria o backfill ainda mais lento sem
 // trazer dado a mais.
 const HISTORY_BACKFILL_DAYS = 365;
+
+// Total de blocos de 15 dias que o backfill percorre - fixo, dá pra calcular
+// sem rodar nada, então vira a barra de progresso no app (windowsDone /
+// windowsTotal), diferente da contagem de pedidos que varia com quanto cada
+// loja vendeu em cada bloco.
+const HISTORY_BACKFILL_WINDOWS_TOTAL = Math.ceil((HISTORY_BACKFILL_DAYS * 24 * 60 * 60) / WINDOW_SECONDS);
 
 // historyBackfillStartedAt funciona como "último sinal de vida" - é
 // reescrito a cada bloco de 15 dias processado, não só uma vez no início
@@ -106,7 +112,12 @@ export async function syncRoutes(app: FastifyInstance) {
       const isStale = isBackfillStale(shop.historyBackfillStatus, shop.historyBackfillStartedAt);
 
       if (shop.historyBackfillStatus === 'running' && !isStale) {
-        return reply.send({ status: 'running', ordersSynced: shop.historyBackfillSynced ?? 0 });
+        return reply.send({
+          status: 'running',
+          ordersSynced: shop.historyBackfillSynced ?? 0,
+          windowsDone: shop.historyBackfillWindowsDone ?? 0,
+          windowsTotal: HISTORY_BACKFILL_WINDOWS_TOTAL,
+        });
       }
 
       const block = await checkSalesLimitBlock(request.user.sub);
@@ -117,7 +128,7 @@ export async function syncRoutes(app: FastifyInstance) {
       const since = new Date(Date.now() - HISTORY_BACKFILL_DAYS * 24 * 60 * 60 * 1000);
       runHistoryBackfill(shop.id, since).catch((err) => app.log.error(err));
 
-      return reply.send({ status: 'running', ordersSynced: 0 });
+      return reply.send({ status: 'running', ordersSynced: 0, windowsDone: 0, windowsTotal: HISTORY_BACKFILL_WINDOWS_TOTAL });
     }
   );
 
@@ -131,6 +142,7 @@ export async function syncRoutes(app: FastifyInstance) {
           historyBackfillStatus: true,
           historyBackfillStartedAt: true,
           historyBackfillSynced: true,
+          historyBackfillWindowsDone: true,
           historyBackfillError: true,
         },
       });
@@ -145,6 +157,8 @@ export async function syncRoutes(app: FastifyInstance) {
         return reply.send({
           status: 'error',
           ordersSynced: shop.historyBackfillSynced ?? 0,
+          windowsDone: shop.historyBackfillWindowsDone ?? 0,
+          windowsTotal: HISTORY_BACKFILL_WINDOWS_TOTAL,
           error: 'A sincronização ficou parada por muito tempo e foi interrompida. Tente de novo.',
         });
       }
@@ -152,6 +166,8 @@ export async function syncRoutes(app: FastifyInstance) {
       return reply.send({
         status: shop.historyBackfillStatus ?? 'idle',
         ordersSynced: shop.historyBackfillSynced ?? 0,
+        windowsDone: shop.historyBackfillWindowsDone ?? 0,
+        windowsTotal: HISTORY_BACKFILL_WINDOWS_TOTAL,
         error: shop.historyBackfillError,
       });
     }

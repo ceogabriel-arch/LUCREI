@@ -244,7 +244,13 @@ export function syncOrders(token: string, shopId: string) {
 // por ad-tech pra sincronizar cookies), e como isso aqui é consultado a cada
 // poucos segundos por minutos, esse endpoint concentra muito mais chamadas
 // que qualquer outro da página - exatamente o que aconteceu em produção.
-export type SyncHistoryStatus = { status: 'idle' | 'running' | 'done' | 'error'; ordersSynced: number; error?: string | null };
+export type SyncHistoryStatus = {
+  status: 'idle' | 'running' | 'done' | 'error';
+  ordersSynced: number;
+  windowsDone: number;
+  windowsTotal: number;
+  error?: string | null;
+};
 
 export function startSyncHistory(token: string, shopId: string) {
   return request<SyncHistoryStatus>(`/shops/${shopId}/backfill`, {

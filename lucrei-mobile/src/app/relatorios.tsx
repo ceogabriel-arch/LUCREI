@@ -157,6 +157,7 @@ function ReportRangeCard({
   const [exporting, setExporting] = useState(false);
   const [backfilling, setBackfilling] = useState(false);
   const [backfillSynced, setBackfillSynced] = useState(0);
+  const [backfillProgress, setBackfillProgress] = useState({ done: 0, total: 0 });
 
   const range = useMemo(() => {
     if (mode === 'lifetime') return { from: new Date(connectedAt), to: new Date() };
@@ -251,6 +252,7 @@ function ReportRangeCard({
         }
         consecutiveFailures = 0;
         setBackfillSynced(status.ordersSynced);
+        setBackfillProgress({ done: status.windowsDone, total: status.windowsTotal });
         if (status.status === 'done') {
           const base =
             status.ordersSynced === 0
@@ -281,6 +283,7 @@ function ReportRangeCard({
       .then((status) => {
         if (status.status === 'running') {
           setBackfillSynced(status.ordersSynced);
+          setBackfillProgress({ done: status.windowsDone, total: status.windowsTotal });
           pollBackfillUntilDone();
         }
       })
@@ -290,7 +293,9 @@ function ReportRangeCard({
 
   async function handleBackfill() {
     try {
-      await startSyncHistory(token, shopId);
+      const status = await startSyncHistory(token, shopId);
+      setBackfillSynced(status.ordersSynced);
+      setBackfillProgress({ done: status.windowsDone, total: status.windowsTotal });
       pollBackfillUntilDone();
     } catch (err) {
       showAlert('Não foi possível sincronizar o histórico', err instanceof ApiError ? err.message : 'Tenta de novo em instantes.');
@@ -369,22 +374,37 @@ function ReportRangeCard({
         <Text className="text-sm font-medium text-lucrei-gold">Exportar CSV</Text>
       </Pressable>
 
-      <Pressable
-        onPress={handleBackfill}
-        disabled={backfilling}
-        className="mt-2 flex-row items-center justify-center gap-2 rounded-xl px-4 py-3"
-        style={{ opacity: backfilling ? 0.6 : 1 }}>
-        {backfilling ? (
-          <ActivityIndicator size="small" color={Colors.textMuted} />
-        ) : (
+      {backfilling ? (
+        <View className="mt-2 px-1 py-2">
+          <View className="flex-row items-center justify-between">
+            <Text className="text-xs text-lucrei-textMuted">Buscando histórico na Shopee...</Text>
+            <Text className="text-xs font-medium text-lucrei-text">
+              {backfillProgress.total > 0
+                ? `${Math.round((backfillProgress.done / backfillProgress.total) * 100)}%`
+                : ''}
+            </Text>
+          </View>
+          <View className="mt-1.5 h-2 overflow-hidden rounded-full bg-lucrei-surfaceAlt">
+            <View
+              style={{
+                width: `${backfillProgress.total > 0 ? (backfillProgress.done / backfillProgress.total) * 100 : 0}%`,
+                backgroundColor: Colors.gold,
+              }}
+              className="h-full rounded-full"
+            />
+          </View>
+          <Text className="mt-1.5 text-xs text-lucrei-textMuted">
+            {backfillSynced} {backfillSynced === 1 ? 'pedido encontrado' : 'pedidos encontrados'} até agora
+          </Text>
+        </View>
+      ) : (
+        <Pressable
+          onPress={handleBackfill}
+          className="mt-2 flex-row items-center justify-center gap-2 rounded-xl px-4 py-3">
           <Ionicons name="time-outline" size={16} color={Colors.textMuted} />
-        )}
-        <Text className="text-xs text-lucrei-textMuted">
-          {backfilling
-            ? `Buscando histórico na Shopee... ${backfillSynced} pedido(s) até agora`
-            : 'Sincronizar histórico completo (último ano)'}
-        </Text>
-      </Pressable>
+          <Text className="text-xs text-lucrei-textMuted">Sincronizar histórico completo (último ano)</Text>
+        </Pressable>
+      )}
     </View>
   );
 }

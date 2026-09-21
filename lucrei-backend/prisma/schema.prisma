@@ -140,6 +140,7 @@ model Shop {
   historyBackfillStartedAt DateTime?
   historyBackfillDoneAt    DateTime?
   historyBackfillSynced    Int?
+  historyBackfillWindowsDone Int?
   historyBackfillError     String?
 
   user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
