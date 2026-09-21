@@ -64,15 +64,26 @@ type CatalogItem = {
   price: number | null;
 };
 
-const CATALOG_TTL_MS = 5 * 60 * 1000;
+// 15min em vez de 5: nome/imagem/preço de catálogo raramente muda de um
+// minuto pro outro, e essa cadeia de chamadas à Shopee (item_list +
+// item_base_info + get_model_list por item com variação) é a parte lenta de
+// verdade de abrir Produtos - cache mais longo evita repetir isso a troco de
+// nada sempre que o usuário troca de aba e volta. Quem quiser dado fresco de
+// verdade usa o "puxar pra atualizar", que ignora esse cache (forceRefresh).
+const CATALOG_TTL_MS = 15 * 60 * 1000;
 const catalogCache = new Map<string, { expiresAt: number; items: CatalogItem[] }>();
 
 // O catálogo (nome/imagem/preço) não depende do período selecionado no app,
 // então cacheamos por loja - trocar de "Hoje" pra "30 dias" não deveria
 // refazer a mesma cadeia de chamadas à Shopee.
-async function getShopeeCatalog(shopDbId: string, accessToken: string, shopeeShopId: number): Promise<CatalogItem[]> {
+async function getShopeeCatalog(
+  shopDbId: string,
+  accessToken: string,
+  shopeeShopId: number,
+  forceRefresh = false
+): Promise<CatalogItem[]> {
   const cached = catalogCache.get(shopDbId);
-  if (cached && cached.expiresAt > Date.now()) return cached.items;
+  if (!forceRefresh && cached && cached.expiresAt > Date.now()) return cached.items;
 
   const pageSize = 50;
   const maxItems = 200;
@@ -140,7 +151,7 @@ export async function productRoutes(app: FastifyInstance) {
     }
   );
 
-  app.get<{ Params: { shopId: string }; Querystring: { period?: Period } }>(
+  app.get<{ Params: { shopId: string }; Querystring: { period?: Period; force?: string } }>(
     '/shops/:shopId/shopee-products',
     { onRequest: [app.authenticate] },
     async (request, reply) => {
@@ -148,10 +159,11 @@ export async function productRoutes(app: FastifyInstance) {
       if (!shop) return reply.status(404).send({ message: 'Loja não encontrada.' });
 
       const period = request.query.period ?? '30d';
+      const forceRefresh = request.query.force === 'true';
 
       try {
         const { accessToken, shopeeShopId } = await getValidAccessToken(shop.id);
-        const catalog = await getShopeeCatalog(shop.id, accessToken, shopeeShopId);
+        const catalog = await getShopeeCatalog(shop.id, accessToken, shopeeShopId, forceRefresh);
 
         const costs = await prisma.product.findMany({ where: { shopId: shop.id } });
         const costByItemId = new Map(costs.map((c) => [c.shopeeItemId, c]));

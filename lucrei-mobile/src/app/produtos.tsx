@@ -157,23 +157,26 @@ export default function ProdutosScreen() {
     [products, edits]
   );
 
-  const load = useCallback(async () => {
-    if (!token || !shopsLoaded) return;
-    if (!selectedShop) {
-      setLoadState('no-shop');
-      return;
-    }
-    setLoadState((prev) => (prev === 'ready' ? prev : 'loading'));
-    try {
-      const { products } = await getShopeeProducts(token, selectedShop.id, PERIOD_TO_API[period]);
-      setProducts(products);
-      setEdits({});
-      setSelected(new Set());
-      setLoadState('ready');
-    } catch {
-      setLoadState('error');
-    }
-  }, [token, shopsLoaded, selectedShop, period]);
+  const load = useCallback(
+    async (force = false) => {
+      if (!token || !shopsLoaded) return;
+      if (!selectedShop) {
+        setLoadState('no-shop');
+        return;
+      }
+      setLoadState((prev) => (prev === 'ready' ? prev : 'loading'));
+      try {
+        const { products } = await getShopeeProducts(token, selectedShop.id, PERIOD_TO_API[period], force);
+        setProducts(products);
+        setEdits({});
+        setSelected(new Set());
+        setLoadState('ready');
+      } catch {
+        setLoadState('error');
+      }
+    },
+    [token, shopsLoaded, selectedShop, period]
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -183,7 +186,10 @@ export default function ProdutosScreen() {
 
   async function handleRefresh() {
     setRefreshing(true);
-    await load();
+    // force: true - "puxar pra atualizar" deve trazer dado fresco da Shopee,
+    // ignorando o cache de catálogo (que existe só pra evitar refazer a
+    // cadeia de chamadas à Shopee toda vez que a tela ganha foco de novo).
+    await load(true);
     setRefreshing(false);
   }
 
@@ -341,7 +347,7 @@ export default function ProdutosScreen() {
       {loadState === 'error' && (
         <View className="mt-8 items-center gap-3">
           <Text className="text-sm text-lucrei-textMuted">Não foi possível carregar seus produtos.</Text>
-          <Pressable onPress={load} className="rounded-xl bg-lucrei-surface px-4 py-2">
+          <Pressable onPress={() => load()} className="rounded-xl bg-lucrei-surface px-4 py-2">
             <Text className="text-sm text-lucrei-gold">Tentar de novo</Text>
           </Pressable>
         </View>

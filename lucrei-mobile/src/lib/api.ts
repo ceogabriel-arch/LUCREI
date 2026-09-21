@@ -161,8 +161,9 @@ export type ShopeeProduct = {
   orders: number;
 };
 
-export function getShopeeProducts(token: string, shopId: string, period: Period) {
-  return request<{ products: ShopeeProduct[] }>(`/shops/${shopId}/shopee-products?period=${period}`, {
+export function getShopeeProducts(token: string, shopId: string, period: Period, force = false) {
+  const query = `period=${period}${force ? '&force=true' : ''}`;
+  return request<{ products: ShopeeProduct[] }>(`/shops/${shopId}/shopee-products?${query}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
 }
