@@ -116,6 +116,10 @@ const ProductRow = memo(function ProductRow({
 
 export default function ProdutosScreen() {
   const { state } = useAuth();
+  // Token em vez do objeto "state" inteiro: refreshUser() troca "state" por
+  // um objeto novo a cada chamada (mesmo com os mesmos dados), o que fazia
+  // "load" ser recriado e a lista recarregar de novo sem necessidade.
+  const token = state.status === 'authenticated' ? state.token : null;
   const Colors = useColors();
   const { selectedShop, loaded: shopsLoaded } = useSelectedShop();
   const { period, setPeriod } = usePeriod();
@@ -154,14 +158,14 @@ export default function ProdutosScreen() {
   );
 
   const load = useCallback(async () => {
-    if (state.status !== 'authenticated' || !shopsLoaded) return;
+    if (!token || !shopsLoaded) return;
     if (!selectedShop) {
       setLoadState('no-shop');
       return;
     }
     setLoadState((prev) => (prev === 'ready' ? prev : 'loading'));
     try {
-      const { products } = await getShopeeProducts(state.token, selectedShop.id, PERIOD_TO_API[period]);
+      const { products } = await getShopeeProducts(token, selectedShop.id, PERIOD_TO_API[period]);
       setProducts(products);
       setEdits({});
       setSelected(new Set());
@@ -169,7 +173,7 @@ export default function ProdutosScreen() {
     } catch {
       setLoadState('error');
     }
-  }, [state, shopsLoaded, selectedShop, period]);
+  }, [token, shopsLoaded, selectedShop, period]);
 
   useFocusEffect(
     useCallback(() => {

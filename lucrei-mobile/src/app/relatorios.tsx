@@ -111,6 +111,10 @@ function ProductRankRow({ product }: { product: ShopeeProduct }) {
 
 export default function RelatoriosScreen() {
   const { state } = useAuth();
+  // Token em vez do objeto "state" inteiro: refreshUser() troca "state" por
+  // um objeto novo a cada chamada (mesmo com os mesmos dados), o que
+  // recarregava o relatório de novo sem necessidade.
+  const token = state.status === 'authenticated' ? state.token : null;
   const Colors = useColors();
   const { selectedShop, loaded: shopsLoaded } = useSelectedShop();
   const { period, setPeriod } = usePeriod();
@@ -120,7 +124,7 @@ export default function RelatoriosScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
-    if (state.status !== 'authenticated' || !shopsLoaded) return;
+    if (!token || !shopsLoaded) return;
     if (!selectedShop) {
       setLoadState('no-shop');
       return;
@@ -129,8 +133,8 @@ export default function RelatoriosScreen() {
     try {
       const apiPeriod = PERIOD_TO_API[period];
       const [summaryRes, productsRes] = await Promise.all([
-        getSummary(state.token, selectedShop.id, apiPeriod),
-        getShopeeProducts(state.token, selectedShop.id, apiPeriod),
+        getSummary(token, selectedShop.id, apiPeriod),
+        getShopeeProducts(token, selectedShop.id, apiPeriod),
       ]);
       setSummary(summaryRes);
       setProducts(productsRes.products);
@@ -138,7 +142,7 @@ export default function RelatoriosScreen() {
     } catch {
       setLoadState('error');
     }
-  }, [state, shopsLoaded, selectedShop, period]);
+  }, [token, shopsLoaded, selectedShop, period]);
 
   useEffect(() => {
     load();

@@ -196,6 +196,12 @@ function OrderRow({ order, onPress, locked }: { order: Order; onPress: () => voi
 
 export default function PedidosScreen() {
   const { state } = useAuth();
+  // Token em vez do objeto "state" inteiro: refreshUser() troca "state" por
+  // um objeto novo a cada chamada (mesmo com os mesmos dados). Como "load"
+  // aqui embaixo roda direto num useEffect(() => load(), [load]), qualquer
+  // refresh de usuário em outro lugar do app (ex: polling da tela de Pix)
+  // recarregava os pedidos de novo sem necessidade.
+  const token = state.status === 'authenticated' ? state.token : null;
   const Colors = useColors();
   const { selectedShop, loaded: shopsLoaded } = useSelectedShop();
   const { period, setPeriod } = usePeriod();
@@ -214,7 +220,7 @@ export default function PedidosScreen() {
   );
 
   const load = useCallback(async () => {
-    if (state.status !== 'authenticated' || !shopsLoaded) return;
+    if (!token || !shopsLoaded) return;
     if (!selectedShop) {
       setLoadState('no-shop');
       return;
@@ -222,8 +228,8 @@ export default function PedidosScreen() {
     setLoadState((prev) => (prev === 'ready' ? prev : 'loading'));
     try {
       const [{ orders }, salesUsage] = await Promise.all([
-        getOrders(state.token, selectedShop.id, PERIOD_TO_API[period]),
-        getSalesUsage(state.token),
+        getOrders(token, selectedShop.id, PERIOD_TO_API[period]),
+        getSalesUsage(token),
       ]);
       setOrders(orders);
       setUsage(salesUsage);
@@ -231,7 +237,7 @@ export default function PedidosScreen() {
     } catch {
       setLoadState('error');
     }
-  }, [state, shopsLoaded, selectedShop, period]);
+  }, [token, shopsLoaded, selectedShop, period]);
 
   useEffect(() => {
     load();

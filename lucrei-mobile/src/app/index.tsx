@@ -98,22 +98,28 @@ export default function InicioScreen() {
     }, [refreshShops, refreshUser])
   );
 
+  // Token em vez do objeto "state" inteiro: refreshUser() troca "state" por
+  // um objeto novo a cada chamada (mesmo com os mesmos dados) - depender
+  // dele aqui fazia o resumo ser recalculado de novo toda vez que a tela
+  // ganhava foco, mesmo sem nada ter mudado de verdade.
+  const token = state.status === 'authenticated' ? state.token : null;
+
   const loadSummary = useCallback(async () => {
-    if (state.status !== 'authenticated' || !selectedShop) {
+    if (!token || !selectedShop) {
       setSummary(null);
       setSummaryLoading(false);
       return;
     }
     setSummaryLoading(true);
     try {
-      const s = await getSummary(state.token, selectedShop.id, PERIOD_TO_API[period]);
+      const s = await getSummary(token, selectedShop.id, PERIOD_TO_API[period]);
       setSummary(s);
     } catch {
       setSummary(null);
     } finally {
       setSummaryLoading(false);
     }
-  }, [state, selectedShop, period]);
+  }, [token, selectedShop, period]);
 
   useEffect(() => {
     setSummary(null);

@@ -19,11 +19,17 @@ export function SelectedShopProvider({ children }: PropsWithChildren) {
   const [shops, setShops] = useState<Shop[]>([]);
   const [selectedShopId, setSelectedShopIdState] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  // refreshUser() troca o objeto "state" inteiro por um novo a cada chamada,
+  // mesmo com os mesmos dados (ver auth.tsx) - depender de "state" aqui
+  // fazia esse refresh (e tudo que depende dele, tipo o resumo da tela de
+  // Início) rodar de novo sempre que QUALQUER coisa atualizasse o usuário,
+  // não só quando o token/login realmente mudava.
+  const token = state.status === 'authenticated' ? state.token : null;
 
   const refresh = useCallback(async () => {
-    if (state.status !== 'authenticated') return;
+    if (!token) return;
     try {
-      const { shops } = await getShops(state.token);
+      const { shops } = await getShops(token);
       setShops(shops);
       setSelectedShopIdState((prev) => (prev && shops.some((s) => s.id === prev) ? prev : (shops[0]?.id ?? null)));
     } catch {
@@ -31,7 +37,7 @@ export function SelectedShopProvider({ children }: PropsWithChildren) {
     } finally {
       setLoaded(true);
     }
-  }, [state]);
+  }, [token]);
 
   useEffect(() => {
     if (state.status !== 'authenticated') {
