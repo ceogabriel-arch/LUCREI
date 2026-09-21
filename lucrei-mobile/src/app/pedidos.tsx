@@ -276,10 +276,10 @@ export default function PedidosScreen() {
       // eslint-disable-next-line no-constant-condition
       while (true) {
         await new Promise((r) => setTimeout(r, 3000));
-        if (state.status !== 'authenticated' || !selectedShop) break;
+        if (!token || !selectedShop) break;
         let status;
         try {
-          status = await getSyncStatus(state.token, selectedShop.id);
+          status = await getSyncStatus(token, selectedShop.id);
         } catch (err) {
           consecutiveFailures++;
           if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
@@ -317,13 +317,13 @@ export default function PedidosScreen() {
     } finally {
       setSyncing(false);
     }
-  }, [state, selectedShop, load, showToast]);
+  }, [token, selectedShop, load, showToast]);
 
   // Se a tela recarregar no meio de um sync que já estava rodando, volta a
   // acompanhar em vez de deixar o botão parado sem refletir o servidor.
   useEffect(() => {
-    if (state.status !== 'authenticated' || !selectedShop) return;
-    getSyncStatus(state.token, selectedShop.id)
+    if (!token || !selectedShop) return;
+    getSyncStatus(token, selectedShop.id)
       .then((status) => {
         if (status.status === 'running') pollSyncUntilDone();
       })
@@ -332,9 +332,9 @@ export default function PedidosScreen() {
   }, [selectedShop?.id]);
 
   async function handleSync() {
-    if (state.status !== 'authenticated' || !selectedShop) return;
+    if (!token || !selectedShop) return;
     try {
-      await startSync(state.token, selectedShop.id);
+      await startSync(token, selectedShop.id);
       pollSyncUntilDone();
     } catch (err) {
       showToast({

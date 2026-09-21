@@ -275,13 +275,18 @@ export function AchievementsCard({
   const [claimedTiers, setClaimedTiers] = useState<number[]>([]);
   const [claimingTier, setClaimingTier] = useState<Tier | null>(null);
   const monthsSinceSignup = (Date.now() - new Date(accountCreatedAt).getTime()) / MS_PER_MONTH;
+  // Token em vez do objeto "authState" inteiro: refreshUser() troca "state"
+  // por um objeto novo a cada chamada (mesmo com os mesmos dados) - depender
+  // dele aqui refazia essa busca de novo toda vez que a tela Início ganhava
+  // foco, mesmo sem o login ter mudado.
+  const token = authState.status === 'authenticated' ? authState.token : null;
 
   useEffect(() => {
-    if (authState.status !== 'authenticated') return;
-    getClaimedRewardTiers(authState.token)
+    if (!token) return;
+    getClaimedRewardTiers(token)
       .then((r) => setClaimedTiers(r.claimedTiers))
       .catch(() => {});
-  }, [authState]);
+  }, [token]);
 
   const unlockedFlags = TIERS.map((_, i) => isUnlocked(i, totalProfit, monthsSinceSignup));
   const currentIndex = unlockedFlags.lastIndexOf(true);
