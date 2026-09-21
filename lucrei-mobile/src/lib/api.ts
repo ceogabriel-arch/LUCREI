@@ -239,10 +239,15 @@ export function syncOrders(token: string, shopId: string) {
 // plano no servidor (pode levar minutos numa loja com muito histórico, tempo
 // demais pra segurar numa requisição só) - startSyncHistory só dispara,
 // getSyncHistoryStatus é o que o app usa pra acompanhar (polling).
+// Endpoint é "/backfill", não ".../sync/history" - bloqueadores de anúncio
+// costumam ter regra pra barrar qualquer URL com "/sync/" no caminho (usado
+// por ad-tech pra sincronizar cookies), e como isso aqui é consultado a cada
+// poucos segundos por minutos, esse endpoint concentra muito mais chamadas
+// que qualquer outro da página - exatamente o que aconteceu em produção.
 export type SyncHistoryStatus = { status: 'idle' | 'running' | 'done' | 'error'; ordersSynced: number; error?: string | null };
 
 export function startSyncHistory(token: string, shopId: string) {
-  return request<SyncHistoryStatus>(`/shops/${shopId}/sync/history`, {
+  return request<SyncHistoryStatus>(`/shops/${shopId}/backfill`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
     body: '{}',
@@ -250,7 +255,7 @@ export function startSyncHistory(token: string, shopId: string) {
 }
 
 export function getSyncHistoryStatus(token: string, shopId: string) {
-  return request<SyncHistoryStatus>(`/shops/${shopId}/sync/history`, {
+  return request<SyncHistoryStatus>(`/shops/${shopId}/backfill`, {
     headers: { Authorization: `Bearer ${token}` },
   });
 }

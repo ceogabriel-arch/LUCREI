@@ -83,9 +83,15 @@ export async function syncRoutes(app: FastifyInstance) {
   // facilmente passa de 1 minuto no total (múltiplas janelas de 15 dias,
   // cada uma com várias chamadas à Shopee), tempo demais pra segurar numa
   // única requisição sem esbarrar em timeout de proxy/navegador. O app
-  // acompanha via GET .../sync/history abaixo.
+  // acompanha via GET .../backfill abaixo.
+  // "backfill" em vez de ".../sync/history": bloqueadores de anúncio/rastreio
+  // (uBlock, AdBlock etc.) usam listas que barram qualquer URL com "/sync/"
+  // no caminho, porque empresas de ad-tech usam esse padrão pra sincronizar
+  // cookies entre sites - isso derrubava esse endpoint (com poll a cada 4s,
+  // por minutos, ele aparecia MUITO mais que qualquer outra chamada da
+  // página, então o efeito ficava concentrado só aqui).
   app.post<{ Params: { shopId: string } }>(
-    '/shops/:shopId/sync/history',
+    '/shops/:shopId/backfill',
     { onRequest: [app.authenticate] },
     async (request, reply) => {
       const shop = await prisma.shop.findFirst({
@@ -114,7 +120,7 @@ export async function syncRoutes(app: FastifyInstance) {
   );
 
   app.get<{ Params: { shopId: string } }>(
-    '/shops/:shopId/sync/history',
+    '/shops/:shopId/backfill',
     { onRequest: [app.authenticate] },
     async (request, reply) => {
       const shop = await prisma.shop.findFirst({
