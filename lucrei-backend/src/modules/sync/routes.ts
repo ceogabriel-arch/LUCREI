@@ -83,7 +83,19 @@ export async function syncRoutes(app: FastifyInstance) {
         return reply.status(404).send({ message: 'Loja não encontrada.' });
       }
 
-      if (shop.historyBackfillStatus === 'running') {
+      // Cada bloco de 15 dias agora tem teto de tempo (ver WINDOW_TIMEOUT_MS
+      // em service.ts), então em condições normais "running" nunca fica
+      // parado por mais que alguns minutos. Se mesmo assim continuar
+      // "running" por muito tempo (processo reiniciado no meio, por
+      // exemplo), trata como travado e deixa tentar de novo em vez de
+      // prender o botão pra sempre.
+      const STALE_RUNNING_MS = 20 * 60 * 1000;
+      const isStale =
+        shop.historyBackfillStatus === 'running' &&
+        shop.historyBackfillStartedAt != null &&
+        Date.now() - shop.historyBackfillStartedAt.getTime() > STALE_RUNNING_MS;
+
+      if (shop.historyBackfillStatus === 'running' && !isStale) {
         return reply.send({ status: 'running', ordersSynced: shop.historyBackfillSynced ?? 0 });
       }
 

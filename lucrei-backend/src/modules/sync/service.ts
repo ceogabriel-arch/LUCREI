@@ -101,13 +101,53 @@ export async function syncOneOrder(shopId: string, orderSn: string, orderStatus:
 // histórico (mais abaixo) precisam varrer o tempo em blocos desse tamanho.
 const WINDOW_SECONDS = 15 * 24 * 60 * 60;
 
-async function syncWindow(shopId: string, shopeeShopId: number, accessToken: string, timeFrom: number, timeTo: number) {
+// Teto de segurança contra um cursor que nunca avança de verdade (a Shopee
+// devolver "more: true" com o mesmo next_cursor, por exemplo) - sem isso essa
+// paginação girava pra sempre, travando o backfill inteiro num bloco só sem
+// nenhum erro pra pegar e seguir adiante.
+const MAX_PAGES_PER_WINDOW = 60;
+
+// fetchJson já tem timeout por chamada (15s), mas nada limitava o tempo
+// total de UM bloco de 15 dias - uma loja com muitos pedidos nesse bloco (ou
+// a Shopee respondendo devagar em várias chamadas seguidas) podia deixar o
+// backfill parado ali por muito tempo sem sinal de vida nenhum pro app.
+const WINDOW_TIMEOUT_MS = 3 * 60 * 1000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      }
+    );
+  });
+}
+
+async function syncWindowUnbounded(
+  shopId: string,
+  shopeeShopId: number,
+  accessToken: string,
+  timeFrom: number,
+  timeTo: number
+) {
   let cursor = '';
   let hasMore = true;
   let ordersSeen = 0;
   let ordersSynced = 0;
+  let pages = 0;
 
   while (hasMore) {
+    pages++;
+    if (pages > MAX_PAGES_PER_WINDOW) {
+      throw new Error(`Bloco com mais de ${MAX_PAGES_PER_WINDOW} páginas de pedidos - parando por segurança.`);
+    }
+
     const page = await getOrderList(accessToken, shopeeShopId, { timeFrom, timeTo, cursor });
     ordersSeen += page.order_list.length;
 
@@ -139,6 +179,14 @@ async function syncWindow(shopId: string, shopeeShopId: number, accessToken: str
   }
 
   return { ordersSeen, ordersSynced };
+}
+
+async function syncWindow(shopId: string, shopeeShopId: number, accessToken: string, timeFrom: number, timeTo: number) {
+  return withTimeout(
+    syncWindowUnbounded(shopId, shopeeShopId, accessToken, timeFrom, timeTo),
+    WINDOW_TIMEOUT_MS,
+    `Bloco de pedidos demorou mais de ${WINDOW_TIMEOUT_MS / 60000} minuto(s) pra responder.`
+  );
 }
 
 export async function syncShopOrders(shopId: string) {
