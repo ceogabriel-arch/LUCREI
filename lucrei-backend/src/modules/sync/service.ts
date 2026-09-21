@@ -165,16 +165,30 @@ export async function syncShopOrdersHistory(shopId: string, sinceDate: Date) {
   let windowEnd = Math.floor(Date.now() / 1000);
   let ordersSeen = 0;
   let ordersSynced = 0;
+  let windowsFailed = 0;
+  let lastError: unknown = null;
 
   while (windowEnd > sinceSec) {
     const windowStart = Math.max(sinceSec, windowEnd - WINDOW_SECONDS);
-    const result = await syncWindow(shopId, shopeeShopId, accessToken, windowStart, windowEnd);
-    ordersSeen += result.ordersSeen;
-    ordersSynced += result.ordersSynced;
+    try {
+      const result = await syncWindow(shopId, shopeeShopId, accessToken, windowStart, windowEnd);
+      ordersSeen += result.ordersSeen;
+      ordersSynced += result.ordersSynced;
+    } catch (err) {
+      // Um bloco de 15 dias falhar (ex: janela antiga demais pra Shopee
+      // aceitar) não pode derrubar o backfill inteiro - registra e segue pros
+      // blocos mais recentes, que são os que mais importam.
+      windowsFailed++;
+      lastError = err;
+    }
     windowEnd = windowStart;
   }
 
   await prisma.shop.update({ where: { id: shopId }, data: { lastSyncedAt: new Date() } });
 
-  return { ordersSeen, ordersSynced };
+  if (ordersSynced === 0 && windowsFailed > 0 && lastError instanceof Error) {
+    throw lastError;
+  }
+
+  return { ordersSeen, ordersSynced, windowsFailed };
 }

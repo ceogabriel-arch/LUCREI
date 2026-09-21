@@ -89,7 +89,13 @@ export async function syncRoutes(app: FastifyInstance) {
         return result;
       } catch (err) {
         app.log.error(err);
-        return reply.status(502).send({ message: 'Falha ao buscar o histórico de pedidos na Shopee.' });
+        // Mensagem real da Shopee embutida (endpoint autenticado, escopado à
+        // loja do usuário) - genérica só dizia "falhou", sem dar pista do que
+        // corrigir.
+        const detail = err instanceof Error ? err.message : undefined;
+        return reply.status(502).send({
+          message: detail ? `Falha ao buscar o histórico de pedidos na Shopee: ${detail}` : 'Falha ao buscar o histórico de pedidos na Shopee.',
+        });
       }
     }
   );
