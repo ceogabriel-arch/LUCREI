@@ -21,7 +21,13 @@ export async function connectShopeeStore(token: string): Promise<ConnectShopeeRe
     throw new ApiError(body?.message ?? 'Não foi possível iniciar a conexão com a Shopee.');
   }
 
-  const result = await WebBrowser.openAuthSessionAsync(body.url, returnUrl);
+  // Na web, expo-web-browser abre isso num popup de 500x650 por padrão -
+  // apertado demais pro fluxo da Shopee (login, SMS, seletor de conta,
+  // tela de autorização). Nativo ignora essas opções (usa o browser do
+  // sistema), então é seguro passar sempre.
+  const result = await WebBrowser.openAuthSessionAsync(body.url, returnUrl, {
+    windowFeatures: { width: 620, height: 820 },
+  });
   if (result.type !== 'success') {
     return { status: 'cancelled' };
   }
