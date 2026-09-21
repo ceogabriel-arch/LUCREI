@@ -14,7 +14,11 @@ export async function summaryRoutes(app: FastifyInstance) {
       if (!shop) return reply.status(404).send({ message: 'Loja não encontrada.' });
 
       const period = request.query.period ?? '30d';
-      const start = rangeStart(period);
+      // "all" (usado pro lucro vitalício das recompensas) não pode contar
+      // pedidos de antes de conectar a loja no Lucrei - senão uma loja com
+      // histórico de vendas na Shopee desbloquearia recompensa na hora de
+      // conectar, sem o usuário ter usado o app pra nada ainda.
+      const start = period === 'all' ? shop.connectedAt : rangeStart(period);
 
       const orders = await prisma.order.findMany({
         where: { shopId: shop.id, orderDate: { gte: start } },

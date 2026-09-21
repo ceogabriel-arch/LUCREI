@@ -77,11 +77,30 @@ export async function rewardsRoutes(app: FastifyInstance) {
       const unlockedByAge = tierThreshold === FIRST_TIER_THRESHOLD && monthsSinceSignup >= 3;
 
       if (!unlockedByAge) {
-        const { _sum } = await prisma.orderLineItem.aggregate({
-          _sum: { profit: true },
-          where: { order: { shop: { userId: user.id } } },
+        // Só conta lucro de pedidos a partir de quando cada loja foi
+        // conectada no Lucrei - histórico de vendas anterior à conexão não
+        // pode destravar recompensa (ver mesmo corte em summary/routes.ts).
+        const shops = await prisma.shop.findMany({
+          where: { userId: user.id },
+          select: { id: true, connectedAt: true },
         });
-        const totalProfit = Number(_sum.profit ?? 0);
+
+        const totalProfit =
+          shops.length === 0
+            ? 0
+            : Number(
+                (
+                  await prisma.orderLineItem.aggregate({
+                    _sum: { profit: true },
+                    where: {
+                      OR: shops.map((shop) => ({
+                        order: { shopId: shop.id, orderDate: { gte: shop.connectedAt } },
+                      })),
+                    },
+                  })
+                )._sum.profit ?? 0
+              );
+
         if (totalProfit < tierThreshold) {
           return reply.status(400).send({ message: 'Você ainda não desbloqueou essa recompensa.' });
         }
