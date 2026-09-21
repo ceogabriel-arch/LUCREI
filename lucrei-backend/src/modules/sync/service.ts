@@ -170,10 +170,10 @@ async function syncWindowUnbounded(
       // Cada pedido faz sua própria chamada de get_escrow_detail (a Shopee só
       // aceita um order_sn por vez ali) mais algumas idas ao banco - processar
       // um de cada vez fazia a sincronização inteira escalar linearmente com
-      // o número de pedidos, dominada por ida-e-volta de rede. Mesmo limite
-      // de 10 já usado pra get_model_list em products/routes.ts, pra não
-      // estourar o rate limit da Shopee.
-      await mapLimit(eligibleDetails, 10, (detail) =>
+      // o número de pedidos, dominada por ida-e-volta de rede. 15 (subiu de
+      // 10) pra loja de alto volume não passar tanto tempo num bloco só sem
+      // estourar o rate limit da Shopee de vez.
+      await mapLimit(eligibleDetails, 15, (detail) =>
         processOrder(shopId, shopeeShopId, accessToken, detail.order_sn, detail.order_status, detail.create_time)
       );
       ordersSynced += eligibleDetails.length;

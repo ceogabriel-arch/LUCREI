@@ -396,14 +396,23 @@ function ReportRangeCard({
           <Text className="mt-1.5 text-xs text-lucrei-textMuted">
             {backfillSynced} {backfillSynced === 1 ? 'pedido encontrado' : 'pedidos encontrados'} até agora
           </Text>
+          <Text className="mt-2 text-xs text-lucrei-textMuted">
+            Pode levar bastante tempo em lojas com muitas vendas — pode sair dessa tela e voltar depois, o
+            progresso continua no servidor.
+          </Text>
         </View>
       ) : (
-        <Pressable
-          onPress={handleBackfill}
-          className="mt-2 flex-row items-center justify-center gap-2 rounded-xl px-4 py-3">
-          <Ionicons name="time-outline" size={16} color={Colors.textMuted} />
-          <Text className="text-xs text-lucrei-textMuted">Sincronizar histórico completo (último ano)</Text>
-        </Pressable>
+        <View className="mt-2">
+          <Pressable
+            onPress={handleBackfill}
+            className="flex-row items-center justify-center gap-2 rounded-xl px-4 py-3">
+            <Ionicons name="time-outline" size={16} color={Colors.textMuted} />
+            <Text className="text-xs text-lucrei-textMuted">Sincronizar histórico completo (último ano)</Text>
+          </Pressable>
+          <Text className="mt-1 text-center text-xs text-lucrei-textMuted">
+            Busca pedido por pedido na Shopee - em lojas com muitas vendas pode demorar vários minutos.
+          </Text>
+        </View>
       )}
     </View>
   );
