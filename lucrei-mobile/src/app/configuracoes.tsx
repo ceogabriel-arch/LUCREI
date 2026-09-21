@@ -106,14 +106,22 @@ function PlanSection({ user }: { user: AuthUser }) {
   const [canceling, setCanceling] = useState(false);
 
   const isCanceled = user.subscriptionStatus === 'canceled';
+  const isTrialing = user.subscriptionStatus === 'trialing';
 
   function confirmCancel() {
+    // Cancelar durante o teste é diferente de cancelar um plano pago: o
+    // teste é só uma vez por loja pra sempre (regra pra impedir reiniciar
+    // teste trocando de conta), então encerrar cedo é uma decisão
+    // permanente sem nenhum benefício - a mensagem genérica de "pode
+    // assinar de novo quando quiser" escondia isso.
     showAlert(
-      'Cancelar plano?',
-      'Você perde acesso aos recursos do plano ao final do período atual. Você pode assinar novamente quando quiser.',
+      isTrialing ? 'Encerrar o teste grátis?' : 'Cancelar plano?',
+      isTrialing
+        ? 'Você perde o acesso na hora, antes do fim previsto do teste. Como o teste grátis vale só uma vez por loja, depois de encerrado você não pode testar de novo - só assinar direto.'
+        : 'Você perde acesso aos recursos do plano ao final do período atual. Você pode assinar novamente quando quiser.',
       [
         { text: 'Voltar', style: 'cancel' },
-        { text: 'Cancelar plano', style: 'destructive', onPress: handleCancel },
+        { text: isTrialing ? 'Encerrar teste' : 'Cancelar plano', style: 'destructive', onPress: handleCancel },
       ]
     );
   }
@@ -159,7 +167,9 @@ function PlanSection({ user }: { user: AuthUser }) {
             {canceling ? (
               <ActivityIndicator size="small" color={Colors.danger} />
             ) : (
-              <Text className="text-sm font-semibold text-lucrei-danger">Cancelar plano</Text>
+              <Text className="text-sm font-semibold text-lucrei-danger">
+                {isTrialing ? 'Encerrar teste' : 'Cancelar plano'}
+              </Text>
             )}
           </Pressable>
         )}
