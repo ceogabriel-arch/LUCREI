@@ -202,9 +202,26 @@ export async function runHistoryBackfill(shopId: string, sinceDate: Date) {
       throw lastError;
     }
 
+    // Backfill parcial (alguns blocos de 15 dias falharam, mas outros
+    // trouxeram pedido) ainda termina como "done" - senão um erro isolado
+    // num bloco antigo faria parecer que nada funcionou. Mas sem registrar
+    // qual foi o erro, meses que ficaram sem dado não têm explicação nenhuma
+    // visível pra ninguém depois.
+    const partialFailureNote =
+      windowsFailed > 0
+        ? `${windowsFailed} bloco(s) de 15 dias não puderam ser buscados (último erro: ${
+            lastError instanceof Error ? lastError.message : 'desconhecido'
+          }). Meses cobertos só por esses blocos podem ter ficado sem pedido.`
+        : null;
+
     await prisma.shop.update({
       where: { id: shopId },
-      data: { historyBackfillStatus: 'done', historyBackfillDoneAt: new Date(), lastSyncedAt: new Date() },
+      data: {
+        historyBackfillStatus: 'done',
+        historyBackfillDoneAt: new Date(),
+        lastSyncedAt: new Date(),
+        historyBackfillError: partialFailureNote,
+      },
     });
   } catch (err) {
     await prisma.shop.update({

@@ -231,11 +231,13 @@ function ReportRangeCard({
         const status = await getSyncHistoryStatus(token, shopId);
         setBackfillSynced(status.ordersSynced);
         if (status.status === 'done') {
-          showAlert(
-            'Histórico sincronizado',
+          const base =
             status.ordersSynced === 0
               ? 'Nenhum pedido novo encontrado no último ano.'
-              : `${status.ordersSynced} pedido(s) do último ano foram trazidos pro Lucrei.`
+              : `${status.ordersSynced} pedido(s) do último ano foram trazidos pro Lucrei.`;
+          showAlert(
+            'Histórico sincronizado',
+            status.error ? `${base}\n\n${status.error}` : base
           );
           await load();
           break;

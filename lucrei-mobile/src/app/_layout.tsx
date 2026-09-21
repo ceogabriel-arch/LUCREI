@@ -9,6 +9,7 @@ import { View } from 'react-native';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 import AppTabs from '@/components/app-tabs';
+import { AlertHost } from '@/components/alert-host';
 import { DesktopShell } from '@/components/desktop-shell';
 import { LoginScreen } from '@/components/login-screen';
 import { SignupScreen } from '@/components/signup-screen';
@@ -100,6 +101,7 @@ function ThemedNavigation() {
           <SelectedShopProvider>
             <PeriodProvider>
               <RootNavigator />
+              <AlertHost />
             </PeriodProvider>
           </SelectedShopProvider>
         </AuthProvider>

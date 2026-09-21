@@ -1,37 +1,32 @@
-import { Alert, Platform } from 'react-native';
-
-type AlertButton = {
+export type AlertButton = {
   text: string;
   onPress?: () => void;
   style?: 'default' | 'cancel' | 'destructive';
 };
 
-// Alert.alert() do react-native-web é um no-op total (não mostra nada e
-// nunca chama os callbacks dos botões) - qualquer confirmação (excluir
-// conta, desconectar loja, aplicar custo em lote...) simplesmente não fazia
-// nada quando usada pelo navegador. Aqui trocamos por window.alert/confirm
-// no web, mantendo o Alert nativo no app.
+export type AlertState = { title: string; message?: string; buttons: AlertButton[] };
+
+// showAlert() é chamado de qualquer lugar (fora de componentes React às
+// vezes), então não pode depender de um hook - guarda quem está "escutando"
+// (o AlertHost, montado uma vez em _layout.tsx) e delega pra ele.
+let handler: ((state: AlertState) => void) | null = null;
+
+export function registerAlertHandler(fn: ((state: AlertState) => void) | null) {
+  handler = fn;
+}
+
+// Substitui tanto o Alert.alert nativo (feio/inconsistente com o resto do
+// app) quanto window.alert/confirm no web (Alert.alert é um no-op ali) por
+// um modal com a cara do Lucrei, igual nas duas plataformas.
 export function showAlert(title: string, message?: string, buttons?: AlertButton[]) {
-  if (Platform.OS !== 'web') {
-    Alert.alert(title, message, buttons);
-    return;
-  }
-
   const list = buttons && buttons.length > 0 ? buttons : [{ text: 'OK' } as AlertButton];
-  const text = message ? `${title}\n\n${message}` : title;
-
-  if (list.length === 1) {
-    window.alert(text);
-    list[0].onPress?.();
+  if (handler) {
+    handler({ title, message, buttons: list });
     return;
   }
-
-  const confirmButton = list.find((b) => b.style !== 'cancel') ?? list[list.length - 1];
-  const cancelButton = list.find((b) => b.style === 'cancel');
-
-  if (window.confirm(text)) {
-    confirmButton.onPress?.();
-  } else {
-    cancelButton?.onPress?.();
+  // AlertHost ainda não montou (não devia acontecer em uso normal) - melhor
+  // um alert feio do que a mensagem sumir sem o usuário nunca ver.
+  if (typeof window !== 'undefined' && typeof window.alert === 'function') {
+    window.alert(message ? `${title}\n\n${message}` : title);
   }
 }
