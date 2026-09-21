@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, Dimensions, Modal, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -239,10 +239,10 @@ export default function PedidosScreen() {
     }
   }, [token, shopsLoaded, selectedShop, period]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
-
+  // Só useFocusEffect (dispara no mount e a cada vez que a tela ganha foco) -
+  // um useEffect(load, [load]) junto disparava a MESMA busca duas vezes em
+  // paralelo (getOrders + getSalesUsage repetidos) toda vez que a tela abria
+  // ou o período mudava, dobrando a espera à toa.
   useFocusEffect(
     useCallback(() => {
       load();
@@ -322,6 +322,12 @@ export default function PedidosScreen() {
           );
         })}
       </View>
+
+      {loadState === 'ready' && (
+        <Text className="mt-3 text-xs text-lucrei-textMuted">
+          {orders.length} {orders.length === 1 ? 'pedido' : 'pedidos'} nesse período
+        </Text>
+      )}
 
       {loadState === 'loading' && (
         <View className="mt-10 items-center">
