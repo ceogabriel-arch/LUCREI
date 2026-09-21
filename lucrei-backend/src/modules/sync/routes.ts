@@ -16,13 +16,15 @@ const WARNING_THRESHOLD = 0.8;
 // trazer dado a mais.
 const HISTORY_BACKFILL_DAYS = 365;
 
-// Cada bloco de 15 dias tem teto de tempo (ver WINDOW_TIMEOUT_MS em
-// service.ts), então em condições normais "running" nunca fica parado por
-// mais que alguns minutos. Se mesmo assim continuar "running" por muito
-// tempo (processo reiniciado no meio de um backfill, por exemplo), trata
-// como travado - tanto o GET (pra soltar o app do polling e reabilitar o
-// botão) quanto o POST (pra deixar começar de novo) usam esse mesmo corte.
-const STALE_RUNNING_MS = 20 * 60 * 1000;
+// historyBackfillStartedAt funciona como "último sinal de vida" - é
+// reescrito a cada bloco de 15 dias processado, não só uma vez no início
+// (ver runHistoryBackfill em service.ts). Cada bloco tem teto de 10min
+// (WINDOW_TIMEOUT_MS), então o intervalo entre dois sinais de vida nunca
+// deveria passar disso - 15min de folga cobre esse teto e trata como
+// travado só quando não sobrou nenhuma dúvida (processo reiniciado no meio
+// de um backfill, por exemplo). Tanto o GET (solta o app do polling e
+// reabilita o botão) quanto o POST (deixa começar de novo) usam esse corte.
+const STALE_RUNNING_MS = 15 * 60 * 1000;
 
 function isBackfillStale(status: string | null, startedAt: Date | null) {
   return status === 'running' && startedAt != null && Date.now() - startedAt.getTime() > STALE_RUNNING_MS;

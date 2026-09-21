@@ -104,14 +104,19 @@ const WINDOW_SECONDS = 15 * 24 * 60 * 60;
 // Teto de segurança contra um cursor que nunca avança de verdade (a Shopee
 // devolver "more: true" com o mesmo next_cursor, por exemplo) - sem isso essa
 // paginação girava pra sempre, travando o backfill inteiro num bloco só sem
-// nenhum erro pra pegar e seguir adiante.
-const MAX_PAGES_PER_WINDOW = 60;
+// nenhum erro pra pegar e seguir adiante. 200 páginas = até 10 mil pedidos
+// num bloco de 15 dias, folga boa pra loja de alto volume.
+const MAX_PAGES_PER_WINDOW = 200;
 
 // fetchJson já tem timeout por chamada (15s), mas nada limitava o tempo
 // total de UM bloco de 15 dias - uma loja com muitos pedidos nesse bloco (ou
 // a Shopee respondendo devagar em várias chamadas seguidas) podia deixar o
-// backfill parado ali por muito tempo sem sinal de vida nenhum pro app.
-const WINDOW_TIMEOUT_MS = 3 * 60 * 1000;
+// backfill parado ali por muito tempo sem sinal de vida nenhum pro app. 3min
+// se mostrou baixo demais pra uma loja de alto volume de verdade (um bloco
+// com centenas de pedidos, cada um com sua própria chamada de
+// get_escrow_detail, passa disso tranquilamente) - 10min dá bem mais folga
+// sem deixar de existir um teto.
+const WINDOW_TIMEOUT_MS = 10 * 60 * 1000;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -235,7 +240,6 @@ export async function runHistoryBackfill(shopId: string, sinceDate: Date) {
       try {
         const result = await syncWindow(shopId, shopeeShopId, accessToken, windowStart, windowEnd);
         ordersSynced += result.ordersSynced;
-        await prisma.shop.update({ where: { id: shopId }, data: { historyBackfillSynced: ordersSynced } });
       } catch (err) {
         // Um bloco de 15 dias falhar (ex: janela antiga demais pra Shopee
         // aceitar) não pode derrubar o backfill inteiro - registra e segue
@@ -243,6 +247,16 @@ export async function runHistoryBackfill(shopId: string, sinceDate: Date) {
         windowsFailed++;
         lastError = err;
       }
+      // historyBackfillStartedAt também funciona como "último sinal de vida"
+      // aqui (ver isBackfillStale em routes.ts) - reescrever a cada bloco, e
+      // não só uma vez no início, evita que um backfill de loja grande (pode
+      // legitimamente passar de 20min no total, com vários blocos de 10min
+      // cada) seja confundido com travado enquanto ainda está progredindo de
+      // verdade.
+      await prisma.shop.update({
+        where: { id: shopId },
+        data: { historyBackfillSynced: ordersSynced, historyBackfillStartedAt: new Date() },
+      });
       windowEnd = windowStart;
     }
 
