@@ -16,6 +16,18 @@ const WARNING_THRESHOLD = 0.8;
 // trazer dado a mais.
 const HISTORY_BACKFILL_DAYS = 365;
 
+// Cada bloco de 15 dias tem teto de tempo (ver WINDOW_TIMEOUT_MS em
+// service.ts), então em condições normais "running" nunca fica parado por
+// mais que alguns minutos. Se mesmo assim continuar "running" por muito
+// tempo (processo reiniciado no meio de um backfill, por exemplo), trata
+// como travado - tanto o GET (pra soltar o app do polling e reabilitar o
+// botão) quanto o POST (pra deixar começar de novo) usam esse mesmo corte.
+const STALE_RUNNING_MS = 20 * 60 * 1000;
+
+function isBackfillStale(status: string | null, startedAt: Date | null) {
+  return status === 'running' && startedAt != null && Date.now() - startedAt.getTime() > STALE_RUNNING_MS;
+}
+
 export async function syncRoutes(app: FastifyInstance) {
   app.post<{ Params: { shopId: string } }>(
     '/shops/:shopId/sync',
@@ -83,17 +95,7 @@ export async function syncRoutes(app: FastifyInstance) {
         return reply.status(404).send({ message: 'Loja não encontrada.' });
       }
 
-      // Cada bloco de 15 dias agora tem teto de tempo (ver WINDOW_TIMEOUT_MS
-      // em service.ts), então em condições normais "running" nunca fica
-      // parado por mais que alguns minutos. Se mesmo assim continuar
-      // "running" por muito tempo (processo reiniciado no meio, por
-      // exemplo), trata como travado e deixa tentar de novo em vez de
-      // prender o botão pra sempre.
-      const STALE_RUNNING_MS = 20 * 60 * 1000;
-      const isStale =
-        shop.historyBackfillStatus === 'running' &&
-        shop.historyBackfillStartedAt != null &&
-        Date.now() - shop.historyBackfillStartedAt.getTime() > STALE_RUNNING_MS;
+      const isStale = isBackfillStale(shop.historyBackfillStatus, shop.historyBackfillStartedAt);
 
       if (shop.historyBackfillStatus === 'running' && !isStale) {
         return reply.send({ status: 'running', ordersSynced: shop.historyBackfillSynced ?? 0 });
@@ -117,10 +119,26 @@ export async function syncRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const shop = await prisma.shop.findFirst({
         where: { id: request.params.shopId, userId: request.user.sub },
-        select: { historyBackfillStatus: true, historyBackfillSynced: true, historyBackfillError: true },
+        select: {
+          historyBackfillStatus: true,
+          historyBackfillStartedAt: true,
+          historyBackfillSynced: true,
+          historyBackfillError: true,
+        },
       });
       if (!shop) {
         return reply.status(404).send({ message: 'Loja não encontrada.' });
+      }
+
+      // Sem isso, um backfill travado (processo reiniciado no meio, etc.)
+      // deixava o app achando "ainda tá rodando" pra sempre - reabre o
+      // botão em vez de ficar preso acompanhando algo que não existe mais.
+      if (isBackfillStale(shop.historyBackfillStatus, shop.historyBackfillStartedAt)) {
+        return reply.send({
+          status: 'error',
+          ordersSynced: shop.historyBackfillSynced ?? 0,
+          error: 'A sincronização ficou parada por muito tempo e foi interrompida. Tente de novo.',
+        });
       }
 
       return reply.send({
