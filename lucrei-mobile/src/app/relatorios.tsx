@@ -224,11 +224,32 @@ function ReportRangeCard({
 
   const pollBackfillUntilDone = useCallback(async () => {
     setBackfilling(true);
+    // O backfill roda solto no servidor por minutos - uma queda de internet
+    // passageira no meio do polling (comum em rede de celular/wifi instável)
+    // não pode derrubar o acompanhamento inteiro, já que o trabalho continua
+    // rodando do outro lado independente da conexão do navegador. Só desiste
+    // depois de várias falhas seguidas (~1min sem conseguir nem consultar).
+    const MAX_CONSECUTIVE_FAILURES = 15;
+    let consecutiveFailures = 0;
     try {
       // eslint-disable-next-line no-constant-condition
       while (true) {
         await new Promise((r) => setTimeout(r, 4000));
-        const status = await getSyncHistoryStatus(token, shopId);
+        let status;
+        try {
+          status = await getSyncHistoryStatus(token, shopId);
+        } catch (err) {
+          consecutiveFailures++;
+          if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+            showAlert(
+              'Não foi possível acompanhar a sincronização',
+              err instanceof ApiError ? err.message : 'Verifique sua internet e tente de novo.'
+            );
+            break;
+          }
+          continue;
+        }
+        consecutiveFailures = 0;
         setBackfillSynced(status.ordersSynced);
         if (status.status === 'done') {
           const base =
@@ -247,8 +268,6 @@ function ReportRangeCard({
           break;
         }
       }
-    } catch (err) {
-      showAlert('Não foi possível acompanhar a sincronização', err instanceof ApiError ? err.message : 'Tenta de novo em instantes.');
     } finally {
       setBackfilling(false);
     }
