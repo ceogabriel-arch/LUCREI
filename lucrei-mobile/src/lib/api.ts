@@ -234,14 +234,24 @@ export function syncOrders(token: string, shopId: string) {
 }
 
 // Sync normal só cobre os últimos 15 dias (limite da própria API da
-// Shopee) - esse backfill varre até 1 ano pra trás em blocos de 15 dias,
-// pra relatórios de mês/ano específico terem dado de verdade. Pode demorar
-// bastante numa loja com muito histórico.
-export function syncOrdersHistory(token: string, shopId: string) {
-  return request<SyncResult>(`/shops/${shopId}/sync/history`, {
+// Shopee) - esse backfill varre até 1 ano pra trás em blocos de 15 dias, pra
+// relatórios de mês/ano específico terem dado de verdade. Roda em segundo
+// plano no servidor (pode levar minutos numa loja com muito histórico, tempo
+// demais pra segurar numa requisição só) - startSyncHistory só dispara,
+// getSyncHistoryStatus é o que o app usa pra acompanhar (polling).
+export type SyncHistoryStatus = { status: 'idle' | 'running' | 'done' | 'error'; ordersSynced: number; error?: string | null };
+
+export function startSyncHistory(token: string, shopId: string) {
+  return request<SyncHistoryStatus>(`/shops/${shopId}/sync/history`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
     body: '{}',
+  });
+}
+
+export function getSyncHistoryStatus(token: string, shopId: string) {
+  return request<SyncHistoryStatus>(`/shops/${shopId}/sync/history`, {
+    headers: { Authorization: `Bearer ${token}` },
   });
 }
 

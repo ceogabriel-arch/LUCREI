@@ -11,7 +11,8 @@ import {
   getShopeeProducts,
   getSummary,
   getSummaryRange,
-  syncOrdersHistory,
+  getSyncHistoryStatus,
+  startSyncHistory,
   type ShopeeProduct,
   type Summary,
 } from '@/lib/api';
@@ -155,6 +156,7 @@ function ReportRangeCard({
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [backfilling, setBackfilling] = useState(false);
+  const [backfillSynced, setBackfillSynced] = useState(0);
 
   const range = useMemo(() => {
     if (mode === 'lifetime') return { from: new Date(connectedAt), to: new Date() };
@@ -220,21 +222,57 @@ function ReportRangeCard({
     }
   }
 
-  async function handleBackfill() {
+  const pollBackfillUntilDone = useCallback(async () => {
     setBackfilling(true);
     try {
-      const result = await syncOrdersHistory(token, shopId);
-      showAlert(
-        'Histórico sincronizado',
-        result.ordersSynced === 0
-          ? 'Nenhum pedido novo encontrado no último ano.'
-          : `${result.ordersSynced} pedido(s) do último ano foram trazidos pro Lucrei.`
-      );
-      await load();
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        await new Promise((r) => setTimeout(r, 4000));
+        const status = await getSyncHistoryStatus(token, shopId);
+        setBackfillSynced(status.ordersSynced);
+        if (status.status === 'done') {
+          showAlert(
+            'Histórico sincronizado',
+            status.ordersSynced === 0
+              ? 'Nenhum pedido novo encontrado no último ano.'
+              : `${status.ordersSynced} pedido(s) do último ano foram trazidos pro Lucrei.`
+          );
+          await load();
+          break;
+        }
+        if (status.status === 'error') {
+          showAlert('Não foi possível sincronizar o histórico', status.error ?? 'Tenta de novo em instantes.');
+          break;
+        }
+      }
     } catch (err) {
-      showAlert('Não foi possível sincronizar o histórico', err instanceof ApiError ? err.message : 'Tenta de novo em instantes.');
+      showAlert('Não foi possível acompanhar a sincronização', err instanceof ApiError ? err.message : 'Tenta de novo em instantes.');
     } finally {
       setBackfilling(false);
+    }
+  }, [token, shopId, load]);
+
+  // Se a tela recarregar (ou o usuário voltar pra Relatórios) no meio de um
+  // backfill que já estava rodando, volta a acompanhar em vez de deixar o
+  // botão parado sem refletir o que já está acontecendo no servidor.
+  useEffect(() => {
+    getSyncHistoryStatus(token, shopId)
+      .then((status) => {
+        if (status.status === 'running') {
+          setBackfillSynced(status.ordersSynced);
+          pollBackfillUntilDone();
+        }
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shopId]);
+
+  async function handleBackfill() {
+    try {
+      await startSyncHistory(token, shopId);
+      pollBackfillUntilDone();
+    } catch (err) {
+      showAlert('Não foi possível sincronizar o histórico', err instanceof ApiError ? err.message : 'Tenta de novo em instantes.');
     }
   }
 
@@ -321,7 +359,9 @@ function ReportRangeCard({
           <Ionicons name="time-outline" size={16} color={Colors.textMuted} />
         )}
         <Text className="text-xs text-lucrei-textMuted">
-          {backfilling ? 'Buscando histórico na Shopee, pode levar alguns minutos...' : 'Sincronizar histórico completo (último ano)'}
+          {backfilling
+            ? `Buscando histórico na Shopee... ${backfillSynced} pedido(s) até agora`
+            : 'Sincronizar histórico completo (último ano)'}
         </Text>
       </Pressable>
     </View>

@@ -133,6 +133,15 @@ model Shop {
   // reconectar em outra conta Lucrei, pra impedir teste infinito trocando de conta.
   trialConsumedAt DateTime?
 
+  // Backfill de histórico (botão em Relatórios) roda em segundo plano porque
+  // pode levar minutos - esses campos são o estado que o app faz polling pra
+  // mostrar progresso, em vez de segurar a requisição HTTP aberta o tempo todo.
+  historyBackfillStatus    String?   // 'running' | 'done' | 'error'
+  historyBackfillStartedAt DateTime?
+  historyBackfillDoneAt    DateTime?
+  historyBackfillSynced    Int?
+  historyBackfillError     String?
+
   user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   oauthToken    ShopeeOAuthToken?
   products      Product[]

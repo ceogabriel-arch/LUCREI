@@ -4,7 +4,7 @@ import { checkSalesLimitBlock, getSalesLimitStatus } from '../../lib/sales-usage
 import { startOfCurrentMonth } from '../../lib/period';
 import { prisma } from '../../lib/prisma';
 import { sendPushNotification } from '../../lib/push-notifications';
-import { syncShopOrders, syncShopOrdersHistory } from './service';
+import { runHistoryBackfill, syncShopOrders } from './service';
 
 // Avisa a conta quando ela cruza esse percentual do limite mensal do plano,
 // uma vez por mês, pra dar tempo de fazer upgrade antes do bloqueio total em 100%.
@@ -67,6 +67,11 @@ export async function syncRoutes(app: FastifyInstance) {
     }
   );
 
+  // Dispara o backfill e devolve na hora - uma loja com bastante histórico
+  // facilmente passa de 1 minuto no total (múltiplas janelas de 15 dias,
+  // cada uma com várias chamadas à Shopee), tempo demais pra segurar numa
+  // única requisição sem esbarrar em timeout de proxy/navegador. O app
+  // acompanha via GET .../sync/history abaixo.
   app.post<{ Params: { shopId: string } }>(
     '/shops/:shopId/sync/history',
     { onRequest: [app.authenticate] },
@@ -78,25 +83,39 @@ export async function syncRoutes(app: FastifyInstance) {
         return reply.status(404).send({ message: 'Loja não encontrada.' });
       }
 
+      if (shop.historyBackfillStatus === 'running') {
+        return reply.send({ status: 'running', ordersSynced: shop.historyBackfillSynced ?? 0 });
+      }
+
       const block = await checkSalesLimitBlock(request.user.sub);
       if (block.blocked) {
         return reply.status(403).send({ message: block.message, code: 'sales_limit_reached' });
       }
 
-      try {
-        const since = new Date(Date.now() - HISTORY_BACKFILL_DAYS * 24 * 60 * 60 * 1000);
-        const result = await syncShopOrdersHistory(shop.id, since);
-        return result;
-      } catch (err) {
-        app.log.error(err);
-        // Mensagem real da Shopee embutida (endpoint autenticado, escopado à
-        // loja do usuário) - genérica só dizia "falhou", sem dar pista do que
-        // corrigir.
-        const detail = err instanceof Error ? err.message : undefined;
-        return reply.status(502).send({
-          message: detail ? `Falha ao buscar o histórico de pedidos na Shopee: ${detail}` : 'Falha ao buscar o histórico de pedidos na Shopee.',
-        });
+      const since = new Date(Date.now() - HISTORY_BACKFILL_DAYS * 24 * 60 * 60 * 1000);
+      runHistoryBackfill(shop.id, since).catch((err) => app.log.error(err));
+
+      return reply.send({ status: 'running', ordersSynced: 0 });
+    }
+  );
+
+  app.get<{ Params: { shopId: string } }>(
+    '/shops/:shopId/sync/history',
+    { onRequest: [app.authenticate] },
+    async (request, reply) => {
+      const shop = await prisma.shop.findFirst({
+        where: { id: request.params.shopId, userId: request.user.sub },
+        select: { historyBackfillStatus: true, historyBackfillSynced: true, historyBackfillError: true },
+      });
+      if (!shop) {
+        return reply.status(404).send({ message: 'Loja não encontrada.' });
       }
+
+      return reply.send({
+        status: shop.historyBackfillStatus ?? 'idle',
+        ordersSynced: shop.historyBackfillSynced ?? 0,
+        error: shop.historyBackfillError,
+      });
     }
   );
 }

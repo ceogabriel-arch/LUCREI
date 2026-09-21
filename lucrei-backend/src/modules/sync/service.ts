@@ -156,39 +156,64 @@ export async function syncShopOrders(shopId: string) {
 
 // Backfill manual (botão "Sincronizar histórico" em Relatórios) - a
 // sincronização normal acima só cobre os últimos 15 dias, então pedidos mais
-// antigos que isso nunca entram no banco sozinhos. Varre de trás pra frente
-// (mais recente primeiro) até "sinceDate", em blocos de 15 dias.
-export async function syncShopOrdersHistory(shopId: string, sinceDate: Date) {
-  const { accessToken, shopeeShopId } = await getValidAccessToken(shopId);
+// antigos que isso nunca entram no banco sozinhos. Uma loja com bastante
+// histórico facilmente passa dos ~30s que um proxy/navegador aguenta numa
+// requisição só, então isso roda solto em segundo plano (a rota só dispara e
+// devolve na hora) e grava progresso no próprio Shop, que o app consulta por
+// polling em vez de ficar com a requisição HTTP presa esperando.
+export async function runHistoryBackfill(shopId: string, sinceDate: Date) {
+  await prisma.shop.update({
+    where: { id: shopId },
+    data: {
+      historyBackfillStatus: 'running',
+      historyBackfillStartedAt: new Date(),
+      historyBackfillDoneAt: null,
+      historyBackfillSynced: 0,
+      historyBackfillError: null,
+    },
+  });
 
-  const sinceSec = Math.floor(sinceDate.getTime() / 1000);
-  let windowEnd = Math.floor(Date.now() / 1000);
-  let ordersSeen = 0;
-  let ordersSynced = 0;
-  let windowsFailed = 0;
-  let lastError: unknown = null;
+  try {
+    const { accessToken, shopeeShopId } = await getValidAccessToken(shopId);
 
-  while (windowEnd > sinceSec) {
-    const windowStart = Math.max(sinceSec, windowEnd - WINDOW_SECONDS);
-    try {
-      const result = await syncWindow(shopId, shopeeShopId, accessToken, windowStart, windowEnd);
-      ordersSeen += result.ordersSeen;
-      ordersSynced += result.ordersSynced;
-    } catch (err) {
-      // Um bloco de 15 dias falhar (ex: janela antiga demais pra Shopee
-      // aceitar) não pode derrubar o backfill inteiro - registra e segue pros
-      // blocos mais recentes, que são os que mais importam.
-      windowsFailed++;
-      lastError = err;
+    const sinceSec = Math.floor(sinceDate.getTime() / 1000);
+    let windowEnd = Math.floor(Date.now() / 1000);
+    let ordersSynced = 0;
+    let windowsFailed = 0;
+    let lastError: unknown = null;
+
+    while (windowEnd > sinceSec) {
+      const windowStart = Math.max(sinceSec, windowEnd - WINDOW_SECONDS);
+      try {
+        const result = await syncWindow(shopId, shopeeShopId, accessToken, windowStart, windowEnd);
+        ordersSynced += result.ordersSynced;
+        await prisma.shop.update({ where: { id: shopId }, data: { historyBackfillSynced: ordersSynced } });
+      } catch (err) {
+        // Um bloco de 15 dias falhar (ex: janela antiga demais pra Shopee
+        // aceitar) não pode derrubar o backfill inteiro - registra e segue
+        // pros blocos mais recentes, que são os que mais importam.
+        windowsFailed++;
+        lastError = err;
+      }
+      windowEnd = windowStart;
     }
-    windowEnd = windowStart;
+
+    if (ordersSynced === 0 && windowsFailed > 0 && lastError instanceof Error) {
+      throw lastError;
+    }
+
+    await prisma.shop.update({
+      where: { id: shopId },
+      data: { historyBackfillStatus: 'done', historyBackfillDoneAt: new Date(), lastSyncedAt: new Date() },
+    });
+  } catch (err) {
+    await prisma.shop.update({
+      where: { id: shopId },
+      data: {
+        historyBackfillStatus: 'error',
+        historyBackfillDoneAt: new Date(),
+        historyBackfillError: err instanceof Error ? err.message : 'Erro desconhecido.',
+      },
+    });
   }
-
-  await prisma.shop.update({ where: { id: shopId }, data: { lastSyncedAt: new Date() } });
-
-  if (ordersSynced === 0 && windowsFailed > 0 && lastError instanceof Error) {
-    throw lastError;
-  }
-
-  return { ordersSeen, ordersSynced, windowsFailed };
 }
