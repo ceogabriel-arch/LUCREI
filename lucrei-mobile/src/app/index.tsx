@@ -156,7 +156,12 @@ export default function InicioScreen() {
     state.status === 'authenticated' && state.user.subscriptionStatus === 'trialing' && state.user.trialEndsAt
       ? Math.ceil((new Date(state.user.trialEndsAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000))
       : null;
-  const showTrialEndingWarning = trialDaysLeft !== null && trialDaysLeft >= 0 && trialDaysLeft <= 3;
+  const showTrialCard = trialDaysLeft !== null && trialDaysLeft >= 0;
+  // Verde enquanto sobra bastante teste, dourado quando começa a apertar,
+  // vermelho pertinho do fim - mesmos limiares que o resto do app já usa
+  // pra "quase no limite" (>=80% de 15 dias ~ 3 dias restantes).
+  const trialColor =
+    trialDaysLeft === null ? Colors.success : trialDaysLeft <= 3 ? Colors.danger : trialDaysLeft <= 7 ? Colors.gold : Colors.success;
 
   useEffect(() => {
     const apiUrl = process.env.EXPO_PUBLIC_API_URL;
@@ -226,13 +231,14 @@ export default function InicioScreen() {
           </Pressable>
         )}
 
-        {showTrialEndingWarning && (
+        {showTrialCard && (
           <Pressable
             onPress={() => router.push('/planos')}
-            className="mt-4 flex-row items-center gap-3 rounded-2xl border border-lucrei-gold bg-lucrei-surface p-4">
-            <Ionicons name="hourglass-outline" size={20} color={Colors.gold} />
+            className="mt-4 flex-row items-center gap-3 rounded-2xl border bg-lucrei-surface p-4"
+            style={{ borderColor: trialColor }}>
+            <Ionicons name="hourglass-outline" size={20} color={trialColor} />
             <View className="flex-1">
-              <Text className="text-sm font-semibold text-lucrei-text">
+              <Text className="text-sm font-semibold" style={{ color: trialColor }}>
                 {trialDaysLeft === 0
                   ? 'Seu teste grátis termina hoje'
                   : trialDaysLeft === 1
@@ -240,7 +246,9 @@ export default function InicioScreen() {
                     : `Faltam ${trialDaysLeft} dias do seu teste grátis`}
               </Text>
               <Text className="mt-0.5 text-xs text-lucrei-textMuted">
-                Escolha um plano pra não perder o acesso ao Lucrei.
+                {trialDaysLeft !== null && trialDaysLeft <= 3
+                  ? 'Escolha um plano pra não perder o acesso ao Lucrei.'
+                  : 'Aproveite pra conhecer o Lucrei antes de escolher um plano.'}
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
