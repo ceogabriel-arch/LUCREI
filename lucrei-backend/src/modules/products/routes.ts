@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { Prisma, type PrismaClient } from '@prisma/client';
 
 import { mapLimit } from '../../lib/concurrency';
 import { prisma } from '../../lib/prisma';
@@ -18,6 +19,42 @@ type BatchUpsertProductBody = {
 
 async function requireOwnedShop(userId: string, shopId: string) {
   return prisma.shop.findFirst({ where: { id: shopId, userId } });
+}
+
+type OrderLineItemForRecalc = {
+  id: string;
+  quantity: number;
+  salePrice: Prisma.Decimal;
+  shippingFeeAllocated: Prisma.Decimal;
+  shopeeFeeAllocated: Prisma.Decimal;
+};
+
+// Recalcula custo/lucro de cada line item afetado por uma mudança de preço
+// de custo e grava tudo num só UPDATE (via VALUES), em vez de um
+// tx.orderLineItem.update() por linha - produto com histórico de centenas
+// de pedidos fazia isso virar centenas de idas ao banco sequenciais, uma
+// transação inteira presa esperando cada uma terminar.
+async function bulkRecalcLineItems(
+  tx: Pick<PrismaClient, '$executeRaw'>,
+  productId: string,
+  costPrice: number,
+  lineItems: OrderLineItemForRecalc[]
+) {
+  if (lineItems.length === 0) return;
+
+  const rows = lineItems.map((li) => {
+    const productCostSnapshot = costPrice * li.quantity;
+    const profit =
+      Number(li.salePrice) - Number(li.shippingFeeAllocated) - Number(li.shopeeFeeAllocated) - productCostSnapshot;
+    return Prisma.sql`(${li.id}::text, ${productCostSnapshot}::numeric, ${profit}::numeric)`;
+  });
+
+  await tx.$executeRaw`
+    UPDATE "OrderLineItem" AS oli
+    SET "productId" = ${productId}, "productCostSnapshot" = v.cost, "profit" = v.profit
+    FROM (VALUES ${Prisma.join(rows)}) AS v(id, cost, profit)
+    WHERE oli.id = v.id
+  `;
 }
 
 type CatalogItem = {
@@ -183,15 +220,7 @@ export async function productRoutes(app: FastifyInstance) {
         where: { shopeeItemId, order: { shopId: shop.id } },
       });
 
-      for (const li of affectedLineItems) {
-        const productCostSnapshot = costPrice * li.quantity;
-        const profit =
-          Number(li.salePrice) - Number(li.shippingFeeAllocated) - Number(li.shopeeFeeAllocated) - productCostSnapshot;
-        await prisma.orderLineItem.update({
-          where: { id: li.id },
-          data: { productId: product.id, productCostSnapshot, profit },
-        });
-      }
+      await bulkRecalcLineItems(prisma, product.id, costPrice, affectedLineItems);
 
       return product;
     }
@@ -253,15 +282,7 @@ export async function productRoutes(app: FastifyInstance) {
                 });
             results.push(product);
 
-            for (const li of lineItemsByShopeeId.get(item.shopeeItemId) ?? []) {
-              const productCostSnapshot = item.costPrice * li.quantity;
-              const profit =
-                Number(li.salePrice) - Number(li.shippingFeeAllocated) - Number(li.shopeeFeeAllocated) - productCostSnapshot;
-              await tx.orderLineItem.update({
-                where: { id: li.id },
-                data: { productId: product.id, productCostSnapshot, profit },
-              });
-            }
+            await bulkRecalcLineItems(tx, product.id, item.costPrice, lineItemsByShopeeId.get(item.shopeeItemId) ?? []);
           }
           return results;
         },

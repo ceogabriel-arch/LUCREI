@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
@@ -34,7 +34,7 @@ function originalCostText(product: ShopeeProduct) {
   return product.costPrice != null ? String(product.costPrice) : '';
 }
 
-function ProductRow({
+const ProductRow = memo(function ProductRow({
   product,
   value,
   dirty,
@@ -112,7 +112,7 @@ function ProductRow({
       </View>
     </View>
   );
-}
+});
 
 export default function ProdutosScreen() {
   const { state } = useAuth();
@@ -128,9 +128,13 @@ export default function ProdutosScreen() {
   const [bulkCost, setBulkCost] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
-  const filteredProducts = products
-    .filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const filteredProducts = useMemo(
+    () =>
+      products
+        .filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [products, search]
+  );
 
   const allFilteredSelected =
     filteredProducts.length > 0 && filteredProducts.every((p) => selected.has(p.shopeeItemId));
@@ -183,18 +187,22 @@ export default function ProdutosScreen() {
     setSelected(new Set(missingCostProducts.map((p) => p.shopeeItemId)));
   }
 
-  function handleChangeCost(shopeeItemId: string, text: string) {
+  // Precisa ser estável (useCallback) - senão o React.memo do ProductRow não
+  // adianta nada, já que a prop onChangeCost/onToggleSelect mudaria de
+  // referência a cada tecla digitada em QUALQUER linha, forçando a lista
+  // inteira a re-renderizar de novo mesmo assim.
+  const handleChangeCost = useCallback((shopeeItemId: string, text: string) => {
     setEdits((prev) => ({ ...prev, [shopeeItemId]: text }));
-  }
+  }, []);
 
-  function handleToggleSelect(shopeeItemId: string) {
+  const handleToggleSelect = useCallback((shopeeItemId: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(shopeeItemId)) next.delete(shopeeItemId);
       else next.add(shopeeItemId);
       return next;
     });
-  }
+  }, []);
 
   function handleToggleSelectAll() {
     if (allFilteredSelected) {

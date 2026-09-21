@@ -1,3 +1,4 @@
+import { mapLimit } from '../../lib/concurrency';
 import { prisma } from '../../lib/prisma';
 import { getValidAccessToken } from '../../lib/shopee-token';
 import { getEscrowDetail, getOrderDetail, getOrderList } from '../../shopee-client';
@@ -119,18 +120,18 @@ export async function syncShopOrders(shopId: string) {
         page.order_list.map((o) => o.order_sn)
       );
 
-      for (const detail of details) {
-        if (!ELIGIBLE_STATUSES.has(detail.order_status)) continue;
-        await processOrder(
-          shopId,
-          shopeeShopId,
-          accessToken,
-          detail.order_sn,
-          detail.order_status,
-          detail.create_time
-        );
-        ordersSynced++;
-      }
+      const eligibleDetails = details.filter((detail) => ELIGIBLE_STATUSES.has(detail.order_status));
+
+      // Cada pedido faz sua própria chamada de get_escrow_detail (a Shopee só
+      // aceita um order_sn por vez ali) mais algumas idas ao banco - processar
+      // um de cada vez fazia a sincronização inteira escalar linearmente com
+      // o número de pedidos, dominada por ida-e-volta de rede. Mesmo limite
+      // de 10 já usado pra get_model_list em products/routes.ts, pra não
+      // estourar o rate limit da Shopee.
+      await mapLimit(eligibleDetails, 10, (detail) =>
+        processOrder(shopId, shopeeShopId, accessToken, detail.order_sn, detail.order_status, detail.create_time)
+      );
+      ordersSynced += eligibleDetails.length;
     }
 
     hasMore = page.more;
