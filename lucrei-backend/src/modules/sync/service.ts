@@ -207,6 +207,30 @@ export async function syncShopOrders(shopId: string) {
   return result;
 }
 
+// Roda o sync do dia a dia solto em segundo plano, igual ao backfill de
+// histórico - travar a sincronização inteira dentro da requisição HTTP
+// enquanto o usuário espera é o que mais pesa quando muita gente sincroniza
+// ao mesmo tempo (cada requisição presa até terminar, num único processo).
+export async function runShopSync(shopId: string) {
+  await prisma.shop.update({
+    where: { id: shopId },
+    data: { syncStatus: 'running', syncStartedAt: new Date(), syncOrdersSynced: null, syncError: null },
+  });
+
+  try {
+    const result = await syncShopOrders(shopId);
+    await prisma.shop.update({
+      where: { id: shopId },
+      data: { syncStatus: 'done', syncOrdersSynced: result.ordersSynced },
+    });
+  } catch (err) {
+    await prisma.shop.update({
+      where: { id: shopId },
+      data: { syncStatus: 'error', syncError: err instanceof Error ? err.message : 'Erro desconhecido.' },
+    });
+  }
+}
+
 // Backfill manual (botão "Sincronizar histórico" em Relatórios) - a
 // sincronização normal acima só cobre os últimos 15 dias, então pedidos mais
 // antigos que isso nunca entram no banco sozinhos. Uma loja com bastante

@@ -223,13 +223,23 @@ export function getOrders(token: string, shopId: string, period: Period) {
   });
 }
 
-export type SyncResult = { ordersSeen: number; ordersSynced: number };
+// Sync roda em segundo plano no servidor, igual ao backfill de histórico -
+// travar a requisição inteira até terminar é o que mais pesa quando muita
+// gente sincroniza ao mesmo tempo. startSync só dispara, getSyncStatus é o
+// que o app usa pra acompanhar (polling).
+export type SyncStatus = { status: 'idle' | 'running' | 'done' | 'error'; ordersSynced: number; error?: string | null };
 
-export function syncOrders(token: string, shopId: string) {
-  return request<SyncResult>(`/shops/${shopId}/sync`, {
+export function startSync(token: string, shopId: string) {
+  return request<SyncStatus>(`/shops/${shopId}/sync`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
     body: '{}',
+  });
+}
+
+export function getSyncStatus(token: string, shopId: string) {
+  return request<SyncStatus>(`/shops/${shopId}/sync`, {
+    headers: { Authorization: `Bearer ${token}` },
   });
 }
 

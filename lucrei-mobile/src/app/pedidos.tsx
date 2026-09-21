@@ -1,12 +1,21 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Dimensions, Modal, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Screen } from '@/components/screen';
 import { ToastBanner, useToast } from '@/components/toast';
-import { ApiError, getOrders, getSalesUsage, syncOrders, type Order, type OrderLineItem, type SalesUsage } from '@/lib/api';
+import {
+  ApiError,
+  getOrders,
+  getSalesUsage,
+  getSyncStatus,
+  startSync,
+  type Order,
+  type OrderLineItem,
+  type SalesUsage,
+} from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatBRL } from '@/lib/format';
 import { PERIOD_TO_API, PERIODS, usePeriod } from '@/lib/period';
@@ -255,28 +264,84 @@ export default function PedidosScreen() {
     setRefreshing(false);
   }
 
+  // Sync roda solto no servidor (não trava a requisição até terminar - ver
+  // routes.ts), então o app acompanha por polling. Tolera falha passageira
+  // de conexão (~1min de tentativas) em vez de desistir na primeira, já que
+  // o trabalho continua rodando do outro lado independente do navegador.
+  const pollSyncUntilDone = useCallback(async () => {
+    setSyncing(true);
+    const MAX_CONSECUTIVE_FAILURES = 15;
+    let consecutiveFailures = 0;
+    try {
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        await new Promise((r) => setTimeout(r, 3000));
+        if (state.status !== 'authenticated' || !selectedShop) break;
+        let status;
+        try {
+          status = await getSyncStatus(state.token, selectedShop.id);
+        } catch (err) {
+          consecutiveFailures++;
+          if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+            showToast({
+              title: 'Não deu certo dessa vez',
+              message: err instanceof ApiError ? err.message : 'Verifique sua internet e tente de novo.',
+              tone: 'error',
+            });
+            break;
+          }
+          continue;
+        }
+        consecutiveFailures = 0;
+        if (status.status === 'done') {
+          const title = status.ordersSynced > 0 ? 'Novidades por aqui!' : 'Tudo em dia';
+          const message =
+            status.ordersSynced === 0
+              ? 'Nenhum pedido novo encontrado nesse período.'
+              : status.ordersSynced === 1
+                ? '1 pedido foi sincronizado e já está com o lucro calculado.'
+                : `${status.ordersSynced} pedidos foram sincronizados e já estão com o lucro calculado.`;
+          showToast({ title, message, tone: 'success' });
+          await load();
+          break;
+        }
+        if (status.status === 'error') {
+          showToast({
+            title: 'Não deu certo dessa vez',
+            message: status.error ?? 'Tenta de novo em instantes.',
+            tone: 'error',
+          });
+          break;
+        }
+      }
+    } finally {
+      setSyncing(false);
+    }
+  }, [state, selectedShop, load, showToast]);
+
+  // Se a tela recarregar no meio de um sync que já estava rodando, volta a
+  // acompanhar em vez de deixar o botão parado sem refletir o servidor.
+  useEffect(() => {
+    if (state.status !== 'authenticated' || !selectedShop) return;
+    getSyncStatus(state.token, selectedShop.id)
+      .then((status) => {
+        if (status.status === 'running') pollSyncUntilDone();
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedShop?.id]);
+
   async function handleSync() {
     if (state.status !== 'authenticated' || !selectedShop) return;
-    setSyncing(true);
     try {
-      const result = await syncOrders(state.token, selectedShop.id);
-      const title = result.ordersSynced > 0 ? 'Novidades por aqui!' : 'Tudo em dia';
-      const message =
-        result.ordersSynced === 0
-          ? 'Nenhum pedido novo encontrado nesse período.'
-          : result.ordersSynced === 1
-            ? '1 pedido foi sincronizado e já está com o lucro calculado.'
-            : `${result.ordersSynced} pedidos foram sincronizados e já estão com o lucro calculado.`;
-      showToast({ title, message, tone: 'success' });
-      await load();
+      await startSync(state.token, selectedShop.id);
+      pollSyncUntilDone();
     } catch (err) {
       showToast({
         title: 'Não deu certo dessa vez',
         message: err instanceof ApiError ? err.message : 'Tenta de novo em instantes.',
         tone: 'error',
       });
-    } finally {
-      setSyncing(false);
     }
   }
 

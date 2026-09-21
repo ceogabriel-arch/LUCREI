@@ -143,6 +143,15 @@ model Shop {
   historyBackfillWindowsDone Int?
   historyBackfillError     String?
 
+  // Sync do dia a dia (botão "Sincronizar" em Pedidos) - mesmo motivo do
+  // backfill acima: rodar preso na requisição HTTP travava tudo se muitos
+  // usuários sincronizassem ao mesmo tempo, ou se uma loja de alto volume
+  // demorasse. Roda solto e o app acompanha por polling.
+  syncStatus       String?   // 'running' | 'done' | 'error'
+  syncStartedAt    DateTime?
+  syncOrdersSynced Int?
+  syncError        String?
+
   user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   oauthToken    ShopeeOAuthToken?
   products      Product[]
@@ -198,6 +207,11 @@ model Order {
   lineItems OrderLineItem[]
 
   @@index([shopId])
+  // Relatórios/CSV/resumo sempre filtram por loja + intervalo de datas -
+  // sem esse índice composto, a busca por data tinha que varrer todos os
+  // pedidos da loja (só o índice de shopId ajuda). Não dói com poucos
+  // pedidos, mas cresce junto com o histórico de cada loja.
+  @@index([shopId, orderDate])
 }
 
 model OrderLineItem {
