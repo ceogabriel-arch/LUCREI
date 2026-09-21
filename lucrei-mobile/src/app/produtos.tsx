@@ -2,10 +2,11 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { useFocusEffect } from 'expo-router';
 import { memo, useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
 import { ApiError, getShopeeProducts, saveProductCosts, type ProductCostInput, type ShopeeProduct } from '@/lib/api';
+import { showAlert } from '@/lib/alert';
 import { useAuth } from '@/lib/auth';
 import { formatBRL } from '@/lib/format';
 import { PERIOD_TO_API, PERIODS, type PeriodLabel, usePeriod } from '@/lib/period';
@@ -240,7 +241,7 @@ export default function ProdutosScreen() {
     if (selected.size === 0) return;
     const parsed = Number(bulkCost.replace(',', '.'));
     if (!bulkCost.trim() || Number.isNaN(parsed) || parsed < 0) {
-      Alert.alert('Custo inválido', 'Digite um valor numérico válido pra aplicar aos produtos selecionados.');
+      showAlert('Custo inválido', 'Digite um valor numérico válido pra aplicar aos produtos selecionados.');
       return;
     }
 
@@ -248,7 +249,7 @@ export default function ProdutosScreen() {
     const aboveSalePrice = selectedProducts.filter((p) => p.price != null && parsed > p.price);
 
     if (aboveSalePrice.length > 0) {
-      Alert.alert(
+      showAlert(
         'Custo maior que o preço de venda',
         aboveSalePrice.length === 1
           ? `${formatBRL(parsed)} é maior que o preço de venda de "${aboveSalePrice[0].name}" (${formatBRL(aboveSalePrice[0].price!)}). Isso dá prejuízo nesse item. Aplicar assim mesmo?`
@@ -279,7 +280,7 @@ export default function ProdutosScreen() {
     }
 
     if (invalidNames.length > 0) {
-      Alert.alert(
+      showAlert(
         'Custo inválido',
         `Corrija o custo de: ${invalidNames.slice(0, 3).join(', ')}${invalidNames.length > 3 ? '...' : ''}`
       );
@@ -302,7 +303,7 @@ export default function ProdutosScreen() {
         return next;
       });
     } catch (err) {
-      Alert.alert('Erro', err instanceof ApiError ? err.message : 'Não foi possível salvar os custos.');
+      showAlert('Erro', err instanceof ApiError ? err.message : 'Não foi possível salvar os custos.');
     } finally {
       setSaving(false);
     }

@@ -3,7 +3,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AchievementsCard } from '@/components/achievements-card';
 import { DeltaBadge } from '@/components/delta-badge';
@@ -12,6 +12,7 @@ import { ShopPicker } from '@/components/shop-picker';
 import { Sparkline } from '@/components/sparkline';
 import { StatTile } from '@/components/stat-tile';
 import { ApiError, getSummary, type Summary } from '@/lib/api';
+import { showAlert } from '@/lib/alert';
 import { useAuth } from '@/lib/auth';
 import { formatBRL } from '@/lib/format';
 import { PERIOD_TO_API, PERIODS, usePeriod } from '@/lib/period';
@@ -72,20 +73,20 @@ export default function InicioScreen() {
     try {
       const result = await connectShopeeStore(state.token);
       if (result.status === 'success') {
-        Alert.alert('Loja conectada!', 'Sua loja Shopee foi conectada com sucesso.');
+        showAlert('Loja conectada!', 'Sua loja Shopee foi conectada com sucesso.');
         await refreshShops();
       } else if (result.status === 'error') {
         if (result.reason === 'shop_taken') {
-          Alert.alert(
+          showAlert(
             'Loja já conectada em outra conta',
             'Essa loja Shopee já está conectada em outra conta Lucrei. Peça para desconectá-la lá (em Configurações) antes de conectar aqui.'
           );
         } else {
-          Alert.alert('Não foi possível conectar', 'Tente novamente em instantes.');
+          showAlert('Não foi possível conectar', 'Tente novamente em instantes.');
         }
       }
     } catch (err) {
-      Alert.alert('Erro', err instanceof ApiError ? err.message : 'Algo deu errado.');
+      showAlert('Erro', err instanceof ApiError ? err.message : 'Algo deu errado.');
     } finally {
       setConnecting(false);
     }

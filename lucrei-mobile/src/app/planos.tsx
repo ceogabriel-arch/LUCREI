@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 
 import { PixPaymentModal } from '@/components/pix-payment-modal';
@@ -14,6 +14,7 @@ import {
   type Plan,
   type PixCharge,
 } from '@/lib/api';
+import { showAlert } from '@/lib/alert';
 import { useAuth } from '@/lib/auth';
 import { formatBRL } from '@/lib/format';
 import { useColors } from '@/lib/theme';
@@ -68,7 +69,7 @@ function PlanCard({ plan }: { plan: Plan }) {
         setPixModal(result.pix);
         return;
       }
-      Alert.alert(
+      showAlert(
         'Plano atualizado',
         result.trialEndsAt
           ? `Você agora está no plano ${plan.name}. Seu teste grátis de 15 dias começou.`
@@ -78,7 +79,7 @@ function PlanCard({ plan }: { plan: Plan }) {
         WebBrowser.openBrowserAsync(result.checkoutUrl);
       }
     } else {
-      Alert.alert('Não foi possível assinar', result.message);
+      showAlert('Não foi possível assinar', result.message);
     }
   }
 
@@ -91,13 +92,13 @@ function PlanCard({ plan }: { plan: Plan }) {
         setPixModalUpgradeTarget(result.plan?.key !== plan.key ? plan.key : null);
         setPixModal(result.pix);
       } else {
-        Alert.alert(
+        showAlert(
           'Plano atualizado',
           `Você agora está no plano ${plan.name}. Seu teste grátis de 15 dias começou.`
         );
       }
     } else {
-      Alert.alert('Não foi possível assinar', result.message);
+      showAlert('Não foi possível assinar', result.message);
     }
   }
 
@@ -116,7 +117,7 @@ function PlanCard({ plan }: { plan: Plan }) {
         setPixModal(pix);
         return;
       }
-      Alert.alert('Nenhuma fatura', 'Não encontramos uma fatura em aberto para esse plano.');
+      showAlert('Nenhuma fatura', 'Não encontramos uma fatura em aberto para esse plano.');
     } finally {
       setCheckingInvoice(false);
     }

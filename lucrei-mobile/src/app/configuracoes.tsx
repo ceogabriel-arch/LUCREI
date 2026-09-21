@@ -3,7 +3,6 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   BackHandler,
   Linking,
   Platform,
@@ -19,6 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Screen } from '@/components/screen';
 import { ToastBanner, useToast } from '@/components/toast';
 import { API_URL, disconnectShop, type AuthUser, type Shop } from '@/lib/api';
+import { showAlert } from '@/lib/alert';
 import { useAuth } from '@/lib/auth';
 import { fullscreenOverlayStyle, useIsDesktopWeb, useModalPresentation, webCapWidth } from '@/lib/responsive';
 import { useSelectedShop } from '@/lib/selected-shop';
@@ -108,7 +108,7 @@ function PlanSection({ user }: { user: AuthUser }) {
   const isCanceled = user.subscriptionStatus === 'canceled';
 
   function confirmCancel() {
-    Alert.alert(
+    showAlert(
       'Cancelar plano?',
       'Você perde acesso aos recursos do plano ao final do período atual. Você pode assinar novamente quando quiser.',
       [
@@ -123,7 +123,7 @@ function PlanSection({ user }: { user: AuthUser }) {
     const result = await cancelPlan();
     setCanceling(false);
     if (!result.ok) {
-      Alert.alert('Erro', result.message);
+      showAlert('Erro', result.message);
     }
   }
 
@@ -371,7 +371,7 @@ function ShopRow({ shop, onDisconnected }: { shop: Shop; onDisconnected: () => v
   const active = shop.status === 'active';
 
   function confirmDisconnect() {
-    Alert.alert(
+    showAlert(
       'Desconectar loja?',
       `Você pode reconectar "${shop.shopName}" a qualquer momento. Seus pedidos e produtos ficam guardados.`,
       [
@@ -388,7 +388,7 @@ function ShopRow({ shop, onDisconnected }: { shop: Shop; onDisconnected: () => v
       await disconnectShop(state.token, shop.id);
       onDisconnected();
     } catch {
-      Alert.alert('Erro', 'Não foi possível desconectar a loja agora.');
+      showAlert('Erro', 'Não foi possível desconectar a loja agora.');
     } finally {
       setDisconnecting(false);
     }
@@ -451,7 +451,7 @@ function DeleteAccountSection() {
   const needsPassword = state.status === 'authenticated' ? state.user.hasPassword : true;
 
   function confirmDelete() {
-    Alert.alert(
+    showAlert(
       'Excluir sua conta?',
       'Isso apaga permanentemente sua conta, lojas conectadas, pedidos e produtos. Não tem como desfazer.',
       [

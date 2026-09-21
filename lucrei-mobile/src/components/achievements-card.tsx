@@ -1,10 +1,11 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { claimReward, getClaimedRewardTiers, ApiError } from '@/lib/api';
+import { showAlert } from '@/lib/alert';
 import { useAuth } from '@/lib/auth';
 import { TextField } from '@/components/text-field';
 import { formatBRL } from '@/lib/format';
@@ -181,9 +182,9 @@ function ClaimFormModal({
       });
       onSubmitted(tier.threshold);
       onClose();
-      Alert.alert('Resgate enviado!', 'Recebemos seu pedido. Nosso time entra em contato pra combinar o envio.');
+      showAlert('Resgate enviado!', 'Recebemos seu pedido. Nosso time entra em contato pra combinar o envio.');
     } catch (err) {
-      Alert.alert('Não foi possível enviar', err instanceof ApiError ? err.message : 'Tenta de novo em instantes.');
+      showAlert('Não foi possível enviar', err instanceof ApiError ? err.message : 'Tenta de novo em instantes.');
     } finally {
       setSubmitting(false);
     }
