@@ -4,7 +4,7 @@ import { prisma } from '../../lib/prisma';
 import { rangeStart, type Period } from '../../lib/period';
 
 export async function summaryRoutes(app: FastifyInstance) {
-  app.get<{ Params: { shopId: string }; Querystring: { period?: Period } }>(
+  app.get<{ Params: { shopId: string }; Querystring: { period?: Period; from?: string; to?: string } }>(
     '/shops/:shopId/summary',
     { onRequest: [app.authenticate] },
     async (request, reply) => {
@@ -13,15 +13,23 @@ export async function summaryRoutes(app: FastifyInstance) {
       });
       if (!shop) return reply.status(404).send({ message: 'Loja não encontrada.' });
 
+      // from/to (usado pelo relatório por ano/mês) manda mais que period -
+      // permite um intervalo arbitrário em vez dos presets fixos.
+      const fromDate = request.query.from ? new Date(request.query.from) : null;
+      const toDate = request.query.to ? new Date(request.query.to) : null;
+
       const period = request.query.period ?? '30d';
       // "all" (usado pro lucro vitalício das recompensas) não pode contar
       // pedidos de antes de conectar a loja no Lucrei - senão uma loja com
       // histórico de vendas na Shopee desbloquearia recompensa na hora de
       // conectar, sem o usuário ter usado o app pra nada ainda.
-      const start = period === 'all' ? shop.connectedAt : rangeStart(period);
+      const start = fromDate ?? (period === 'all' ? shop.connectedAt : rangeStart(period));
 
       const orders = await prisma.order.findMany({
-        where: { shopId: shop.id, orderDate: { gte: start } },
+        where: {
+          shopId: shop.id,
+          orderDate: { gte: start, ...(toDate ? { lt: toDate } : {}) },
+        },
         include: { lineItems: true },
         orderBy: { orderDate: 'asc' },
       });

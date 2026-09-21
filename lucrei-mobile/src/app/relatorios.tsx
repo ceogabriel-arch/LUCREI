@@ -1,18 +1,38 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 
 import { DailyProfitChart } from '@/components/daily-profit-chart';
 import { Screen } from '@/components/screen';
 import type { ThemeColors } from '@/constants/theme';
-import { getShopeeProducts, getSummary, type ShopeeProduct, type Summary } from '@/lib/api';
+import { ApiError, getShopeeProducts, getSummary, getSummaryRange, type ShopeeProduct, type Summary } from '@/lib/api';
+import { showAlert } from '@/lib/alert';
 import { useAuth } from '@/lib/auth';
+import { exportOrdersCsv } from '@/lib/export-csv';
 import { formatBRL } from '@/lib/format';
 import { PERIOD_TO_API, PERIODS, usePeriod } from '@/lib/period';
 import { useSelectedShop } from '@/lib/selected-shop';
 import { useColors } from '@/lib/theme';
 
 type LoadState = 'loading' | 'no-shop' | 'ready' | 'error';
+
+const MONTH_NAMES = [
+  'Janeiro',
+  'Fevereiro',
+  'Março',
+  'Abril',
+  'Maio',
+  'Junho',
+  'Julho',
+  'Agosto',
+  'Setembro',
+  'Outubro',
+  'Novembro',
+  'Dezembro',
+];
+
+type ReportMode = 'month' | 'year' | 'lifetime';
 
 function CostBar({ label, value, total, color }: { label: string; value: number; total: number; color: string }) {
   const pct = total > 0 ? (value / total) * 100 : 0;
@@ -105,6 +125,163 @@ function ProductRankRow({ product }: { product: ShopeeProduct }) {
       <Text className="text-sm font-semibold" style={{ color: positive ? Colors.success : Colors.danger }}>
         {formatBRL(product.profit ?? 0)}
       </Text>
+    </View>
+  );
+}
+
+function ReportRangeCard({
+  token,
+  shopId,
+  connectedAt,
+}: {
+  token: string;
+  shopId: string;
+  connectedAt: string;
+}) {
+  const Colors = useColors();
+  const now = new Date();
+  const [mode, setMode] = useState<ReportMode>('month');
+  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [summary, setSummary] = useState<Summary | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  const range = useMemo(() => {
+    if (mode === 'lifetime') return { from: new Date(connectedAt), to: new Date() };
+    if (mode === 'year') return { from: new Date(year, 0, 1), to: new Date(year + 1, 0, 1) };
+    return { from: new Date(year, month - 1, 1), to: new Date(year, month, 1) };
+  }, [mode, year, month, connectedAt]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const s = await getSummaryRange(token, shopId, range.from, range.to);
+      setSummary(s);
+    } catch {
+      setSummary(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [token, shopId, range]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  function goPrev() {
+    if (mode === 'year') {
+      setYear((y) => y - 1);
+    } else if (mode === 'month') {
+      if (month === 1) {
+        setMonth(12);
+        setYear((y) => y - 1);
+      } else {
+        setMonth((m) => m - 1);
+      }
+    }
+  }
+
+  function goNext() {
+    if (mode === 'year') {
+      setYear((y) => y + 1);
+    } else if (mode === 'month') {
+      if (month === 12) {
+        setMonth(1);
+        setYear((y) => y + 1);
+      } else {
+        setMonth((m) => m + 1);
+      }
+    }
+  }
+
+  const nextDisabled =
+    mode === 'year'
+      ? year >= now.getFullYear()
+      : year > now.getFullYear() || (year === now.getFullYear() && month >= now.getMonth() + 1);
+
+  async function handleExport() {
+    setExporting(true);
+    try {
+      await exportOrdersCsv(token, shopId, range.from, range.to);
+    } catch (err) {
+      showAlert('Não foi possível exportar', err instanceof ApiError ? err.message : 'Tenta de novo em instantes.');
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  const label =
+    mode === 'lifetime' ? 'Desde que conectei' : mode === 'year' ? String(year) : `${MONTH_NAMES[month - 1]} de ${year}`;
+
+  return (
+    <View className="rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+      <Text className="mb-3 text-sm font-medium text-lucrei-text">Relatório por período</Text>
+
+      <View className="flex-row gap-2">
+        {(['month', 'year', 'lifetime'] as ReportMode[]).map((m) => (
+          <Pressable
+            key={m}
+            onPress={() => setMode(m)}
+            className="rounded-full px-3.5 py-1.5"
+            style={{ backgroundColor: mode === m ? Colors.gold : Colors.surfaceAlt }}>
+            <Text className="text-xs font-medium" style={{ color: mode === m ? Colors.onGold : Colors.textMuted }}>
+              {m === 'month' ? 'Mês' : m === 'year' ? 'Ano' : 'Desde que conectei'}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      {mode !== 'lifetime' ? (
+        <View className="mt-3 flex-row items-center justify-center gap-4">
+          <Pressable onPress={goPrev} hitSlop={8}>
+            <Ionicons name="chevron-back" size={18} color={Colors.text} />
+          </Pressable>
+          <Text className="text-sm font-medium text-lucrei-text">{label}</Text>
+          <Pressable onPress={goNext} disabled={nextDisabled} hitSlop={8} style={{ opacity: nextDisabled ? 0.3 : 1 }}>
+            <Ionicons name="chevron-forward" size={18} color={Colors.text} />
+          </Pressable>
+        </View>
+      ) : (
+        <Text className="mt-3 text-center text-sm font-medium text-lucrei-text">{label}</Text>
+      )}
+
+      <View className="mt-4 border-t border-lucrei-border pt-3">
+        {loading ? (
+          <ActivityIndicator color={Colors.gold} />
+        ) : summary ? (
+          <View className="gap-1.5">
+            <View className="flex-row items-center justify-between">
+              <Text className="text-xs text-lucrei-textMuted">Faturamento</Text>
+              <Text className="text-sm text-lucrei-text">{formatBRL(summary.revenue)}</Text>
+            </View>
+            <View className="flex-row items-center justify-between">
+              <Text className="text-xs text-lucrei-textMuted">Lucro</Text>
+              <Text className="text-base font-bold" style={{ color: summary.profit >= 0 ? Colors.success : Colors.danger }}>
+                {formatBRL(summary.profit)}
+              </Text>
+            </View>
+            <Text className="text-xs text-lucrei-textMuted">
+              {summary.ordersCount} {summary.ordersCount === 1 ? 'pedido' : 'pedidos'}
+            </Text>
+          </View>
+        ) : (
+          <Text className="text-sm text-lucrei-textMuted">Sem dados nesse período.</Text>
+        )}
+      </View>
+
+      <Pressable
+        onPress={handleExport}
+        disabled={exporting}
+        className="mt-4 flex-row items-center justify-center gap-2 rounded-xl bg-lucrei-surfaceAlt px-4 py-3"
+        style={{ opacity: exporting ? 0.6 : 1 }}>
+        {exporting ? (
+          <ActivityIndicator size="small" color={Colors.gold} />
+        ) : (
+          <Ionicons name="download-outline" size={16} color={Colors.gold} />
+        )}
+        <Text className="text-sm font-medium text-lucrei-gold">Exportar CSV</Text>
+      </Pressable>
     </View>
   );
 }
@@ -223,6 +400,10 @@ export default function RelatoriosScreen() {
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.gold} />
           }>
+          {token && selectedShop && (
+            <ReportRangeCard token={token} shopId={selectedShop.id} connectedAt={selectedShop.connectedAt} />
+          )}
+
           <View className="rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
             <Text className="text-sm font-medium text-lucrei-text">Lucro por dia</Text>
             <DailyProfitChart data={summary.trend} />

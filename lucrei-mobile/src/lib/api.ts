@@ -150,6 +150,15 @@ export function getSummary(token: string, shopId: string, period: Period) {
   });
 }
 
+// from/to (ISO) pro relatório de ano/mês específico em Relatórios - period
+// só cobre os presets fixos (hoje/7d/30d/all), não um intervalo arbitrário.
+export function getSummaryRange(token: string, shopId: string, from: Date, to: Date) {
+  const query = `from=${from.toISOString()}&to=${to.toISOString()}`;
+  return request<Summary>(`/shops/${shopId}/summary?${query}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 export type ShopeeProduct = {
   shopeeItemId: string;
   name: string;
