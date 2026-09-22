@@ -154,7 +154,9 @@ export default function InicioScreen() {
 
   const trialDaysLeft =
     state.status === 'authenticated' && state.user.subscriptionStatus === 'trialing' && state.user.trialEndsAt
-      ? Math.ceil((new Date(state.user.trialEndsAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000))
+      ? // floor, não ceil - com 29h restantes (1 dia e uns 5h) o usuário espera
+        // ver "1 dia", não "2 dias" só porque sobrou uma fração de dia a mais.
+        Math.floor((new Date(state.user.trialEndsAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000))
       : null;
   const showTrialCard = trialDaysLeft !== null && trialDaysLeft >= 0;
   // Verde enquanto sobra bastante teste, dourado quando começa a apertar,
