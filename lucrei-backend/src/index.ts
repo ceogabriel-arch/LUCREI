@@ -4,6 +4,7 @@ import 'dotenv/config';
 import compress from '@fastify/compress';
 import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
+import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
 import staticFiles from '@fastify/static';
 import Fastify, { type FastifyError } from 'fastify';
@@ -11,6 +12,7 @@ import Fastify, { type FastifyError } from 'fastify';
 import { prisma } from './lib/prisma';
 import { authRoutes } from './modules/auth/routes';
 import { billingRoutes } from './modules/billing/routes';
+import { labelRoutes } from './modules/labels/routes';
 import { legalRoutes } from './modules/legal/routes';
 import { orderRoutes } from './modules/orders/routes';
 import { passwordResetRoutes } from './modules/password-reset/routes';
@@ -34,6 +36,9 @@ async function main() {
   await app.register(cors, { origin: true });
   await app.register(compress, { global: true });
   await app.register(jwt, { secret: process.env.JWT_SECRET });
+  // Limite generoso: etiquetas em PDF costumam ter várias páginas (um pedido
+  // por página) quando o vendedor baixa um lote inteiro da Shopee de uma vez.
+  await app.register(multipart, { limits: { fileSize: 25 * 1024 * 1024 } });
   // Limite geral (por IP) contra abuso/DoS; rotas de login/cadastro/reset têm
   // limites bem mais apertados registrados junto com cada rota.
   await app.register(rateLimit, {
@@ -95,7 +100,7 @@ async function main() {
     },
   });
 
-  for (const route of ['pedidos', 'produtos', 'relatorios', 'configuracoes', 'shopee-connected', 'planos']) {
+  for (const route of ['pedidos', 'produtos', 'relatorios', 'etiquetas', 'configuracoes', 'shopee-connected', 'planos']) {
     app.get(`/${route}`, (_req, reply) => reply.sendFile(`${route}.html`));
   }
 
@@ -105,6 +110,7 @@ async function main() {
   await app.register(productRoutes);
   await app.register(summaryRoutes);
   await app.register(orderRoutes);
+  await app.register(labelRoutes);
   await app.register(plansRoutes);
   await app.register(legalRoutes);
   await app.register(passwordResetRoutes);

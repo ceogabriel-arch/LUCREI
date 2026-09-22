@@ -20,6 +20,7 @@ const TAB_META: Record<string, { active: IconName; inactive: IconName; label: st
   pedidos: { active: 'receipt', inactive: 'receipt-outline', label: 'Pedidos' },
   produtos: { active: 'cube', inactive: 'cube-outline', label: 'Produtos' },
   relatorios: { active: 'bar-chart', inactive: 'bar-chart-outline', label: 'Relatórios' },
+  etiquetas: { active: 'print', inactive: 'print-outline', label: 'Etiquetas' },
   configuracoes: { active: 'settings', inactive: 'settings-outline', label: 'Config.' },
 };
 
@@ -78,6 +79,7 @@ export default function AppTabs() {
       <Tabs.Screen name="pedidos" options={{ title: 'Pedidos' }} />
       <Tabs.Screen name="produtos" options={{ title: 'Produtos' }} />
       <Tabs.Screen name="relatorios" options={{ title: 'Relatórios' }} />
+      <Tabs.Screen name="etiquetas" options={{ title: 'Etiquetas' }} />
       <Tabs.Screen name="configuracoes" options={{ title: 'Config.' }} />
       <Tabs.Screen name="shopee-connected" options={{ href: null }} />
       <Tabs.Screen name="planos" options={{ href: null }} />
