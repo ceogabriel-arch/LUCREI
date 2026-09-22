@@ -250,24 +250,26 @@ function OrphanProductsSection({ token, shopId }: { token: string; shopId: strin
   }
 
   return (
-    <View className="mt-4 gap-3">
-      <Text className="text-sm text-lucrei-textMuted">
+    <>
+      <Text className="mt-4 text-sm text-lucrei-textMuted">
         Esses produtos foram vendidos mas não existem mais no catálogo da Shopee (provavelmente excluídos) — por
         isso não aparecem na aba Catálogo. Cadastre o custo aqui pra eles entrarem no seu lucro.
       </Text>
-      {orphans.map((orphan) => (
-        <OrphanProductRow
-          key={orphan.shopeeItemId}
-          orphan={orphan}
-          value={costEdits[orphan.shopeeItemId] ?? ''}
-          nameValue={nameEdits[orphan.shopeeItemId] ?? ''}
-          onChangeCost={(text) => setCostEdits((prev) => ({ ...prev, [orphan.shopeeItemId]: text }))}
-          onChangeName={(text) => setNameEdits((prev) => ({ ...prev, [orphan.shopeeItemId]: text }))}
-          onSave={() => handleSave(orphan)}
-          saving={savingId === orphan.shopeeItemId}
-        />
-      ))}
-    </View>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="mt-3 gap-3 pb-4">
+        {orphans.map((orphan) => (
+          <OrphanProductRow
+            key={orphan.shopeeItemId}
+            orphan={orphan}
+            value={costEdits[orphan.shopeeItemId] ?? ''}
+            nameValue={nameEdits[orphan.shopeeItemId] ?? ''}
+            onChangeCost={(text) => setCostEdits((prev) => ({ ...prev, [orphan.shopeeItemId]: text }))}
+            onChangeName={(text) => setNameEdits((prev) => ({ ...prev, [orphan.shopeeItemId]: text }))}
+            onSave={() => handleSave(orphan)}
+            saving={savingId === orphan.shopeeItemId}
+          />
+        ))}
+      </ScrollView>
+    </>
   );
 }
 
