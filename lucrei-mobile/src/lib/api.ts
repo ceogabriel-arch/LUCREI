@@ -185,6 +185,17 @@ export function saveProductCost(token: string, shopId: string, shopeeItemId: str
   });
 }
 
+// Itens vendidos que não batem com nenhum produto do catálogo atual da
+// Shopee (normalmente porque foram excluídos de lá) - a tela normal de
+// Produtos não mostra eles, então ficam pra sempre "sem custo" sem essa lista.
+export type OrphanProduct = { shopeeItemId: string; name: string | null; ordersAffected: number };
+
+export function getOrphanProducts(token: string, shopId: string) {
+  return request<{ orphans: OrphanProduct[] }>(`/shops/${shopId}/orphan-products`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 export type ProductCostInput = { shopeeItemId: string; name: string; costPrice: number };
 
 export function saveProductCosts(token: string, shopId: string, items: ProductCostInput[]) {

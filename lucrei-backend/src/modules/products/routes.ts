@@ -139,6 +139,47 @@ async function getShopeeCatalog(
 }
 
 export async function productRoutes(app: FastifyInstance) {
+  // Itens que aparecem em pedidos mas não batem com nenhum Product cadastrado
+  // - normalmente porque o produto foi excluído do catálogo da Shopee depois
+  // de já ter sido vendido, então nunca mais aparece na lista normal de
+  // Produtos (que só busca o catálogo atual). Sem isso, esses pedidos ficam
+  // "sem custo" pra sempre, sem nenhum jeito de corrigir.
+  app.get<{ Params: { shopId: string } }>(
+    '/shops/:shopId/orphan-products',
+    { onRequest: [app.authenticate] },
+    async (request, reply) => {
+      const shop = await requireOwnedShop(request.user.sub, request.params.shopId);
+      if (!shop) return reply.status(404).send({ message: 'Loja não encontrada.' });
+
+      const grouped = await prisma.orderLineItem.groupBy({
+        by: ['shopeeItemId'],
+        where: { order: { shopId: shop.id }, productId: null, shopeeItemId: { not: null } },
+        _count: { _all: true },
+      });
+
+      const orphans = await Promise.all(
+        grouped.map(async (g) => {
+          // itemName só existe em pedidos sincronizados depois dessa
+          // mudança - pedidos antigos não têm, por isso o nome pode vir nulo
+          // (o app mostra um campo pro usuário preencher manualmente nesse caso).
+          const sample = await prisma.orderLineItem.findFirst({
+            where: { order: { shopId: shop.id }, shopeeItemId: g.shopeeItemId },
+            select: { itemName: true },
+            orderBy: { id: 'desc' },
+          });
+          return {
+            shopeeItemId: g.shopeeItemId!,
+            name: sample?.itemName ?? null,
+            ordersAffected: g._count._all,
+          };
+        })
+      );
+
+      orphans.sort((a, b) => b.ordersAffected - a.ordersAffected);
+      return reply.send({ orphans });
+    }
+  );
+
   app.get<{ Params: { shopId: string } }>(
     '/shops/:shopId/products',
     { onRequest: [app.authenticate] },

@@ -72,6 +72,7 @@ async function processOrder(
       orderId: order.id,
       productId: product?.id,
       shopeeItemId: String(li.item_id),
+      itemName: li.item_name,
       quantity: li.quantity_purchased,
       salePrice: lineValue,
       shippingFeeAllocated,

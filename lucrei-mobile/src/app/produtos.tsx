@@ -5,7 +5,16 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
-import { ApiError, getShopeeProducts, saveProductCosts, type ProductCostInput, type ShopeeProduct } from '@/lib/api';
+import {
+  ApiError,
+  getOrphanProducts,
+  getShopeeProducts,
+  saveProductCost,
+  saveProductCosts,
+  type OrphanProduct,
+  type ProductCostInput,
+  type ShopeeProduct,
+} from '@/lib/api';
 import { showAlert } from '@/lib/alert';
 import { useAuth } from '@/lib/auth';
 import { formatBRL } from '@/lib/format';
@@ -115,6 +124,153 @@ const ProductRow = memo(function ProductRow({
   );
 });
 
+function OrphanProductRow({
+  orphan,
+  value,
+  nameValue,
+  onChangeCost,
+  onChangeName,
+  onSave,
+  saving,
+}: {
+  orphan: OrphanProduct;
+  value: string;
+  nameValue: string;
+  onChangeCost: (text: string) => void;
+  onChangeName: (text: string) => void;
+  onSave: () => void;
+  saving: boolean;
+}) {
+  const Colors = useColors();
+  const canSave = nameValue.trim().length > 0 && value.trim().length > 0;
+  return (
+    <View className="gap-2 rounded-2xl border border-lucrei-border bg-lucrei-surface p-3">
+      <View className="flex-row items-center justify-between">
+        <View className="flex-1 pr-3">
+          {orphan.name ? (
+            <Text className="text-sm font-medium text-lucrei-text" numberOfLines={1}>
+              {orphan.name}
+            </Text>
+          ) : (
+            <TextInput
+              value={nameValue}
+              onChangeText={onChangeName}
+              placeholder="Nome do produto (não veio da Shopee)"
+              placeholderTextColor={Colors.textMuted}
+              className="rounded-xl border border-lucrei-border bg-lucrei-bg px-3 py-2 text-sm text-lucrei-text"
+            />
+          )}
+          <Text className="mt-1 text-xs text-lucrei-textMuted">
+            {orphan.ordersAffected} {orphan.ordersAffected === 1 ? 'pedido afetado' : 'pedidos afetados'} · ID{' '}
+            {orphan.shopeeItemId}
+          </Text>
+        </View>
+      </View>
+      <View className="flex-row items-center gap-2">
+        <TextInput
+          value={value}
+          onChangeText={onChangeCost}
+          placeholder="Custo (R$)"
+          placeholderTextColor={Colors.textMuted}
+          keyboardType="decimal-pad"
+          className="flex-1 rounded-xl border border-lucrei-border bg-lucrei-bg px-3 py-2 text-sm text-lucrei-text"
+        />
+        <Pressable
+          onPress={onSave}
+          disabled={!canSave || saving}
+          className="rounded-xl bg-lucrei-gold px-4 py-2.5"
+          style={{ opacity: !canSave || saving ? 0.4 : 1 }}>
+          {saving ? (
+            <ActivityIndicator size="small" color={Colors.onGold} />
+          ) : (
+            <Text className="text-xs font-semibold text-lucrei-onGold">Salvar</Text>
+          )}
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+// Produtos que saíram do catálogo da Shopee depois de já terem sido
+// vendidos - a busca normal de Produtos só traz o catálogo atual, então
+// esses itens nunca apareciam pra cadastrar custo, ficando "sem custo" pra
+// sempre nos relatórios sem nenhum jeito de corrigir.
+function OrphanProductsSection({ token, shopId }: { token: string; shopId: string }) {
+  const Colors = useColors();
+  const [orphans, setOrphans] = useState<OrphanProduct[] | null>(null);
+  const [costEdits, setCostEdits] = useState<Record<string, string>>({});
+  const [nameEdits, setNameEdits] = useState<Record<string, string>>({});
+  const [savingId, setSavingId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const { orphans } = await getOrphanProducts(token, shopId);
+      setOrphans(orphans);
+    } catch {
+      setOrphans([]);
+    }
+  }, [token, shopId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
+
+  async function handleSave(orphan: OrphanProduct) {
+    const name = (orphan.name ?? nameEdits[orphan.shopeeItemId] ?? '').trim();
+    const parsed = Number((costEdits[orphan.shopeeItemId] ?? '').replace(',', '.'));
+    if (!name || Number.isNaN(parsed) || parsed < 0) return;
+
+    setSavingId(orphan.shopeeItemId);
+    try {
+      await saveProductCost(token, shopId, orphan.shopeeItemId, name, parsed);
+      setOrphans((prev) => prev?.filter((o) => o.shopeeItemId !== orphan.shopeeItemId) ?? null);
+    } catch (err) {
+      showAlert('Erro', err instanceof ApiError ? err.message : 'Não foi possível salvar o custo.');
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  if (orphans === null) {
+    return (
+      <View className="mt-6 items-center">
+        <ActivityIndicator color={Colors.gold} />
+      </View>
+    );
+  }
+
+  if (orphans.length === 0) {
+    return (
+      <Text className="mt-6 text-sm text-lucrei-textMuted">
+        Nenhum produto sem cadastro por aqui — todos os itens vendidos batem com algum produto do catálogo.
+      </Text>
+    );
+  }
+
+  return (
+    <View className="mt-4 gap-3">
+      <Text className="text-sm text-lucrei-textMuted">
+        Esses produtos foram vendidos mas não existem mais no catálogo da Shopee (provavelmente excluídos) — por
+        isso não aparecem na aba Catálogo. Cadastre o custo aqui pra eles entrarem no seu lucro.
+      </Text>
+      {orphans.map((orphan) => (
+        <OrphanProductRow
+          key={orphan.shopeeItemId}
+          orphan={orphan}
+          value={costEdits[orphan.shopeeItemId] ?? ''}
+          nameValue={nameEdits[orphan.shopeeItemId] ?? ''}
+          onChangeCost={(text) => setCostEdits((prev) => ({ ...prev, [orphan.shopeeItemId]: text }))}
+          onChangeName={(text) => setNameEdits((prev) => ({ ...prev, [orphan.shopeeItemId]: text }))}
+          onSave={() => handleSave(orphan)}
+          saving={savingId === orphan.shopeeItemId}
+        />
+      ))}
+    </View>
+  );
+}
+
 export default function ProdutosScreen() {
   const { state } = useAuth();
   // Token em vez do objeto "state" inteiro: refreshUser() troca "state" por
@@ -132,6 +288,7 @@ export default function ProdutosScreen() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkCost, setBulkCost] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [viewMode, setViewMode] = useState<'catalog' | 'orphans'>('catalog');
 
   const filteredProducts = useMemo(
     () =>
@@ -317,6 +474,35 @@ export default function ProdutosScreen() {
       </Text>
 
       <View className="mt-5 flex-row self-start rounded-full bg-lucrei-surface p-1">
+        <Pressable
+          onPress={() => setViewMode('catalog')}
+          className="rounded-full px-3.5 py-1.5"
+          style={{ backgroundColor: viewMode === 'catalog' ? Colors.gold : 'transparent' }}>
+          <Text
+            className="text-xs font-medium"
+            style={{ color: viewMode === 'catalog' ? Colors.onGold : Colors.textMuted }}>
+            Catálogo
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={() => setViewMode('orphans')}
+          className="rounded-full px-3.5 py-1.5"
+          style={{ backgroundColor: viewMode === 'orphans' ? Colors.gold : 'transparent' }}>
+          <Text
+            className="text-xs font-medium"
+            style={{ color: viewMode === 'orphans' ? Colors.onGold : Colors.textMuted }}>
+            Sem cadastro
+          </Text>
+        </Pressable>
+      </View>
+
+      {viewMode === 'orphans' && token && selectedShop && (
+        <OrphanProductsSection token={token} shopId={selectedShop.id} />
+      )}
+
+      {viewMode === 'catalog' && (
+        <>
+      <View className="mt-5 flex-row self-start rounded-full bg-lucrei-surface p-1">
         {PERIODS.map((p) => {
           const active = p === period;
           return (
@@ -470,6 +656,8 @@ export default function ProdutosScreen() {
             </View>
           )}
         </>
+      )}
+      </>
       )}
     </Screen>
   );

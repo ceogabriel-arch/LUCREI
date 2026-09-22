@@ -72,7 +72,7 @@ export async function orderRoutes(app: FastifyInstance) {
             itemsMissingCost,
             lineItems: order.lineItems.map((li) => ({
               id: li.id,
-              productName: li.product?.name ?? `Item ${li.shopeeItemId ?? '?'}`,
+              productName: li.product?.name ?? li.itemName ?? `Item ${li.shopeeItemId ?? '?'}`,
               quantity: li.quantity,
               salePrice: Number(li.salePrice),
               shippingFeeAllocated: Number(li.shippingFeeAllocated),
@@ -124,7 +124,7 @@ export async function orderRoutes(app: FastifyInstance) {
         const dateStr = order.orderDate.toLocaleDateString('pt-BR');
         const statusStr = STATUS_LABELS[order.orderStatus] ?? order.orderStatus;
         for (const li of order.lineItems) {
-          const productName = li.product?.name ?? `Item ${li.shopeeItemId ?? '?'}`;
+          const productName = li.product?.name ?? li.itemName ?? `Item ${li.shopeeItemId ?? '?'}`;
           rows.push(
             [
               dateStr,

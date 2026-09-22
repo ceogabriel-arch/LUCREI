@@ -219,6 +219,11 @@ model OrderLineItem {
   orderId               String
   productId             String?
   shopeeItemId          String?
+  // Nome do item no momento do pedido (vem do get_escrow_detail) - a Shopee
+  // não devolve mais isso se o produto for excluído do catálogo depois. Sem
+  // guardar aqui, um item descontinuado vira um "custo não informado" sem
+  // nome nenhum pra identificar, e sem jeito de cadastrar o custo dele.
+  itemName              String?
   quantity              Int
   salePrice             Decimal  @db.Decimal(12, 2)
   shippingFeeAllocated  Decimal  @db.Decimal(12, 2)
