@@ -5,6 +5,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { OAuth2Client } from 'google-auth-library';
 
 import { prisma } from '../../lib/prisma';
+import { sendPushNotification } from '../../lib/push-notifications';
 import { getOrdersThisMonth } from '../../lib/sales-usage';
 import { reconcileMercadoPagoSubscription } from '../../lib/subscription-sync';
 import { warnIfTrialEndingSoon } from '../../lib/trial-warning';
@@ -236,6 +237,27 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.send({ ok: true });
     }
   );
+
+  // Manda uma notificação de teste pro token já registrado da própria
+  // conta - só pra confirmar que o dispositivo está recebendo push de
+  // verdade, sem mexer em pedido/dado nenhum.
+  app.post('/auth/push-token/test', { onRequest: [app.authenticate] }, async (request, reply) => {
+    const user = await prisma.user.findUnique({ where: { id: request.user.sub } });
+    if (!user?.pushToken) {
+      return reply.status(400).send({ message: 'Nenhum token de push registrado pra essa conta.' });
+    }
+
+    try {
+      await sendPushNotification(
+        user.pushToken,
+        'Teste de notificação 🔔',
+        'Se você está vendo isso, as notificações push estão funcionando!'
+      );
+      return reply.send({ ok: true });
+    } catch (err) {
+      return reply.status(502).send({ message: err instanceof Error ? err.message : 'Falha ao enviar.' });
+    }
+  });
 
   app.post<{ Body: ChangePasswordBody }>(
     '/auth/change-password',
