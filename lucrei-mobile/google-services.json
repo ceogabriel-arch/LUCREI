@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "609003517480",
+    "project_id": "lucrei-29600",
+    "storage_bucket": "lucrei-29600.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:609003517480:android:e9bfa145162ba4c62d271d",
+        "android_client_info": {
+          "package_name": "com.lucreiapp.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBRX9Ld5LUEUUXBezIE6mUsG2lyQIQyHSY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
