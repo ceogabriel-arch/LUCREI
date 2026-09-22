@@ -9,6 +9,7 @@
 .env.*
 !.env.example
 !lucrei-mobile/.env.local-build.example
+*firebase-adminsdk*.json
 
 # Expo
 /lucrei-mobile/.expo/
