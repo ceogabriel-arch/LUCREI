@@ -29,10 +29,17 @@ export async function getSubscriptionAccessStatus(user: User): Promise<Subscript
     return { pastDue: false, blocked: false, graceDaysLeft: null };
   }
 
-  const subscription = await prisma.subscription.findFirst({
-    where: { userId: user.id, status: { not: 'canceled' } },
-    orderBy: { createdAt: 'desc' },
-  });
+  // Normalmente existe uma assinatura ativa (não cancelada) nesse ponto - é
+  // dela que sai a data. Mas se todas as assinaturas da conta estiverem
+  // canceladas (ex: trocou de método de pagamento, ou um estado
+  // inconsistente qualquer), cair pra "agora" faria a carência nunca
+  // aparecer esgotada - busca a mais recente de qualquer status como
+  // fallback, que ainda é bem mais fiel que um timestamp genérico da conta.
+  const subscription =
+    (await prisma.subscription.findFirst({
+      where: { userId: user.id, status: { not: 'canceled' } },
+      orderBy: { createdAt: 'desc' },
+    })) ?? (await prisma.subscription.findFirst({ where: { userId: user.id }, orderBy: { createdAt: 'desc' } }));
   const since = subscription?.currentPeriodEnd ?? subscription?.createdAt ?? user.updatedAt;
   const graceExpiresAt = new Date(since.getTime() + SUBSCRIPTION_GRACE_DAYS * 24 * 60 * 60 * 1000);
   const now = new Date();
