@@ -81,10 +81,34 @@ describe('notifyOrderCompletedIfNeeded', () => {
 
     expect(sendPushNotificationMock).toHaveBeenCalledWith(
       'ExponentPushToken[abc]',
-      'Novo pedido concluído! 🎉',
       expect.stringContaining('42,50'),
+      expect.any(String),
       { orderSn: 'SN123' }
     );
+  });
+
+  it('sends a prejuízo message (title, not "você lucrou") when totalProfit is negative', async () => {
+    prismaMock.order.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.shop.findUnique.mockResolvedValue({ id: 's1', userId: 'u1' });
+    prismaMock.user.findUnique.mockResolvedValue({ id: 'u1', pushToken: 'ExponentPushToken[abc]' });
+
+    await notifyOrderCompletedIfNeeded({
+      orderId: 'o1',
+      orderSn: 'SN123',
+      shopDbId: 's1',
+      completedAt: new Date(),
+      totalProfit: -5,
+    });
+
+    expect(sendPushNotificationMock).toHaveBeenCalledWith(
+      'ExponentPushToken[abc]',
+      expect.stringMatching(/prejuízo/i),
+      expect.any(String),
+      { orderSn: 'SN123' }
+    );
+    const [, title] = sendPushNotificationMock.mock.calls[0];
+    expect(title).toContain('5,00');
+    expect(title).not.toContain('-');
   });
 
   it('sends the "cadastre o custo" message when totalProfit is null', async () => {
@@ -102,7 +126,7 @@ describe('notifyOrderCompletedIfNeeded', () => {
 
     expect(sendPushNotificationMock).toHaveBeenCalledWith(
       'ExponentPushToken[abc]',
-      'Novo pedido concluído! 🎉',
+      expect.any(String),
       expect.stringContaining('Cadastre o custo'),
       { orderSn: 'SN123' }
     );

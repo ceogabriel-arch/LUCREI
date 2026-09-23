@@ -9,6 +9,28 @@ import { formatBRL, sendPushNotification } from './push-notifications';
 // recente, não um jeito de notificar tudo retroativamente.
 const FALLBACK_WINDOW_MS = 24 * 60 * 60 * 1000;
 
+// O valor vai no título (é a informação que importa de verdade, olhando de
+// relance) - "Você lucrou -R$ 5,00 nesse pedido" não fazia sentido nenhum
+// num pedido que deu prejuízo, então trata os três casos separados.
+function buildNotificationMessage(totalProfit: number | null): { title: string; body: string } {
+  if (totalProfit === null) {
+    return {
+      title: 'Pedido concluído',
+      body: 'Cadastre o custo do produto pra saber quanto você lucrou nele.',
+    };
+  }
+  if (totalProfit < 0) {
+    return {
+      title: `⚠️ Prejuízo de ${formatBRL(Math.abs(totalProfit))}`,
+      body: 'Um pedido seu completou no prejuízo - vale dar uma olhada.',
+    };
+  }
+  return {
+    title: `💰 Lucro de ${formatBRL(totalProfit)}`,
+    body: 'Um pedido seu acabou de completar na Shopee.',
+  };
+}
+
 export async function notifyOrderCompletedIfNeeded(params: {
   orderId: string;
   orderSn: string;
@@ -36,11 +58,7 @@ export async function notifyOrderCompletedIfNeeded(params: {
   const owner = await prisma.user.findUnique({ where: { id: shop.userId } });
   if (!owner?.pushToken) return;
 
-  const title = 'Novo pedido concluído! 🎉';
-  const body =
-    params.totalProfit !== null
-      ? `Você lucrou ${formatBRL(params.totalProfit)} nesse pedido.`
-      : 'Cadastre o custo do produto pra ver o lucro desse pedido.';
+  const { title, body } = buildNotificationMessage(params.totalProfit);
 
   try {
     await sendPushNotification(owner.pushToken, title, body, { orderSn: params.orderSn });
