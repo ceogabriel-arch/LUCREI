@@ -11,7 +11,7 @@ import { Sparkline } from '@/components/sparkline';
 import { TextField } from '@/components/text-field';
 import { requestPasswordReset } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { fullscreenOverlayStyle, useIsDesktopWeb, useModalPresentation, webCapWidth } from '@/lib/responsive';
+import { authCapWidth, fullscreenOverlayStyle, useIsDesktopWeb, useModalPresentation } from '@/lib/responsive';
 import { useAppTheme } from '@/lib/theme';
 
 const LOGO_LIGHT = require('../../assets/images/lucrei-logo-light.png');
@@ -162,7 +162,7 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
       <KeyboardAvoidingView behavior="padding" className="flex-1">
         <ScrollView
           contentContainerClassName="flex-grow justify-center px-6 py-10"
-          contentContainerStyle={webCapWidth()}
+          contentContainerStyle={authCapWidth()}
           keyboardShouldPersistTaps="handled">
           <View className="items-center">
             <View style={{ width: logoWidth, height: logoHeight }}>

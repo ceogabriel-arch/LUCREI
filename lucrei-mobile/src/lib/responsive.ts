@@ -29,6 +29,26 @@ export function useIsDesktopWeb() {
   return Platform.OS === 'web' && width >= DESKTOP_BREAKPOINT;
 }
 
+const AUTH_MAX_WIDTH = 440;
+
+/**
+ * Login/cadastro usavam webCapWidth(), que no desktop libera até
+ * DESKTOP_CONTENT_MAX_WIDTH (1100px) - certo pro conteúdo do app depois de
+ * logado, mas um formulário de 2-3 campos esticado até 1100px de largura
+ * fica com cara de tela de celular só que enorme, não de tela feita pra
+ * desktop. Um formulário de auth fica compacto e centralizado em qualquer
+ * largura de tela, igual a maioria dos sites - por isso um teto fixo, sem
+ * variar por breakpoint.
+ */
+export function authCapWidth() {
+  if (Platform.OS !== 'web') return undefined;
+  return {
+    width: '100%' as const,
+    maxWidth: AUTH_MAX_WIDTH,
+    alignSelf: 'center' as const,
+  };
+}
+
 /**
  * Os modais que não usam o <Modal> nativo do RN (renderizados como overlay
  * normal na árvore, pra contornar o resize do teclado no Android - ver
