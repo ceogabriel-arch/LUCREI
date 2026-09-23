@@ -119,7 +119,7 @@ export async function authRoutes(app: FastifyInstance) {
       });
 
       const token = app.jwt.sign({ sub: user.id, tv: user.tokenVersion });
-      return reply.status(201).send({ token, user: serializeUser(user) });
+      return reply.status(201).send({ token, user: await serializeUser(user) });
     }
   );
 
@@ -146,7 +146,7 @@ export async function authRoutes(app: FastifyInstance) {
       }
 
       const token = app.jwt.sign({ sub: user.id, tv: user.tokenVersion });
-      return reply.send({ token, user: serializeUser(user) });
+      return reply.send({ token, user: await serializeUser(user) });
     }
   );
 
@@ -198,7 +198,7 @@ export async function authRoutes(app: FastifyInstance) {
       }
 
       const token = app.jwt.sign({ sub: user.id, tv: user.tokenVersion });
-      return reply.send({ token, user: serializeUser(user) });
+      return reply.send({ token, user: await serializeUser(user) });
     }
   );
 
@@ -210,7 +210,7 @@ export async function authRoutes(app: FastifyInstance) {
     }
     const salesUsedThisMonth = user.plan?.salesLimit != null ? await getOrdersThisMonth(user.id) : null;
     await warnIfTrialEndingSoon(app, user);
-    return reply.send({ ...serializeUser(user), salesUsedThisMonth });
+    return reply.send({ ...await serializeUser(user), salesUsedThisMonth });
   });
 
   app.patch<{ Body: UpdateNameBody }>(
@@ -222,7 +222,7 @@ export async function authRoutes(app: FastifyInstance) {
         data: { name: request.body.name },
         include: userWithPlan,
       });
-      return reply.send(serializeUser(user));
+      return reply.send(await serializeUser(user));
     }
   );
 

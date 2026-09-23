@@ -6,7 +6,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AchievementsCard } from '@/components/achievements-card';
+import { BlurredValue } from '@/components/blurred-value';
 import { DeltaBadge } from '@/components/delta-badge';
+import { PastDueBanner } from '@/components/past-due-banner';
 import { Screen } from '@/components/screen';
 import { ShopPicker } from '@/components/shop-picker';
 import { Sparkline } from '@/components/sparkline';
@@ -20,6 +22,7 @@ import { PERIOD_TO_API, PERIODS, usePeriod } from '@/lib/period';
 import { useIsDesktopWeb } from '@/lib/responsive';
 import { useSelectedShop } from '@/lib/selected-shop';
 import { connectShopeeStore } from '@/lib/shopee';
+import { useSubscriptionAccess } from '@/lib/subscription-access';
 import { useAppTheme } from '@/lib/theme';
 
 const LOGO_LIGHT = require('../../assets/images/lucrei-logo-light.png');
@@ -62,6 +65,7 @@ export default function InicioScreen() {
   const { shops, selectedShop, loaded: shopsLoaded, refresh: refreshShops } = useSelectedShop();
   const { period, setPeriod } = usePeriod();
   const { refreshSignal } = useDataRefresh();
+  const subscriptionAccess = useSubscriptionAccess();
   const [backendStatus, setBackendStatus] = useState<BackendStatus>('checking');
   const [connecting, setConnecting] = useState(false);
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -313,6 +317,10 @@ export default function InicioScreen() {
                 <View className="mt-3 h-[52px] justify-center">
                   <ActivityIndicator color={Colors.gold} />
                 </View>
+              ) : showingRealData && subscriptionAccess.isPastDue ? (
+                <View className="mt-3">
+                  <BlurredValue width={180} height={isDesktop ? 52 : 44} />
+                </View>
               ) : (
                 <Text className={isDesktop ? 'mt-1 text-6xl font-bold text-lucrei-gold' : 'mt-1 text-5xl font-bold text-lucrei-gold'}>
                   {formatBRL(showingRealData ? summary!.profit : 40250)}
@@ -338,10 +346,15 @@ export default function InicioScreen() {
           </View>
         </View>
 
+        <PastDueBanner />
+
         <Text className="mt-6 text-sm font-medium text-lucrei-textMuted">Resumo do período</Text>
         {isDesktop ? (
           <View className="mt-3 flex-row flex-wrap gap-3">
-            {!stillLoading && kpiTiles.map((kpi) => <StatTile key={kpi.label} {...kpi} />)}
+            {!stillLoading &&
+              kpiTiles.map((kpi) => (
+                <StatTile key={kpi.label} {...kpi} blurred={showingRealData && subscriptionAccess.isPastDue} />
+              ))}
           </View>
         ) : (
           <ScrollView
@@ -349,7 +362,10 @@ export default function InicioScreen() {
             showsHorizontalScrollIndicator={false}
             className="-mx-5 mt-3"
             contentContainerClassName="gap-3 px-5">
-            {!stillLoading && kpiTiles.map((kpi) => <StatTile key={kpi.label} {...kpi} />)}
+            {!stillLoading &&
+              kpiTiles.map((kpi) => (
+                <StatTile key={kpi.label} {...kpi} blurred={showingRealData && subscriptionAccess.isPastDue} />
+              ))}
           </ScrollView>
         )}
 

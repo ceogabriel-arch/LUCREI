@@ -12,6 +12,12 @@ export type AuthUser = {
   createdAt: string;
   subscriptionStatus: SubscriptionStatus;
   trialEndsAt: string | null;
+  // Espelha SalesUsage.blocked/graceDaysLeft, mas pro pagamento em atraso -
+  // subscriptionBlocked só vira true depois da carência de 7 dias (ver
+  // getSubscriptionAccessStatus no backend); até lá, graceDaysLeft conta
+  // quanto falta.
+  subscriptionBlocked: boolean;
+  subscriptionGraceDaysLeft: number | null;
   plan: UserPlan | null;
   // Só vem preenchido na resposta de /auth/me (não em login/signup/planos).
   salesUsedThisMonth?: number | null;

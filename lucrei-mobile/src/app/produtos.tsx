@@ -4,6 +4,8 @@ import { useFocusEffect } from 'expo-router';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 
+import { BlurredValue } from '@/components/blurred-value';
+import { PastDueBanner } from '@/components/past-due-banner';
 import { Screen } from '@/components/screen';
 import {
   ApiError,
@@ -21,6 +23,7 @@ import { useDataRefresh } from '@/lib/data-refresh';
 import { formatBRL } from '@/lib/format';
 import { PERIOD_TO_API, PERIODS, type PeriodLabel, usePeriod } from '@/lib/period';
 import { useSelectedShop } from '@/lib/selected-shop';
+import { useSubscriptionAccess } from '@/lib/subscription-access';
 import { useColors } from '@/lib/theme';
 
 type LoadState = 'loading' | 'no-shop' | 'ready' | 'error';
@@ -65,6 +68,7 @@ const ProductRow = memo(function ProductRow({
   period: PeriodLabel;
 }) {
   const Colors = useColors();
+  const subscriptionAccess = useSubscriptionAccess();
   return (
     <View
       className="flex-row items-center gap-3 rounded-2xl border bg-lucrei-surface p-3"
@@ -90,22 +94,28 @@ const ProductRow = memo(function ProductRow({
         <Text className="mt-0.5 text-xs text-lucrei-textMuted">
           {product.price != null ? `Preço: ${formatBRL(product.price)}` : 'Sem preço informado'}
         </Text>
-        <Text
-          className="mt-0.5 text-xs"
-          style={{
-            color:
-              product.profit == null
-                ? Colors.textMuted
-                : product.profit >= 0
-                  ? Colors.success
-                  : Colors.danger,
-          }}>
-          {product.profit != null
-            ? `${product.profit >= 0 ? 'Lucro' : 'Prejuízo'} (${PROFIT_LABEL[period]}): ${formatBRL(product.profit)}`
-            : product.orders > 0
-              ? 'Vendeu, mas sem custo pra calcular lucro'
-              : NO_SALES_LABEL[period]}
-        </Text>
+        {subscriptionAccess.isPastDue && product.profit != null ? (
+          <View className="mt-1">
+            <BlurredValue width={110} />
+          </View>
+        ) : (
+          <Text
+            className="mt-0.5 text-xs"
+            style={{
+              color:
+                product.profit == null
+                  ? Colors.textMuted
+                  : product.profit >= 0
+                    ? Colors.success
+                    : Colors.danger,
+            }}>
+            {product.profit != null
+              ? `${product.profit >= 0 ? 'Lucro' : 'Prejuízo'} (${PROFIT_LABEL[period]}): ${formatBRL(product.profit)}`
+              : product.orders > 0
+                ? 'Vendeu, mas sem custo pra calcular lucro'
+                : NO_SALES_LABEL[period]}
+          </Text>
+        )}
       </View>
 
       <View className="items-end gap-1">
@@ -540,6 +550,7 @@ export default function ProdutosScreen() {
         </View>
         {loadState === 'ready' && reloading && <ActivityIndicator size="small" color={Colors.gold} />}
       </View>
+      <PastDueBanner />
 
       {loadState === 'loading' && (
         <View className="mt-10 items-center">

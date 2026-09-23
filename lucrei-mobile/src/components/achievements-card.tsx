@@ -21,7 +21,7 @@ const TIERS: Tier[] = [
     threshold: 1_000,
     reward: 'Mentoria de alavancagem',
     icon: 'school',
-    note: 'ou por já ser cliente Lucrei há 3 meses',
+    note: 'ou ser cliente Lucrei há 3 meses',
   },
   { threshold: 10_000, reward: 'Pulseira Lucrei', icon: 'gift' },
   { threshold: 50_000, reward: 'Caneca + boné Lucrei', icon: 'cafe' },

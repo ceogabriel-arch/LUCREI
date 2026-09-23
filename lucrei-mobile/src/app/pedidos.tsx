@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Dimensions, Modal, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BlurredValue } from '@/components/blurred-value';
+import { PastDueBanner } from '@/components/past-due-banner';
 import { Screen } from '@/components/screen';
 import { ToastBanner, useToast } from '@/components/toast';
 import {
@@ -22,6 +24,7 @@ import { formatBRL } from '@/lib/format';
 import { PERIOD_TO_API, PERIODS, usePeriod } from '@/lib/period';
 import { useModalPresentation } from '@/lib/responsive';
 import { useSelectedShop } from '@/lib/selected-shop';
+import { useSubscriptionAccess } from '@/lib/subscription-access';
 import { useColors } from '@/lib/theme';
 
 type LoadState = 'loading' | 'no-shop' | 'ready' | 'error';
@@ -154,10 +157,6 @@ function UsageBar({ usage }: { usage: SalesUsage }) {
 // Placeholder no lugar do valor real quando a conta está sobre o limite (na
 // carência) - cria a mesma sensação de "borrado" sem depender de blur/filtro
 // de CSS, que não é suportado de forma consistente no nativo.
-function BlurredValue({ width }: { width: number }) {
-  return <View style={{ width, height: 14, borderRadius: 4, opacity: 0.35 }} className="bg-lucrei-textMuted" />;
-}
-
 function OrderRow({ order, onPress, locked }: { order: Order; onPress: () => void; locked: boolean }) {
   const Colors = useColors();
   const hasProfit = order.profit !== null;
@@ -224,7 +223,8 @@ export default function PedidosScreen() {
   const [search, setSearch] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const { toast, opacity: toastOpacity, show: showToast } = useToast();
-  const isOverLimit = usage?.overLimit ?? false;
+  const subscriptionAccess = useSubscriptionAccess();
+  const isOverLimit = (usage?.overLimit ?? false) || subscriptionAccess.isPastDue;
   // Trocar de período com a tela já pronta mantém loadState em 'ready' (de
   // propósito, pra não piscar a tela inteira de loading) - sem isso, nada
   // avisa que a lista está recalculando enquanto o pedido não volta.
@@ -387,6 +387,7 @@ export default function PedidosScreen() {
       </View>
 
       {usage && <UsageBar usage={usage} />}
+      <PastDueBanner />
 
       <View className="mt-5 flex-row items-center gap-2">
         <View className="flex-row self-start rounded-full bg-lucrei-surface p-1">
@@ -468,6 +469,14 @@ export default function PedidosScreen() {
                   order={order}
                   locked={isOverLimit}
                   onPress={() => {
+                    if (subscriptionAccess.isPastDue) {
+                      showToast({
+                        title: 'Valores ocultos',
+                        message: 'Regularize seu pagamento pra ver o detalhe de lucro desse pedido.',
+                        tone: 'error',
+                      });
+                      return;
+                    }
                     if (isOverLimit) {
                       showToast({
                         title: 'Valores ocultos',

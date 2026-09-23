@@ -1,6 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Text, View } from 'react-native';
 
+import { BlurredValue } from '@/components/blurred-value';
 import { useColors } from '@/lib/theme';
 
 type StatTileProps = {
@@ -10,6 +11,8 @@ type StatTileProps = {
   deltaDirection?: 'up' | 'down';
   /** Whether an increase is favorable for this metric (false for cost-like metrics). */
   positiveIsGood?: boolean;
+  /** Pagamento em atraso/limite estourado - esconde o valor em vez de mostrar. */
+  blurred?: boolean;
 };
 
 export function StatTile({
@@ -18,6 +21,7 @@ export function StatTile({
   deltaLabel,
   deltaDirection = 'up',
   positiveIsGood = true,
+  blurred = false,
 }: StatTileProps) {
   const Colors = useColors();
   const isGood = (deltaDirection === 'up') === positiveIsGood;
@@ -28,10 +32,16 @@ export function StatTile({
       <Text className="text-xs text-lucrei-textMuted" numberOfLines={1}>
         {label}
       </Text>
-      <Text className="mt-1.5 text-lg font-semibold text-lucrei-text" numberOfLines={1}>
-        {value}
-      </Text>
-      {deltaLabel ? (
+      {blurred ? (
+        <View className="mt-1.5">
+          <BlurredValue width={70} height={18} />
+        </View>
+      ) : (
+        <Text className="mt-1.5 text-lg font-semibold text-lucrei-text" numberOfLines={1}>
+          {value}
+        </Text>
+      )}
+      {deltaLabel && !blurred ? (
         <View className="mt-1 flex-row items-center gap-1">
           <Ionicons
             name={deltaDirection === 'down' ? 'arrow-down' : 'arrow-up'}

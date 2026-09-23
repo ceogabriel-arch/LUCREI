@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 
 import { checkSalesLimitBlock, getSalesLimitStatus } from '../../lib/sales-usage';
+import { checkSubscriptionAccessBlock } from '../../lib/subscription-access';
 import { startOfCurrentMonth } from '../../lib/period';
 import { prisma } from '../../lib/prisma';
 import { sendPushNotification } from '../../lib/push-notifications';
@@ -60,6 +61,11 @@ export async function syncRoutes(app: FastifyInstance) {
         where: { id: request.user.sub },
         include: { plan: true },
       });
+
+      const subscriptionBlock = await checkSubscriptionAccessBlock(request.user.sub);
+      if (subscriptionBlock.blocked) {
+        return reply.status(403).send({ message: subscriptionBlock.message, code: 'subscription_past_due' });
+      }
 
       if (user?.plan?.salesLimit != null) {
         const status = await getSalesLimitStatus(user);
@@ -150,6 +156,11 @@ export async function syncRoutes(app: FastifyInstance) {
           windowsDone: shop.historyBackfillWindowsDone ?? 0,
           windowsTotal: HISTORY_BACKFILL_WINDOWS_TOTAL,
         });
+      }
+
+      const subscriptionBlock = await checkSubscriptionAccessBlock(request.user.sub);
+      if (subscriptionBlock.blocked) {
+        return reply.status(403).send({ message: subscriptionBlock.message, code: 'subscription_past_due' });
       }
 
       const block = await checkSalesLimitBlock(request.user.sub);

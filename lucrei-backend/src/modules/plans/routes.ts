@@ -101,7 +101,7 @@ export async function plansRoutes(app: FastifyInstance) {
       try {
         const upgradeCharge = await createProratedUpgradeCharge(user, plan);
         if (upgradeCharge) {
-          return reply.send({ ...serializeUser(user), pix: upgradeCharge });
+          return reply.send({ ...await serializeUser(user), pix: upgradeCharge });
         }
       } catch (err) {
         app.log.error(err);
@@ -136,7 +136,7 @@ export async function plansRoutes(app: FastifyInstance) {
       // pra ele, então só devolve o que já existe em vez de criar uma
       // segunda assinatura de verdade na Mercado Pago.
       if (existingSubscription && existingSubscription.status !== 'canceled' && user.plan?.id === plan.id) {
-        return reply.send({ ...serializeUser(user), checkoutUrl: existingSubscription.lastInvoiceUrl });
+        return reply.send({ ...await serializeUser(user), checkoutUrl: existingSubscription.lastInvoiceUrl });
       }
 
       // Só reaproveita a assinatura existente (só troca o valor) se o ciclo de
@@ -216,7 +216,7 @@ export async function plansRoutes(app: FastifyInstance) {
         include: userWithPlan,
       });
 
-      return reply.send({ ...serializeUser(updated), checkoutUrl });
+      return reply.send({ ...await serializeUser(updated), checkoutUrl });
     }
   );
 
@@ -251,7 +251,7 @@ export async function plansRoutes(app: FastifyInstance) {
       try {
         const upgradeCharge = await createProratedUpgradeCharge(user, plan);
         if (upgradeCharge) {
-          return reply.send({ ...serializeUser(user), pix: upgradeCharge });
+          return reply.send({ ...await serializeUser(user), pix: upgradeCharge });
         }
       } catch (err) {
         app.log.error(err);
@@ -326,7 +326,7 @@ export async function plansRoutes(app: FastifyInstance) {
           data: { planId: plan.id, subscriptionStatus: 'trialing', trialEndsAt },
           include: userWithPlan,
         });
-        return reply.send({ ...serializeUser(updated), pix: null });
+        return reply.send({ ...await serializeUser(updated), pix: null });
       }
 
       const periodStart = new Date();
@@ -361,7 +361,7 @@ export async function plansRoutes(app: FastifyInstance) {
         include: userWithPlan,
       });
 
-      return reply.send({ ...serializeUser(updated), pix: charge });
+      return reply.send({ ...await serializeUser(updated), pix: charge });
     }
   );
 
@@ -420,6 +420,6 @@ export async function plansRoutes(app: FastifyInstance) {
       data: { subscriptionStatus: 'canceled' },
       include: userWithPlan,
     });
-    return reply.send(serializeUser(user));
+    return reply.send(await serializeUser(user));
   });
 }

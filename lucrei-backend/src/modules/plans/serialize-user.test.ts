@@ -51,23 +51,29 @@ function buildPlan(overrides: Partial<Plan> = {}): Plan {
 }
 
 describe('serializeUser', () => {
-  it('never leaks the password hash', () => {
-    const result = serializeUser(buildUser());
+  it('never leaks the password hash', async () => {
+    const result = await serializeUser(buildUser());
     expect(result).not.toHaveProperty('passwordHash');
   });
 
-  it('returns plan: null when the user has no plan linked', () => {
-    const result = serializeUser(buildUser({ plan: null }));
+  it('returns plan: null when the user has no plan linked', async () => {
+    const result = await serializeUser(buildUser({ plan: null }));
     expect(result.plan).toBeNull();
   });
 
-  it('exposes key, name, salesLimit, and billingPeriod from the linked plan', () => {
-    const result = serializeUser(buildUser({ planId: 'plan_pro', plan: buildPlan() }));
+  it('exposes key, name, salesLimit, and billingPeriod from the linked plan', async () => {
+    const result = await serializeUser(buildUser({ planId: 'plan_pro', plan: buildPlan() }));
     expect(result.plan).toEqual({ key: 'pro', name: 'Pro', salesLimit: 1500, billingPeriod: 'monthly' });
   });
 
-  it('passes through the subscription status as-is', () => {
-    const result = serializeUser(buildUser({ subscriptionStatus: 'canceled' }));
+  it('passes through the subscription status as-is', async () => {
+    const result = await serializeUser(buildUser({ subscriptionStatus: 'canceled' }));
     expect(result.subscriptionStatus).toBe('canceled');
+  });
+
+  it('reports no block/grace when not past_due (no DB access needed)', async () => {
+    const result = await serializeUser(buildUser({ subscriptionStatus: 'trialing' }));
+    expect(result.subscriptionBlocked).toBe(false);
+    expect(result.subscriptionGraceDaysLeft).toBeNull();
   });
 });

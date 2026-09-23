@@ -3,7 +3,9 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 
+import { BlurredValue } from '@/components/blurred-value';
 import { DailyProfitChart } from '@/components/daily-profit-chart';
+import { PastDueBanner } from '@/components/past-due-banner';
 import { Screen } from '@/components/screen';
 import type { ThemeColors } from '@/constants/theme';
 import {
@@ -23,6 +25,7 @@ import { exportOrdersCsv } from '@/lib/export-csv';
 import { formatBRL } from '@/lib/format';
 import { PERIOD_TO_API, PERIODS, usePeriod } from '@/lib/period';
 import { useSelectedShop } from '@/lib/selected-shop';
+import { useSubscriptionAccess } from '@/lib/subscription-access';
 import { useColors } from '@/lib/theme';
 
 type LoadState = 'loading' | 'no-shop' | 'ready' | 'error';
@@ -149,6 +152,7 @@ function ReportRangeCard({
   connectedAt: string;
 }) {
   const Colors = useColors();
+  const subscriptionAccess = useSubscriptionAccess();
   const now = new Date();
   const [mode, setMode] = useState<ReportMode>('month');
   const [year, setYear] = useState(now.getFullYear());
@@ -342,21 +346,34 @@ function ReportRangeCard({
         {loading ? (
           <ActivityIndicator color={Colors.gold} />
         ) : summary ? (
-          <View className="gap-1.5">
-            <View className="flex-row items-center justify-between">
-              <Text className="text-xs text-lucrei-textMuted">Faturamento</Text>
-              <Text className="text-sm text-lucrei-text">{formatBRL(summary.revenue)}</Text>
+          subscriptionAccess.isPastDue ? (
+            <View className="gap-1.5">
+              <View className="flex-row items-center justify-between">
+                <Text className="text-xs text-lucrei-textMuted">Faturamento</Text>
+                <BlurredValue width={70} />
+              </View>
+              <View className="flex-row items-center justify-between">
+                <Text className="text-xs text-lucrei-textMuted">Lucro</Text>
+                <BlurredValue width={90} height={16} />
+              </View>
             </View>
-            <View className="flex-row items-center justify-between">
-              <Text className="text-xs text-lucrei-textMuted">Lucro</Text>
-              <Text className="text-base font-bold" style={{ color: summary.profit >= 0 ? Colors.success : Colors.danger }}>
-                {formatBRL(summary.profit)}
+          ) : (
+            <View className="gap-1.5">
+              <View className="flex-row items-center justify-between">
+                <Text className="text-xs text-lucrei-textMuted">Faturamento</Text>
+                <Text className="text-sm text-lucrei-text">{formatBRL(summary.revenue)}</Text>
+              </View>
+              <View className="flex-row items-center justify-between">
+                <Text className="text-xs text-lucrei-textMuted">Lucro</Text>
+                <Text className="text-base font-bold" style={{ color: summary.profit >= 0 ? Colors.success : Colors.danger }}>
+                  {formatBRL(summary.profit)}
+                </Text>
+              </View>
+              <Text className="text-xs text-lucrei-textMuted">
+                {summary.ordersCount} {summary.ordersCount === 1 ? 'pedido' : 'pedidos'}
               </Text>
             </View>
-            <Text className="text-xs text-lucrei-textMuted">
-              {summary.ordersCount} {summary.ordersCount === 1 ? 'pedido' : 'pedidos'}
-            </Text>
-          </View>
+          )
         ) : (
           <Text className="text-sm text-lucrei-textMuted">Sem dados nesse período.</Text>
         )}
@@ -429,6 +446,7 @@ export default function RelatoriosScreen() {
   const { selectedShop, loaded: shopsLoaded } = useSelectedShop();
   const { period, setPeriod } = usePeriod();
   const { refreshSignal } = useDataRefresh();
+  const subscriptionAccess = useSubscriptionAccess();
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [summary, setSummary] = useState<Summary | null>(null);
   const [products, setProducts] = useState<ShopeeProduct[]>([]);
@@ -556,83 +574,96 @@ export default function RelatoriosScreen() {
             <ReportRangeCard token={token} shopId={selectedShop.id} connectedAt={selectedShop.connectedAt} />
           )}
 
-          <View className="rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
-            <Text className="text-sm font-medium text-lucrei-text">Lucro por dia</Text>
-            <DailyProfitChart data={summary.trend} />
-          </View>
+          <PastDueBanner />
 
-          <View className="rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
-            <Text className="mb-3 text-sm font-medium text-lucrei-text">Pra onde foi o dinheiro</Text>
-            <CostBar label="Custo do produto" value={summary.productCost} total={summary.revenue} color={Colors.goldDim} />
-            <CostBar label="Taxas da Shopee" value={summary.shopeeFees} total={summary.revenue} color={Colors.danger} />
-            <CostBar label="Frete" value={summary.shippingCost} total={summary.revenue} color={Colors.textMuted} />
-            <CostBar label="Lucro" value={summary.profit} total={summary.revenue} color={Colors.gold} />
-            {summary.itemsMissingCost > 0 && (
-              <Text className="mt-1 text-xs text-lucrei-textMuted">
-                {summary.itemsMissingCost} item(ns) sem custo cadastrado, não entram nesse cálculo.
+          {subscriptionAccess.isPastDue ? (
+            <View className="items-center rounded-2xl border border-lucrei-border bg-lucrei-surface p-6">
+              <Ionicons name="lock-closed" size={20} color={Colors.textMuted} />
+              <Text className="mt-2 text-center text-sm text-lucrei-textMuted">
+                Gráficos e detalhamento de lucro ficam ocultos até você regularizar o pagamento.
               </Text>
-            )}
-          </View>
-
-          {abcItems.length > 0 && (
-            <View className="rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
-              <Text className="mb-1 text-sm font-medium text-lucrei-text">Curva ABC</Text>
-              <Text className="mb-3 text-xs text-lucrei-textMuted">
-                Classificação dos produtos pela contribuição no faturamento.
-              </Text>
-
-              <View className="mb-3 h-2 flex-row overflow-hidden rounded-full">
-                {abcCounts
-                  .filter((c) => c.count > 0)
-                  .map((c) => (
-                    <View
-                      key={c.cls}
-                      style={{ flex: c.count, backgroundColor: getAbcBackground(c.cls, Colors), height: '100%' }}
-                    />
-                  ))}
-              </View>
-
-              <View className="mb-3 flex-row flex-wrap gap-x-4 gap-y-1.5">
-                {abcCounts
-                  .filter((c) => c.count > 0)
-                  .map((c) => (
-                    <View key={c.cls} className="flex-row items-center gap-1.5">
-                      <View className="h-2 w-2 rounded-full" style={{ backgroundColor: getAbcBackground(c.cls, Colors) }} />
-                      <Text className="text-xs text-lucrei-textMuted">
-                        {c.cls}: {c.count} · {ABC_DESCRIPTION[c.cls]}
-                      </Text>
-                    </View>
-                  ))}
-              </View>
-
-              <View className="gap-2">
-                {abcItems.map((item) => (
-                  <AbcRow key={item.product.shopeeItemId} item={item} />
-                ))}
-              </View>
             </View>
-          )}
-
-          {topProfitable.length > 0 && (
-            <View className="rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
-              <Text className="mb-3 text-sm font-medium text-lucrei-text">Produtos mais lucrativos</Text>
-              <View className="gap-2">
-                {topProfitable.map((p) => (
-                  <ProductRankRow key={p.shopeeItemId} product={p} />
-                ))}
+          ) : (
+            <>
+              <View className="rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+                <Text className="text-sm font-medium text-lucrei-text">Lucro por dia</Text>
+                <DailyProfitChart data={summary.trend} />
               </View>
-            </View>
-          )}
 
-          {lossMakers.length > 0 && (
-            <View className="rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
-              <Text className="mb-3 text-sm font-medium text-lucrei-text">Produtos no prejuízo</Text>
-              <View className="gap-2">
-                {lossMakers.map((p) => (
-                  <ProductRankRow key={p.shopeeItemId} product={p} />
-                ))}
+              <View className="rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+                <Text className="mb-3 text-sm font-medium text-lucrei-text">Pra onde foi o dinheiro</Text>
+                <CostBar label="Custo do produto" value={summary.productCost} total={summary.revenue} color={Colors.goldDim} />
+                <CostBar label="Taxas da Shopee" value={summary.shopeeFees} total={summary.revenue} color={Colors.danger} />
+                <CostBar label="Frete" value={summary.shippingCost} total={summary.revenue} color={Colors.textMuted} />
+                <CostBar label="Lucro" value={summary.profit} total={summary.revenue} color={Colors.gold} />
+                {summary.itemsMissingCost > 0 && (
+                  <Text className="mt-1 text-xs text-lucrei-textMuted">
+                    {summary.itemsMissingCost} item(ns) sem custo cadastrado, não entram nesse cálculo.
+                  </Text>
+                )}
               </View>
-            </View>
+
+              {abcItems.length > 0 && (
+                <View className="rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+                  <Text className="mb-1 text-sm font-medium text-lucrei-text">Curva ABC</Text>
+                  <Text className="mb-3 text-xs text-lucrei-textMuted">
+                    Classificação dos produtos pela contribuição no faturamento.
+                  </Text>
+
+                  <View className="mb-3 h-2 flex-row overflow-hidden rounded-full">
+                    {abcCounts
+                      .filter((c) => c.count > 0)
+                      .map((c) => (
+                        <View
+                          key={c.cls}
+                          style={{ flex: c.count, backgroundColor: getAbcBackground(c.cls, Colors), height: '100%' }}
+                        />
+                      ))}
+                  </View>
+
+                  <View className="mb-3 flex-row flex-wrap gap-x-4 gap-y-1.5">
+                    {abcCounts
+                      .filter((c) => c.count > 0)
+                      .map((c) => (
+                        <View key={c.cls} className="flex-row items-center gap-1.5">
+                          <View className="h-2 w-2 rounded-full" style={{ backgroundColor: getAbcBackground(c.cls, Colors) }} />
+                          <Text className="text-xs text-lucrei-textMuted">
+                            {c.cls}: {c.count} · {ABC_DESCRIPTION[c.cls]}
+                          </Text>
+                        </View>
+                      ))}
+                  </View>
+
+                  <View className="gap-2">
+                    {abcItems.map((item) => (
+                      <AbcRow key={item.product.shopeeItemId} item={item} />
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {topProfitable.length > 0 && (
+                <View className="rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+                  <Text className="mb-3 text-sm font-medium text-lucrei-text">Produtos mais lucrativos</Text>
+                  <View className="gap-2">
+                    {topProfitable.map((p) => (
+                      <ProductRankRow key={p.shopeeItemId} product={p} />
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {lossMakers.length > 0 && (
+                <View className="rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+                  <Text className="mb-3 text-sm font-medium text-lucrei-text">Produtos no prejuízo</Text>
+                  <View className="gap-2">
+                    {lossMakers.map((p) => (
+                      <ProductRankRow key={p.shopeeItemId} product={p} />
+                    ))}
+                  </View>
+                </View>
+              )}
+            </>
           )}
         </ScrollView>
       )}
