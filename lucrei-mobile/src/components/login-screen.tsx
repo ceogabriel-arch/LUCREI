@@ -181,7 +181,8 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
               </View>
             )}
 
-            <View className={`rounded-2xl border border-lucrei-border bg-lucrei-surface p-5 ${isDesktop ? '' : 'mt-8'}`}>
+            <View
+              className={`rounded-2xl border border-lucrei-border bg-lucrei-surface ${isDesktop ? 'p-7' : 'p-5 mt-8'}`}>
             <TextField
               label="E-mail"
               placeholder="seu@email.com"
@@ -190,7 +191,6 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
               keyboardType="email-address"
               value={email}
               onChangeText={setEmail}
-              compact={isDesktop}
             />
             <PasswordField
               label="Senha"
@@ -198,7 +198,6 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
               value={password}
               onChangeText={setPassword}
               autoComplete="off"
-              compact={isDesktop}
             />
 
             <View className="mb-2 flex-row items-center justify-between">
@@ -208,11 +207,11 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
                   size={18}
                   color={rememberMe ? Colors.gold : Colors.textMuted}
                 />
-                <Text className="text-xs text-lucrei-textMuted">Lembrar de mim</Text>
+                <Text className="text-sm text-lucrei-textMuted">Lembrar de mim</Text>
               </Pressable>
 
               <Pressable onPress={() => setForgotPasswordVisible(true)} hitSlop={8}>
-                <Text className="text-xs font-medium text-lucrei-gold">Esqueci minha senha</Text>
+                <Text className="text-sm font-medium text-lucrei-gold">Esqueci minha senha</Text>
               </Pressable>
             </View>
 
@@ -221,7 +220,7 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
             <Pressable
               onPress={handleSubmit}
               disabled={submitting || !canSubmit}
-              className={`mt-2 items-center rounded-2xl bg-lucrei-gold ${isDesktop ? 'py-3' : 'py-4'}`}
+              className="mt-2 items-center rounded-2xl bg-lucrei-gold py-4"
               style={{ opacity: submitting || !canSubmit ? 0.6 : 1 }}>
               {submitting ? (
                 <ActivityIndicator color={Colors.onGold} />
@@ -233,16 +232,16 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
 
           <View className="mt-5 flex-row items-center gap-3">
             <View className="h-px flex-1 bg-lucrei-border" />
-            <Text className="text-xs text-lucrei-textMuted">ou</Text>
+            <Text className="text-sm text-lucrei-textMuted">ou</Text>
             <View className="h-px flex-1 bg-lucrei-border" />
           </View>
 
           <GoogleSignInButton onIdToken={handleGoogleIdToken} onError={setError} />
 
           <View className="mt-8 flex-row justify-center gap-1">
-            <Text className="text-sm text-lucrei-textMuted">Ainda não tem conta?</Text>
+            <Text className="text-base text-lucrei-textMuted">Ainda não tem conta?</Text>
             <Pressable onPress={onNavigateToSignup} hitSlop={8}>
-              <Text className="text-sm font-semibold text-lucrei-gold">Criar conta</Text>
+              <Text className="text-base font-semibold text-lucrei-gold">Criar conta</Text>
             </Pressable>
           </View>
           </ScrollView>
