@@ -162,7 +162,9 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
 
           <ScrollView
             className={isDesktop ? 'flex-1' : undefined}
-            contentContainerClassName="flex-grow justify-center px-6 py-10"
+            contentContainerClassName={
+              isDesktop ? 'flex-grow justify-start px-6 pb-10 pt-28' : 'flex-grow justify-center px-6 py-10'
+            }
             contentContainerStyle={authCapWidth()}
             keyboardShouldPersistTaps="handled">
             {isDesktop ? null : (
