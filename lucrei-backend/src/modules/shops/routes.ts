@@ -4,7 +4,6 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 
 import { encrypt } from '../../lib/crypto';
 import { sendShopReconnectAttemptEmail } from '../../lib/email';
-import { formatBRL, sendPushNotification } from '../../lib/push-notifications';
 import { prisma } from '../../lib/prisma';
 import { exchangeCodeForToken, getAuthorizationUrl, getShopInfo } from '../../shopee-client';
 import { syncOneOrder } from '../sync/service';
@@ -46,23 +45,10 @@ const SHOP_AUTHORIZATION_CANCELED_PUSH_CODE = 2;
 const ORDER_STATUS_PUSH_CODE = 3;
 const ORDER_COMPLETED_STATUS = 'COMPLETED';
 
-async function notifyOrderProfit(shopDbId: string, orderSn: string, orderStatus: string) {
-  const shop = await prisma.shop.findUnique({ where: { id: shopDbId } });
-  if (!shop) return;
-
-  const owner = await prisma.user.findUnique({ where: { id: shop.userId } });
-  if (!owner?.pushToken) return;
-
-  const { totalProfit } = await syncOneOrder(shopDbId, orderSn, orderStatus);
-
-  const title = 'Novo pedido concluído! 🎉';
-  const body =
-    totalProfit !== null
-      ? `Você lucrou ${formatBRL(totalProfit)} nesse pedido.`
-      : 'Cadastre o custo do produto pra ver o lucro desse pedido.';
-
-  await sendPushNotification(owner.pushToken, title, body, { orderSn });
-}
+// A notificação de "pedido concluído" agora é enviada de dentro do próprio
+// processOrder (ver notifyOrderCompletedIfNeeded) - sincronizar o pedido
+// aqui já cobre isso sozinho, webhook não precisa mais mandar o push por
+// conta própria.
 
 export async function shopRoutes(app: FastifyInstance) {
   app.get<{ Querystring: AuthorizeUrlQuery }>(
@@ -280,8 +266,10 @@ export async function shopRoutes(app: FastifyInstance) {
         const shop = await prisma.shop.findUnique({ where: { shopeeShopId: String(shopeeShopId) } });
         if (shop) {
           // Não deixa a Shopee esperando o pedido inteiro ser processado e a
-          // notificação ser enviada — responde 200 e termina em segundo plano.
-          notifyOrderProfit(shop.id, orderSn, status).catch((err) => app.log.error(err));
+          // notificação ser enviada — responde 200 e termina em segundo
+          // plano. syncOneOrder já manda a notificação sozinho (ver
+          // notifyOrderCompletedIfNeeded dentro de processOrder).
+          syncOneOrder(shop.id, orderSn, status).catch((err) => app.log.error(err));
         }
       }
     } else if (code !== undefined && code !== SHOP_AUTHORIZATION_CANCELED_PUSH_CODE) {

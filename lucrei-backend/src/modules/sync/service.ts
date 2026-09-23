@@ -1,4 +1,5 @@
 import { mapLimit } from '../../lib/concurrency';
+import { notifyOrderCompletedIfNeeded } from '../../lib/order-notifications';
 import { prisma } from '../../lib/prisma';
 import { getValidAccessToken } from '../../lib/shopee-token';
 import { getEscrowDetail, getOrderDetail, getOrderList } from '../../shopee-client';
@@ -106,6 +107,19 @@ async function processOrder(
   // Segue o mesmo critério da rota de listagem de pedidos: só null quando
   // NENHUM item do pedido tem custo cadastrado.
   const totalProfit = itemsMissingCost === income.items.length ? null : profitSum;
+
+  // Rede de segurança contra o push da Shopee não avisar (não garante
+  // entrega) - roda em toda sincronização, não só quando vem do webhook, mas
+  // só manda notificação de verdade se o pedido ainda não tiver sido
+  // notificado E tiver completado recentemente (ver notifyOrderCompletedIfNeeded).
+  // Nunca deixa uma falha aqui derrubar a sincronização do pedido em si.
+  await notifyOrderCompletedIfNeeded({
+    orderId: order.id,
+    orderSn,
+    shopDbId,
+    completedAt: order.completedAt,
+    totalProfit,
+  }).catch(() => {});
 
   return { orderId: order.id, totalProfit };
 }
