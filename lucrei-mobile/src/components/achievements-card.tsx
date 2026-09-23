@@ -17,7 +17,12 @@ type IconName = keyof typeof Ionicons.glyphMap;
 type Tier = { threshold: number; reward: string; icon: IconName; note?: string };
 
 const TIERS: Tier[] = [
-  { threshold: 1_000, reward: 'Mentoria de alavancagem', icon: 'school', note: 'ou 3 meses de conta na Lucrei' },
+  {
+    threshold: 1_000,
+    reward: 'Mentoria de alavancagem',
+    icon: 'school',
+    note: 'ou por já ser cliente Lucrei há 3 meses',
+  },
   { threshold: 10_000, reward: 'Pulseira Lucrei', icon: 'gift' },
   { threshold: 50_000, reward: 'Caneca + boné Lucrei', icon: 'cafe' },
   { threshold: 100_000, reward: 'Placa Lucrei', icon: 'ribbon' },
