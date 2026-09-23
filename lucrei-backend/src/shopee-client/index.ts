@@ -188,19 +188,39 @@ export async function getOrderList(
   return body.response!;
 }
 
+// item_list vem preenchido pra pedido em qualquer status (diferente do
+// get_escrow_detail, que só tem dado depois do pedido completar) - é o que
+// permite identificar o produto de uma etiqueta impressa antes da venda
+// fechar. Nomes de campo aqui NÃO foram confirmados contra uma resposta real
+// da Shopee (sem credencial de parceiro real neste ambiente) - se vier vazio
+// na prática, conferir o payload real no Partner Center antes de mais nada.
 type OrderDetailResponse = {
   response?: {
-    order_list: { order_sn: string; order_status: string; create_time: number }[];
+    order_list: {
+      order_sn: string;
+      order_status: string;
+      create_time: number;
+      item_list?: {
+        item_name: string;
+        model_quantity_purchased?: number;
+        quantity_purchased?: number;
+      }[];
+    }[];
   };
   error?: string;
   message?: string;
 };
 
-export async function getOrderDetail(accessToken: string, shopId: number, orderSnList: string[]) {
+export async function getOrderDetail(
+  accessToken: string,
+  shopId: number,
+  orderSnList: string[],
+  optionalFields: string[] = ['create_time']
+) {
   let url = buildAuthenticatedUrl('/api/v2/order/get_order_detail', accessToken, shopId);
   const params = new URLSearchParams({
     order_sn_list: orderSnList.join(','),
-    response_optional_fields: 'create_time',
+    response_optional_fields: optionalFields.join(','),
   });
   url += `&${params.toString()}`;
 

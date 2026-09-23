@@ -1,28 +1,70 @@
 import type { FastifyPluginAsync } from 'fastify';
 
 import { prisma } from '../../lib/prisma';
+import { getValidAccessToken } from '../../lib/shopee-token';
+import { getOrderDetail } from '../../shopee-client';
 import { extractOrderSnsByPage, resizePdfToLabel } from './service';
 
 // Monta "2x Ração Golden 10kg + 1x Areia Sanitária" a partir dos itens do
-// pedido - usa o nome do produto do catálogo, com o nome capturado na hora
-// da venda como fallback (mesma lógica do CSV de pedidos, pra cobrir item
-// descontinuado da Shopee que não tem mais Product vinculado).
-function formatOrderProductLabel(order: {
-  lineItems: Array<{ quantity: number; itemName: string | null; product: { name: string } | null }>;
-}): string | null {
-  const parts = order.lineItems
-    .map((li) => li.product?.name ?? li.itemName)
-    .filter((name): name is string => !!name);
-  if (parts.length === 0) return null;
-
+// pedido.
+function formatOrderProductLabel(lineItems: Array<{ quantity: number; name: string }>): string | null {
+  if (lineItems.length === 0) return null;
   const counted = new Map<string, number>();
-  order.lineItems.forEach((li, i) => {
-    const name = parts[i];
-    if (!name) return;
-    counted.set(name, (counted.get(name) ?? 0) + li.quantity);
-  });
-
+  for (const li of lineItems) {
+    counted.set(li.name, (counted.get(li.name) ?? 0) + li.quantity);
+  }
   return [...counted.entries()].map(([name, qty]) => `${qty}x ${name}`).join(' + ');
+}
+
+// Etiqueta de envio é impressa logo depois da venda, muito antes do pedido
+// chegar em "concluído" - e o Lucrei só sincroniza pedido COMPLETED (só aí
+// os valores de repasse da Shopee ficam definitivos pra calcular lucro). Ou
+// seja, na prática o pedido quase nunca está no banco ainda quando a
+// etiqueta é gerada. Por isso: primeiro tenta achar no que já está
+// sincronizado (rápido, não gasta chamada da API), e pro resto busca ao vivo
+// na Shopee via get_order_detail, que devolve os itens do pedido em
+// QUALQUER status - diferente do get_escrow_detail usado na sincronização.
+async function lookupProductLabels(userId: string, orderSns: string[]): Promise<Map<string, string>> {
+  const labelBySn = new Map<string, string>();
+  if (orderSns.length === 0) return labelBySn;
+
+  const synced = await prisma.order.findMany({
+    where: { shopeeOrderSn: { in: orderSns }, shop: { userId } },
+    include: { lineItems: { include: { product: { select: { name: true } } } } },
+  });
+  for (const order of synced) {
+    const items = order.lineItems
+      .map((li) => ({ quantity: li.quantity, name: li.product?.name ?? li.itemName }))
+      .filter((li): li is { quantity: number; name: string } => !!li.name);
+    const label = formatOrderProductLabel(items);
+    if (label) labelBySn.set(order.shopeeOrderSn, label);
+  }
+
+  const remaining = orderSns.filter((sn) => !labelBySn.has(sn));
+  if (remaining.length === 0) return labelBySn;
+
+  const shops = await prisma.shop.findMany({ where: { userId, status: 'active' } });
+  for (const shop of shops) {
+    const stillRemaining = orderSns.filter((sn) => !labelBySn.has(sn));
+    if (stillRemaining.length === 0) break;
+
+    try {
+      const { accessToken, shopeeShopId } = await getValidAccessToken(shop.id);
+      const orderList = await getOrderDetail(accessToken, shopeeShopId, stillRemaining, ['item_list']);
+      for (const order of orderList) {
+        const items = (order.item_list ?? [])
+          .map((it) => ({ quantity: it.model_quantity_purchased ?? it.quantity_purchased ?? 1, name: it.item_name }))
+          .filter((it): it is { quantity: number; name: string } => !!it.name);
+        const label = formatOrderProductLabel(items);
+        if (label) labelBySn.set(order.order_sn, label);
+      }
+    } catch {
+      // Uma loja falhando (token expirado, pedido de outra loja etc.) não
+      // pode impedir de tentar as outras lojas do usuário.
+    }
+  }
+
+  return labelBySn;
 }
 
 export const labelRoutes: FastifyPluginAsync = async (app) => {
@@ -37,20 +79,16 @@ export const labelRoutes: FastifyPluginAsync = async (app) => {
 
     const bytes = await file.toBuffer();
 
-    // Só funciona pra etiquetas da Shopee (único marketplace com pedidos
-    // sincronizados no banco) - pra etiquetas de outro marketplace, isso
-    // simplesmente não acha nenhum pedido e segue sem escrever nada.
+    // Só funciona pra etiquetas da Shopee (único marketplace integrado) -
+    // pra etiqueta de outro marketplace, isso simplesmente não acha nenhum
+    // pedido e segue sem escrever nada.
     let productLabelByPage: Array<string | null> | undefined;
     try {
       const orderSnsByPage = await extractOrderSnsByPage(bytes);
       const orderSns = [...new Set(orderSnsByPage.filter((sn): sn is string => !!sn))];
 
       if (orderSns.length > 0) {
-        const orders = await prisma.order.findMany({
-          where: { shopeeOrderSn: { in: orderSns }, shop: { userId: request.user.sub } },
-          include: { lineItems: { include: { product: { select: { name: true } } } } },
-        });
-        const labelBySn = new Map(orders.map((order) => [order.shopeeOrderSn, formatOrderProductLabel(order)]));
+        const labelBySn = await lookupProductLabels(request.user.sub, orderSns);
         productLabelByPage = orderSnsByPage.map((sn) => (sn ? (labelBySn.get(sn) ?? null) : null));
       }
     } catch (err) {
