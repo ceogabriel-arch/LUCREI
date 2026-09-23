@@ -364,6 +364,13 @@ export function AchievementsCard({
               <View className="mb-1 flex-row items-start gap-2 rounded-xl p-3" style={{ backgroundColor: Colors.surfaceAlt }}>
                 <Ionicons name="information-circle" size={16} color={Colors.textMuted} />
                 <Text className="flex-1 text-xs leading-5 text-lucrei-textMuted">
+                  Só contam pedidos feitos depois que você conectou a loja no Lucrei, e só depois que o pedido fica
+                  "Concluído" na Shopee (é quando o lucro fica confirmado de verdade).
+                </Text>
+              </View>
+              <View className="mb-1 flex-row items-start gap-2 rounded-xl p-3" style={{ backgroundColor: Colors.surfaceAlt }}>
+                <Ionicons name="information-circle" size={16} color={Colors.textMuted} />
+                <Text className="flex-1 text-xs leading-5 text-lucrei-textMuted">
                   Se a sincronização travar por limite do plano, seu lucro para de contar pras conquistas depois de
                   7 dias, até você fazer upgrade.
                 </Text>
