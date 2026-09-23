@@ -355,16 +355,23 @@ export default function PedidosScreen() {
 
   async function handleSync() {
     if (!token || !selectedShop) return;
+    // Trava o botão JÁ AQUI, antes do await - senão sobra uma janela (a
+    // duração da própria chamada de rede) em que o clique ainda não voltou
+    // e o botão continua parecendo destravado, dando pra clicar de novo,
+    // trocar de aba e voltar etc.
+    setSyncing(true);
     try {
       await startSync(token, selectedShop.id);
-      pollSyncUntilDone();
     } catch (err) {
+      setSyncing(false);
       showToast({
         title: 'Não deu certo dessa vez',
         message: err instanceof ApiError ? err.message : 'Tenta de novo em instantes.',
         tone: 'error',
       });
+      return;
     }
+    pollSyncUntilDone();
   }
 
   return (

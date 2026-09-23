@@ -297,14 +297,21 @@ function ReportRangeCard({
   }, [shopId]);
 
   async function handleBackfill() {
+    // Trava o botão JÁ AQUI, antes do await - senão sobra uma janela (a
+    // duração da própria chamada de rede) em que o clique ainda não voltou
+    // e o botão continua parecendo destravado, dando pra clicar de novo.
+    setBackfilling(true);
+    let status;
     try {
-      const status = await startSyncHistory(token, shopId);
-      setBackfillSynced(status.ordersSynced);
-      setBackfillProgress({ done: status.windowsDone, total: status.windowsTotal });
-      pollBackfillUntilDone();
+      status = await startSyncHistory(token, shopId);
     } catch (err) {
+      setBackfilling(false);
       showAlert('Não foi possível sincronizar o histórico', err instanceof ApiError ? err.message : 'Tenta de novo em instantes.');
+      return;
     }
+    setBackfillSynced(status.ordersSynced);
+    setBackfillProgress({ done: status.windowsDone, total: status.windowsTotal });
+    pollBackfillUntilDone();
   }
 
   const label =
