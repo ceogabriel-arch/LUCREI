@@ -431,6 +431,10 @@ export default function RelatoriosScreen() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [products, setProducts] = useState<ShopeeProduct[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  // Trocar de período com a tela já pronta mantém loadState em 'ready' (de
+  // propósito, pra não piscar a tela inteira de loading) - sem isso, nada
+  // avisa que os números estão recalculando enquanto o pedido não volta.
+  const [reloading, setReloading] = useState(false);
 
   const load = useCallback(async () => {
     if (!token || !shopsLoaded) return;
@@ -439,6 +443,7 @@ export default function RelatoriosScreen() {
       return;
     }
     setLoadState((prev) => (prev === 'ready' ? prev : 'loading'));
+    setReloading(true);
     try {
       const apiPeriod = PERIOD_TO_API[period];
       const [summaryRes, productsRes] = await Promise.all([
@@ -450,6 +455,8 @@ export default function RelatoriosScreen() {
       setLoadState('ready');
     } catch {
       setLoadState('error');
+    } finally {
+      setReloading(false);
     }
   }, [token, shopsLoaded, selectedShop, period]);
 
@@ -487,21 +494,24 @@ export default function RelatoriosScreen() {
       <Text className="text-2xl font-bold text-lucrei-text">Relatórios</Text>
       <Text className="mt-1 text-sm text-lucrei-textMuted">Pra onde vai o seu lucro.</Text>
 
-      <View className="mt-5 flex-row self-start rounded-full bg-lucrei-surface p-1">
-        {PERIODS.map((p) => {
-          const active = p === period;
-          return (
-            <Pressable
-              key={p}
-              onPress={() => setPeriod(p)}
-              className="rounded-full px-3.5 py-1.5"
-              style={{ backgroundColor: active ? Colors.gold : 'transparent' }}>
-              <Text className="text-xs font-medium" style={{ color: active ? Colors.onGold : Colors.textMuted }}>
-                {p}
-              </Text>
-            </Pressable>
-          );
-        })}
+      <View className="mt-5 flex-row items-center gap-2">
+        <View className="flex-row self-start rounded-full bg-lucrei-surface p-1">
+          {PERIODS.map((p) => {
+            const active = p === period;
+            return (
+              <Pressable
+                key={p}
+                onPress={() => setPeriod(p)}
+                className="rounded-full px-3.5 py-1.5"
+                style={{ backgroundColor: active ? Colors.gold : 'transparent' }}>
+                <Text className="text-xs font-medium" style={{ color: active ? Colors.onGold : Colors.textMuted }}>
+                  {p}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        {loadState === 'ready' && reloading && <ActivityIndicator size="small" color={Colors.gold} />}
       </View>
 
       {loadState === 'loading' && (

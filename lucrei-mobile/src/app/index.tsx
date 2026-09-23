@@ -257,23 +257,26 @@ export default function InicioScreen() {
           </Pressable>
         )}
 
-        <View className="mt-7 flex-row self-start rounded-full bg-lucrei-surface p-1">
-          {PERIODS.map((p) => {
-            const active = p === period;
-            return (
-              <Pressable
-                key={p}
-                onPress={() => setPeriod(p)}
-                className="rounded-full px-3.5 py-1.5"
-                style={{ backgroundColor: active ? Colors.gold : 'transparent' }}>
-                <Text
-                  className="text-xs font-medium"
-                  style={{ color: active ? Colors.onGold : Colors.textMuted }}>
-                  {p}
-                </Text>
-              </Pressable>
-            );
-          })}
+        <View className="mt-7 flex-row items-center gap-2">
+          <View className="flex-row self-start rounded-full bg-lucrei-surface p-1">
+            {PERIODS.map((p) => {
+              const active = p === period;
+              return (
+                <Pressable
+                  key={p}
+                  onPress={() => setPeriod(p)}
+                  className="rounded-full px-3.5 py-1.5"
+                  style={{ backgroundColor: active ? Colors.gold : 'transparent' }}>
+                  <Text
+                    className="text-xs font-medium"
+                    style={{ color: active ? Colors.onGold : Colors.textMuted }}>
+                    {p}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {!stillLoading && summaryLoading && <ActivityIndicator size="small" color={Colors.gold} />}
         </View>
 
         <View className="mt-4 overflow-hidden rounded-3xl border border-lucrei-border">
