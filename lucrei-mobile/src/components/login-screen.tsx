@@ -12,7 +12,7 @@ import { Sparkline } from '@/components/sparkline';
 import { TextField } from '@/components/text-field';
 import { requestPasswordReset } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { authCapWidth, fullscreenOverlayStyle, useIsDesktopWeb, useModalPresentation } from '@/lib/responsive';
+import { AUTH_SPLIT_MAX_WIDTH, authCapWidth, fullscreenOverlayStyle, useIsDesktopWeb, useModalPresentation } from '@/lib/responsive';
 import { useAppTheme } from '@/lib/theme';
 
 const LOGO_LIGHT = require('../../assets/images/lucrei-logo-light.png');
@@ -153,9 +153,11 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-lucrei-bg">
+    <SafeAreaView className="flex-1 bg-lucrei-bg" style={isDesktop ? { backgroundColor: '#0A0A0B' } : undefined}>
       <KeyboardAvoidingView behavior="padding" className="flex-1">
-        <View className={isDesktop ? 'flex-1 flex-row' : 'flex-1'}>
+        <View
+          className={isDesktop ? 'flex-1 flex-row' : 'flex-1'}
+          style={isDesktop ? { maxWidth: AUTH_SPLIT_MAX_WIDTH, width: '100%', alignSelf: 'center' } : undefined}>
           {isDesktop ? <AuthBrandPanel variant="login" /> : null}
 
           <ScrollView

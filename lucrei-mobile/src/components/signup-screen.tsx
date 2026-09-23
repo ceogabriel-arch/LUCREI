@@ -8,7 +8,7 @@ import { PasswordField } from '@/components/password-field';
 import { TextField } from '@/components/text-field';
 import { API_URL } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { authCapWidth, useIsDesktopWeb } from '@/lib/responsive';
+import { AUTH_SPLIT_MAX_WIDTH, authCapWidth, useIsDesktopWeb } from '@/lib/responsive';
 import { useColors } from '@/lib/theme';
 
 type SignupScreenProps = {
@@ -41,9 +41,11 @@ export function SignupScreen({ onNavigateToLogin }: SignupScreenProps) {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-lucrei-bg">
+    <SafeAreaView className="flex-1 bg-lucrei-bg" style={isDesktop ? { backgroundColor: '#0A0A0B' } : undefined}>
       <KeyboardAvoidingView behavior="padding" className="flex-1">
-        <View className={isDesktop ? 'flex-1 flex-row' : 'flex-1'}>
+        <View
+          className={isDesktop ? 'flex-1 flex-row' : 'flex-1'}
+          style={isDesktop ? { maxWidth: AUTH_SPLIT_MAX_WIDTH, width: '100%', alignSelf: 'center' } : undefined}>
           {isDesktop ? <AuthBrandPanel variant="signup" /> : null}
 
           <ScrollView

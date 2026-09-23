@@ -32,6 +32,16 @@ export function useIsDesktopWeb() {
 const AUTH_MAX_WIDTH = 440;
 
 /**
+ * Teto de largura do bloco de duas colunas (painel de marca + formulário)
+ * das telas de login/cadastro no desktop. Sem isso, cada metade da tela
+ * fica gigante em monitores bem largos, e centralizar o conteúdo dentro de
+ * cada metade independente deixa os dois blocos (logo à esquerda, form à
+ * direita) longe um do outro - dá uma sensação de "tudo muito separado"
+ * em vez de um layout desenhado pra tela larga.
+ */
+export const AUTH_SPLIT_MAX_WIDTH = 1280;
+
+/**
  * Login/cadastro usavam webCapWidth(), que no desktop libera até
  * DESKTOP_CONTENT_MAX_WIDTH (1100px) - certo pro conteúdo do app depois de
  * logado, mas um formulário de 2-3 campos esticado até 1100px de largura
