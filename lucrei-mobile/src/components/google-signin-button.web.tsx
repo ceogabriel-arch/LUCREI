@@ -20,6 +20,7 @@ declare global {
             use_fedcm_for_button?: boolean;
           }) => void;
           renderButton: (parent: HTMLElement, options: Record<string, unknown>) => void;
+          disableAutoSelect: () => void;
         };
       };
     };
@@ -78,6 +79,11 @@ export function GoogleSignInButton({
             }
           },
         });
+        // Sem isso, o navegador reaproveita silenciosamente a sessão Google
+        // ativa (cookie) e nunca deixa escolher outra conta depois de sair
+        // do Lucrei - é a chamada que o próprio Google recomenda pra esse
+        // caso (documentação do Google Identity Services).
+        window.google!.accounts.id.disableAutoSelect();
         setReady(true);
       })
       .catch((err) => {
