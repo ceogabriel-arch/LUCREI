@@ -39,21 +39,31 @@ function normalize(x: number, y: number): [number, number] {
 // aqui a área realmente desenhada (imagens, traços e texto) pra usar como
 // referência do recorte/escala, em vez do tamanho bruto da página - não
 // depende de onde exatamente o marketplace ancorou o conteúdo.
-async function detectContentBBox(pdfjsPage: {
+//
+// Devolve UMA caixa por marca (imagem/traço/texto) em vez de já mesclar
+// tudo numa caixa só - o Mercado Livre às vezes desenha a etiqueta de envio
+// e uma declaração fiscal (DANFE) lado a lado na mesma página, e mesclar as
+// duas cedo demais faria o recorte abranger as duas juntas, encolhendo tudo
+// e sobrando margem enorme. Quem chama decide como agrupar essas marcas.
+async function detectContentMarks(pdfjsPage: {
   getOperatorList: () => Promise<{ fnArray: number[]; argsArray: unknown[][] }>;
   getTextContent: () => Promise<{ items: Array<{ transform?: number[]; width?: number; height?: number }> }>;
-}): Promise<BBox | null> {
+}): Promise<BBox[]> {
   const pdfjsLib = (await import('pdfjs-dist/legacy/build/pdf.mjs')) as unknown as { OPS: Record<string, number> };
   const { OPS } = pdfjsLib;
 
-  const bbox: BBox = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+  const marks: BBox[] = [];
   const expand = (pts: Array<[number, number]>) => {
+    const bbox: BBox = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
     for (const [x, y] of pts) {
       if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
       bbox.minX = Math.min(bbox.minX, x);
       bbox.minY = Math.min(bbox.minY, y);
       bbox.maxX = Math.max(bbox.maxX, x);
       bbox.maxY = Math.max(bbox.maxY, y);
+    }
+    if (Number.isFinite(bbox.minX) && bbox.maxX > bbox.minX && bbox.maxY > bbox.minY) {
+      marks.push(bbox);
     }
   };
 
@@ -118,10 +128,36 @@ async function detectContentBBox(pdfjsPage: {
     ]);
   }
 
-  if (!Number.isFinite(bbox.minX) || !Number.isFinite(bbox.maxX) || bbox.maxX <= bbox.minX || bbox.maxY <= bbox.minY) {
-    return null;
+  return marks;
+}
+
+// Agrupa as marcas em "ilhas" pela posição horizontal: duas marcas cujo
+// intervalo de X está mais perto que o vão mínimo entram no mesmo bloco (é
+// o espaçamento normal entre elementos de UMA etiqueta - código de barras,
+// texto, QR code). Um vão maior indica outra coisa desenhada do lado (a
+// declaração fiscal, outra etiqueta) - vira um bloco separado. O vão mínimo
+// é proporcional à largura da página em vez de fixo, pra não depender da
+// resolução/tamanho exatos do PDF de origem. Etiqueta de envio é sempre a
+// mais à esquerda: é a convenção da Shopee/Mercado Livre quando isso
+// aparece, e continua funcionando quando só existe uma marca mesmo (o caso
+// comum, uma etiqueta só por página).
+export function pickShippingLabelRegion(marks: BBox[], pageWidth: number): BBox | null {
+  if (marks.length === 0) return null;
+
+  const minGap = Math.max(10, pageWidth * 0.03);
+  const sorted = [...marks].sort((a, b) => a.minX - b.minX);
+  const island: BBox = { ...sorted[0] };
+
+  for (let i = 1; i < sorted.length; i++) {
+    const mark = sorted[i];
+    if (mark.minX - island.maxX > minGap) break; // próximo bloco - a etiqueta de envio já terminou
+    island.minX = Math.min(island.minX, mark.minX);
+    island.minY = Math.min(island.minY, mark.minY);
+    island.maxX = Math.max(island.maxX, mark.maxX);
+    island.maxY = Math.max(island.maxY, mark.maxY);
   }
-  return bbox;
+
+  return island;
 }
 
 // Encaixa a área de conteúdo de cada página do PDF original numa página de
@@ -149,7 +185,8 @@ export async function resizePdfToLabel(bytes: Uint8Array): Promise<Uint8Array> {
     try {
       const pdfjsPage = await pdfjsDoc.getPage(i + 1);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      bbox = await detectContentBBox(pdfjsPage as any);
+      const marks = await detectContentMarks(pdfjsPage as any);
+      bbox = pickShippingLabelRegion(marks, embedded.width);
     } catch {
       bbox = null;
     }
