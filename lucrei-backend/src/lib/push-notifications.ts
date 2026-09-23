@@ -15,7 +15,13 @@ export async function sendPushNotification(
   data?: Record<string, unknown>
 ) {
   const { Expo } = await loadExpoModule();
-  if (!Expo.isExpoPushToken(pushToken)) return;
+  // Antes só retornava aqui sem erro nenhum - quem chama achava que tinha
+  // dado tudo certo (nenhum .catch/try disparava) mesmo sem nada ter sido
+  // enviado de verdade. Todo lugar que usa essa função já trata erro (catch
+  // ou try/catch), então lançar aqui só torna a falha visível em vez de muda.
+  if (!Expo.isExpoPushToken(pushToken)) {
+    throw new Error(`Token de push num formato inválido: "${pushToken}".`);
+  }
 
   const expo = new Expo();
   const [ticket] = await expo.sendPushNotificationsAsync([{ to: pushToken, sound: 'default', title, body, data }]);

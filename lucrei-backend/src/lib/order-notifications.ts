@@ -73,6 +73,12 @@ export async function notifyOrderCompletedIfNeeded(params: {
     // Expo fora do ar), reverte a marca - senão o pedido fica etiquetado
     // como "já notificado" pra sempre, sem a notificação nunca ter chegado
     // de verdade, e nenhuma sincronização futura tenta de novo.
+    // console.error (não app.log - esse módulo não tem acesso à instância do
+    // Fastify) ainda assim aparece nos logs do Railway, que capturam
+    // stdout/stderr do processo inteiro - sem isso, uma falha de envio ficava
+    // muda: o pedido só parecia "sincronizado sem notificar", sem pista
+    // nenhuma do motivo real.
+    console.error(`[order-notifications] Falha ao enviar push do pedido ${params.orderSn}:`, err);
     await prisma.order.updateMany({ where: { id: params.orderId, notifiedAt: { not: null } }, data: { notifiedAt: null } });
     throw err;
   }
