@@ -210,7 +210,7 @@ export async function productRoutes(app: FastifyInstance) {
         const costByItemId = new Map(costs.map((c) => [c.shopeeItemId, c]));
 
         const lineItems = await prisma.orderLineItem.findMany({
-          where: { order: { shopId: shop.id, orderDate: { gte: rangeStart(period) } } },
+          where: { order: { shopId: shop.id, completedAt: { gte: rangeStart(period) } } },
         });
         const statsByItemId = new Map<string, { profit: number; revenue: number; orders: number }>();
         for (const li of lineItems) {

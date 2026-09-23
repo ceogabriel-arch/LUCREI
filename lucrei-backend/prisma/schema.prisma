@@ -198,6 +198,14 @@ model Order {
   shopeeOrderSn         String    @unique
   orderStatus           String
   orderDate             DateTime
+  // Quando o pedido entrou em COMPLETED na Shopee (update_time do
+  // get_order_detail) - é o que os filtros de período (Hoje/7 dias/30 dias)
+  // usam pra decidir se um pedido conta, já que o lucro só existe de fato
+  // depois de completar. orderDate continua sendo a data da compra em si,
+  // usada só pra exibição ("Data do pedido"). Pedido sincronizado antes
+  // dessa coluna existir foi retroativamente preenchido com orderDate como
+  // aproximação (não temos o update_time histórico real de antes).
+  completedAt           DateTime?
   buyerPaidShippingFee  Decimal   @db.Decimal(12, 2)
   escrowAmount          Decimal?  @db.Decimal(12, 2)
   syncedAt              DateTime  @default(now())
@@ -212,6 +220,7 @@ model Order {
   // pedidos da loja (só o índice de shopId ajuda). Não dói com poucos
   // pedidos, mas cresce junto com o histórico de cada loja.
   @@index([shopId, orderDate])
+  @@index([shopId, completedAt])
 }
 
 model OrderLineItem {

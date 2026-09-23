@@ -1,5 +1,6 @@
 import { DarkTheme, DefaultTheme, ThemeProvider as NavigationThemeProvider } from 'expo-router';
 import { vars } from 'nativewind';
+import * as Notifications from 'expo-notifications';
 import * as Sentry from '@sentry/react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import * as SystemUI from 'expo-system-ui';
@@ -16,6 +17,7 @@ import { SignupScreen } from '@/components/signup-screen';
 import { DarkCssVars, LightCssVars } from '@/constants/theme';
 import { savePushToken } from '@/lib/api';
 import { AuthProvider, useAuth } from '@/lib/auth';
+import { DataRefreshProvider, useDataRefresh } from '@/lib/data-refresh';
 import { PeriodProvider } from '@/lib/period';
 import { registerForPushNotifications } from '@/lib/push-notifications';
 import { SelectedShopProvider } from '@/lib/selected-shop';
@@ -36,6 +38,7 @@ type AuthScreen = 'login' | 'signup';
 function RootNavigator() {
   const { state } = useAuth();
   const [screen, setScreen] = useState<AuthScreen>('login');
+  const { triggerRefresh } = useDataRefresh();
 
   useEffect(() => {
     if (state.status !== 'loading') {
@@ -50,6 +53,21 @@ function RootNavigator() {
       if (pushToken) savePushToken(token, pushToken).catch(() => {});
     });
   }, [state.status]);
+
+  // Pedido concluído (ou qualquer outro push) chegando enquanto o app está
+  // aberto - recarrega os dados sozinho em vez de deixar o usuário achando
+  // que o app não pegou a notificação. Os dois listeners cobrem tanto o
+  // banner aparecendo com o app em primeiro plano quanto o toque numa
+  // notificação recebida com o app em segundo plano.
+  useEffect(() => {
+    if (state.status !== 'authenticated') return;
+    const receivedSub = Notifications.addNotificationReceivedListener(() => triggerRefresh());
+    const responseSub = Notifications.addNotificationResponseReceivedListener(() => triggerRefresh());
+    return () => {
+      receivedSub.remove();
+      responseSub.remove();
+    };
+  }, [state.status, triggerRefresh]);
 
   if (state.status === 'loading') {
     return null;
@@ -100,8 +118,10 @@ function ThemedNavigation() {
         <AuthProvider>
           <SelectedShopProvider>
             <PeriodProvider>
-              <RootNavigator />
-              <AlertHost />
+              <DataRefreshProvider>
+                <RootNavigator />
+                <AlertHost />
+              </DataRefreshProvider>
             </PeriodProvider>
           </SelectedShopProvider>
         </AuthProvider>

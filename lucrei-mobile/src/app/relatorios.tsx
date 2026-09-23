@@ -18,6 +18,7 @@ import {
 } from '@/lib/api';
 import { showAlert } from '@/lib/alert';
 import { useAuth } from '@/lib/auth';
+import { useDataRefresh } from '@/lib/data-refresh';
 import { exportOrdersCsv } from '@/lib/export-csv';
 import { formatBRL } from '@/lib/format';
 import { PERIOD_TO_API, PERIODS, usePeriod } from '@/lib/period';
@@ -427,6 +428,7 @@ export default function RelatoriosScreen() {
   const Colors = useColors();
   const { selectedShop, loaded: shopsLoaded } = useSelectedShop();
   const { period, setPeriod } = usePeriod();
+  const { refreshSignal } = useDataRefresh();
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [summary, setSummary] = useState<Summary | null>(null);
   const [products, setProducts] = useState<ShopeeProduct[]>([]);
@@ -469,6 +471,14 @@ export default function RelatoriosScreen() {
       load();
     }, [load])
   );
+
+  // Pedido concluído chegando via push (ver DataRefreshProvider em
+  // _layout.tsx) - recarrega sozinho, sem esperar o usuário puxar pra
+  // atualizar. refreshSignal > 0 evita recarregar de novo no mount (os
+  // efeitos acima já cobrem isso).
+  useEffect(() => {
+    if (refreshSignal > 0) load();
+  }, [refreshSignal, load]);
 
   async function handleRefresh() {
     setRefreshing(true);

@@ -22,17 +22,28 @@ export async function summaryRoutes(app: FastifyInstance) {
       // "all" (usado pro lucro vitalício das recompensas) não pode contar
       // pedidos de antes de conectar a loja no Lucrei - senão uma loja com
       // histórico de vendas na Shopee desbloquearia recompensa na hora de
-      // conectar, sem o usuário ter usado o app pra nada ainda.
+      // conectar, sem o usuário ter usado o app pra nada ainda. Esse caso
+      // continua olhando orderDate (data da compra) de propósito - é sobre
+      // quando a VENDA aconteceu em relação a conectar a loja, não sobre
+      // quando o lucro ficou confirmado.
+      const isLifetimeRewardsQuery = !fromDate && period === 'all';
       const start = fromDate ?? (period === 'all' ? shop.connectedAt : rangeStart(period));
 
-      const orders = await prisma.order.findMany({
-        where: {
-          shopId: shop.id,
-          orderDate: { gte: start, ...(toDate ? { lt: toDate } : {}) },
-        },
-        include: { lineItems: true },
-        orderBy: { orderDate: 'asc' },
-      });
+      // Demais casos (presets Hoje/7 dias/30 dias e o from/to dos relatórios
+      // por mês/ano) filtram por completedAt: o lucro só existe de fato
+      // depois do pedido completar, então "Hoje" precisa dizer "completou
+      // hoje", não "foi comprado hoje" (que normalmente é outro dia).
+      const orders = isLifetimeRewardsQuery
+        ? await prisma.order.findMany({
+            where: { shopId: shop.id, orderDate: { gte: start, ...(toDate ? { lt: toDate } : {}) } },
+            include: { lineItems: true },
+            orderBy: { orderDate: 'asc' },
+          })
+        : await prisma.order.findMany({
+            where: { shopId: shop.id, completedAt: { gte: start, ...(toDate ? { lt: toDate } : {}) } },
+            include: { lineItems: true },
+            orderBy: { orderDate: 'asc' },
+          });
 
       let revenue = 0;
       let revenueWithKnownCost = 0;
@@ -44,7 +55,7 @@ export async function summaryRoutes(app: FastifyInstance) {
       const profitByDay = new Map<string, number>();
 
       for (const order of orders) {
-        const day = order.orderDate.toISOString().slice(0, 10);
+        const day = (order.completedAt ?? order.orderDate).toISOString().slice(0, 10);
         for (const li of order.lineItems) {
           const sale = Number(li.salePrice);
           revenue += sale;

@@ -14,6 +14,7 @@ import { StatTile } from '@/components/stat-tile';
 import { ApiError, getSummary, type Summary } from '@/lib/api';
 import { showAlert } from '@/lib/alert';
 import { useAuth } from '@/lib/auth';
+import { useDataRefresh } from '@/lib/data-refresh';
 import { formatBRL } from '@/lib/format';
 import { PERIOD_TO_API, PERIODS, usePeriod } from '@/lib/period';
 import { useIsDesktopWeb } from '@/lib/responsive';
@@ -60,6 +61,7 @@ export default function InicioScreen() {
   const isDesktop = useIsDesktopWeb();
   const { shops, selectedShop, loaded: shopsLoaded, refresh: refreshShops } = useSelectedShop();
   const { period, setPeriod } = usePeriod();
+  const { refreshSignal } = useDataRefresh();
   const [backendStatus, setBackendStatus] = useState<BackendStatus>('checking');
   const [connecting, setConnecting] = useState(false);
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -126,6 +128,14 @@ export default function InicioScreen() {
     setSummary(null);
     loadSummary();
   }, [loadSummary]);
+
+  // Pedido concluído chegando via push (ver DataRefreshProvider em
+  // _layout.tsx) - recarrega o resumo sozinho, sem esperar o usuário puxar
+  // pra atualizar ou trocar de tela. refreshSignal > 0 evita recarregar de
+  // novo no mount (o efeito acima já cobre isso).
+  useEffect(() => {
+    if (refreshSignal > 0) loadSummary();
+  }, [refreshSignal, loadSummary]);
 
   async function handleRefresh() {
     setRefreshing(true);

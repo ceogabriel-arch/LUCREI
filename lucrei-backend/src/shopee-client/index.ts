@@ -200,6 +200,11 @@ type OrderDetailResponse = {
       order_sn: string;
       order_status: string;
       create_time: number;
+      // "Última vez que o pedido mudou de status" - pra um pedido já
+      // COMPLETED, na prática é o momento em que ele completou (status
+      // final, não muda mais depois). Usado como data de conclusão porque a
+      // Shopee não expõe um "complete_time" dedicado.
+      update_time: number;
       item_list?: {
         item_name: string;
         model_quantity_purchased?: number;
@@ -215,7 +220,7 @@ export async function getOrderDetail(
   accessToken: string,
   shopId: number,
   orderSnList: string[],
-  optionalFields: string[] = ['create_time']
+  optionalFields: string[] = ['create_time', 'update_time']
 ) {
   let url = buildAuthenticatedUrl('/api/v2/order/get_order_detail', accessToken, shopId);
   const params = new URLSearchParams({

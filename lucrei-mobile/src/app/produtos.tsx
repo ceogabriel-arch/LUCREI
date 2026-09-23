@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { useFocusEffect } from 'expo-router';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
@@ -17,6 +17,7 @@ import {
 } from '@/lib/api';
 import { showAlert } from '@/lib/alert';
 import { useAuth } from '@/lib/auth';
+import { useDataRefresh } from '@/lib/data-refresh';
 import { formatBRL } from '@/lib/format';
 import { PERIOD_TO_API, PERIODS, type PeriodLabel, usePeriod } from '@/lib/period';
 import { useSelectedShop } from '@/lib/selected-shop';
@@ -282,6 +283,7 @@ export default function ProdutosScreen() {
   const Colors = useColors();
   const { selectedShop, loaded: shopsLoaded } = useSelectedShop();
   const { period, setPeriod } = usePeriod();
+  const { refreshSignal } = useDataRefresh();
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [products, setProducts] = useState<ShopeeProduct[]>([]);
   const [edits, setEdits] = useState<Record<string, string>>({});
@@ -350,6 +352,14 @@ export default function ProdutosScreen() {
       load();
     }, [load])
   );
+
+  // Pedido concluído chegando via push (ver DataRefreshProvider em
+  // _layout.tsx) - recarrega sozinho, sem esperar o usuário puxar pra
+  // atualizar. refreshSignal > 0 evita recarregar de novo no mount (o
+  // useFocusEffect acima já cobre isso).
+  useEffect(() => {
+    if (refreshSignal > 0) load();
+  }, [refreshSignal, load]);
 
   async function handleRefresh() {
     setRefreshing(true);

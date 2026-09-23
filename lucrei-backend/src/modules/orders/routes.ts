@@ -42,7 +42,7 @@ export async function orderRoutes(app: FastifyInstance) {
       const period = request.query.period ?? '30d';
 
       const orders = await prisma.order.findMany({
-        where: { shopId: shop.id, orderDate: { gte: rangeStart(period) } },
+        where: { shopId: shop.id, completedAt: { gte: rangeStart(period) } },
         include: { lineItems: { include: { product: true } } },
         orderBy: { orderDate: 'desc' },
       });
@@ -101,7 +101,7 @@ export async function orderRoutes(app: FastifyInstance) {
       }
 
       const orders = await prisma.order.findMany({
-        where: { shopId: shop.id, orderDate: { gte: new Date(from), lt: new Date(to) } },
+        where: { shopId: shop.id, completedAt: { gte: new Date(from), lt: new Date(to) } },
         include: { lineItems: { include: { product: true } } },
         orderBy: { orderDate: 'asc' },
       });

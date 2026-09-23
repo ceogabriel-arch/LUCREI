@@ -12,7 +12,8 @@ async function processOrder(
   accessToken: string,
   orderSn: string,
   orderStatus: string,
-  createTime?: number
+  createTime?: number,
+  updateTime?: number
 ) {
   const escrow = await getEscrowDetail(accessToken, shopeeShopId, orderSn);
   const income = escrow.order_income;
@@ -25,10 +26,18 @@ async function processOrder(
     income.service_fee
   );
 
+  // update_time é "última mudança de status" - pra um pedido que só chega
+  // aqui depois de virar COMPLETED (ELIGIBLE_STATUSES), na prática é o
+  // momento da conclusão, já que esse é o status final. Grava em toda
+  // sincronização (não só na criação) pra pedido reprocessado também ficar
+  // com a data certa, não só o primeiro registro.
+  const completedAt = updateTime ? new Date(updateTime * 1000) : new Date();
+
   const order = await prisma.order.upsert({
     where: { shopeeOrderSn: orderSn },
     update: {
       orderStatus,
+      completedAt,
       buyerPaidShippingFee: income.buyer_paid_shipping_fee,
       escrowAmount: income.escrow_amount,
       escrowSyncedAt: new Date(),
@@ -38,6 +47,7 @@ async function processOrder(
       shopeeOrderSn: orderSn,
       orderStatus,
       orderDate: createTime ? new Date(createTime * 1000) : new Date(),
+      completedAt,
       buyerPaidShippingFee: income.buyer_paid_shipping_fee,
       escrowAmount: income.escrow_amount,
       escrowSyncedAt: new Date(),
@@ -103,7 +113,7 @@ async function processOrder(
 export async function syncOneOrder(shopId: string, orderSn: string, orderStatus: string) {
   const { accessToken, shopeeShopId } = await getValidAccessToken(shopId);
   const [detail] = await getOrderDetail(accessToken, shopeeShopId, [orderSn]);
-  return processOrder(shopId, shopeeShopId, accessToken, orderSn, orderStatus, detail?.create_time);
+  return processOrder(shopId, shopeeShopId, accessToken, orderSn, orderStatus, detail?.create_time, detail?.update_time);
 }
 
 // get_order_list da Shopee só aceita um intervalo de até 15 dias por
@@ -184,7 +194,15 @@ async function syncWindowUnbounded(
       // 10) pra loja de alto volume não passar tanto tempo num bloco só sem
       // estourar o rate limit da Shopee de vez.
       await mapLimit(eligibleDetails, 15, (detail) =>
-        processOrder(shopId, shopeeShopId, accessToken, detail.order_sn, detail.order_status, detail.create_time)
+        processOrder(
+          shopId,
+          shopeeShopId,
+          accessToken,
+          detail.order_sn,
+          detail.order_status,
+          detail.create_time,
+          detail.update_time
+        )
       );
       ordersSynced += eligibleDetails.length;
     }

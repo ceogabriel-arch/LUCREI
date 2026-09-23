@@ -17,6 +17,7 @@ import {
   type SalesUsage,
 } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { useDataRefresh } from '@/lib/data-refresh';
 import { formatBRL } from '@/lib/format';
 import { PERIOD_TO_API, PERIODS, usePeriod } from '@/lib/period';
 import { useModalPresentation } from '@/lib/responsive';
@@ -214,6 +215,7 @@ export default function PedidosScreen() {
   const Colors = useColors();
   const { selectedShop, loaded: shopsLoaded } = useSelectedShop();
   const { period, setPeriod } = usePeriod();
+  const { refreshSignal } = useDataRefresh();
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [orders, setOrders] = useState<Order[]>([]);
   const [usage, setUsage] = useState<SalesUsage | null>(null);
@@ -264,6 +266,14 @@ export default function PedidosScreen() {
       load();
     }, [load])
   );
+
+  // Pedido concluído chegando via push (ver DataRefreshProvider em
+  // _layout.tsx) - recarrega sozinho, sem esperar o usuário puxar pra
+  // atualizar. refreshSignal > 0 evita recarregar de novo no mount (o
+  // useFocusEffect acima já cobre isso).
+  useEffect(() => {
+    if (refreshSignal > 0) load();
+  }, [refreshSignal, load]);
 
   async function handleRefresh() {
     setRefreshing(true);
