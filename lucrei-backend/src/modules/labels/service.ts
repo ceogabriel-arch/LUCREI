@@ -155,7 +155,23 @@ export async function resizePdfToLabel(bytes: Uint8Array): Promise<Uint8Array> {
 
     // Sem conteúdo detectável (raro) - cai de volta pra página inteira, pra
     // não quebrar em PDFs fora do padrão esperado.
-    const region = bbox ?? { minX: 0, minY: 0, maxX: embedded.width, maxY: embedded.height };
+    const rawRegion = bbox ?? { minX: 0, minY: 0, maxX: embedded.width, maxY: embedded.height };
+
+    // A largura de texto que o pdf.js reporta é o avanço da pena, não a
+    // tinta de verdade - a primeira letra de uma linha às vezes desenha um
+    // pouco à esquerda da origem (bearing negativo/serifa), cortando essa
+    // pontinha se o recorte for exato. Uma margem pequena (bem menor que a
+    // folga grande que já foi corrigida) evita esse corte sem voltar a
+    // deixar a etiqueta pequena dentro de uma moldura em branco.
+    const BLEED_PT = 3;
+    const region = bbox
+      ? {
+          minX: Math.max(0, rawRegion.minX - BLEED_PT),
+          minY: Math.max(0, rawRegion.minY - BLEED_PT),
+          maxX: Math.min(embedded.width, rawRegion.maxX + BLEED_PT),
+          maxY: Math.min(embedded.height, rawRegion.maxY + BLEED_PT),
+        }
+      : rawRegion;
     const regionW = region.maxX - region.minX;
     const regionH = region.maxY - region.minY;
 
