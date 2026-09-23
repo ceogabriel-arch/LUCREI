@@ -8,7 +8,7 @@ import { Sparkline } from '@/components/sparkline';
 // identidade visual da marca (preto + dourado), não muda com o tema.
 const LOGO = require('../../assets/images/lucrei-logo.png');
 const LOGO_ASPECT = 449 / 153;
-const LOGO_WIDTH = 220;
+const LOGO_WIDTH = 240;
 
 const BRAND_BG = '#0A0A0B';
 const BRAND_GOLD = '#F5C518';
@@ -22,20 +22,20 @@ const TAGLINES = {
 
 export function AuthBrandPanel({ variant }: { variant: keyof typeof TAGLINES }) {
   return (
-    <View className="flex-1 items-center justify-center px-12" style={{ backgroundColor: BRAND_BG }}>
+    <View className="flex-1 items-center px-12 pt-28" style={{ backgroundColor: BRAND_BG }}>
       <View style={{ width: LOGO_WIDTH, height: LOGO_WIDTH / LOGO_ASPECT }}>
         <Image source={LOGO} style={{ width: '100%', height: '100%' }} contentFit="contain" />
       </View>
 
-      <Text className="mt-6 max-w-sm text-center text-lg leading-7 text-white/80">{TAGLINES[variant]}</Text>
+      <Text className="mt-7 max-w-md text-center text-2xl leading-8 text-white/80">{TAGLINES[variant]}</Text>
 
-      <View className="mt-10 items-center">
-        <Text className="text-4xl font-bold" style={{ color: BRAND_GOLD }}>
+      <View className="mt-12 items-center">
+        <Text className="text-6xl font-bold" style={{ color: BRAND_GOLD }}>
           +93%
         </Text>
-        <Text className="mt-1 text-center text-sm text-white/50">de lucro identificado em vendas que pareciam empatar</Text>
-        <View className="mt-4">
-          <Sparkline data={TREND} width={340} height={80} />
+        <Text className="mt-2 text-center text-base text-white/50">de lucro identificado em vendas que pareciam empatar</Text>
+        <View className="mt-6">
+          <Sparkline data={TREND} width={420} height={110} />
         </View>
       </View>
     </View>
