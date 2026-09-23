@@ -101,9 +101,10 @@ function TierListItem({
       <View className="flex-row items-center gap-3">
         <TierBadge tier={tier} unlocked={unlocked} isNext={isNext} size={38} />
         <View className="flex-1">
-          <Text className="text-sm font-medium text-lucrei-text">{formatBRL(tier.threshold)} de lucro</Text>
+          <Text className="text-sm font-medium text-lucrei-text">
+            {formatBRL(tier.threshold)} de lucro{tier.note ? ` ${tier.note}` : ''}
+          </Text>
           <Text className="mt-0.5 text-xs text-lucrei-textMuted">{tier.reward}</Text>
-          {tier.note && <Text className="mt-0.5 text-xs text-lucrei-textMuted">{tier.note}</Text>}
         </View>
       </View>
       {unlocked && (
