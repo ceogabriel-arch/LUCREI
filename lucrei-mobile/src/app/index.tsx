@@ -37,17 +37,50 @@ const LOGO_WIDTH = LOGO_HEIGHT * LOGO_ASPECT;
 // Exemplo apenas — valores reais chegam quando a loja Shopee for conectada (Fase 2).
 const MOCK_TREND = [18400, 19200, 21000, 20500, 23800, 26100, 27400, 31200, 33600, 35900, 38100, 40250];
 const MOCK_KPIS = [
-  { label: 'Faturamento', value: formatBRL(120750), deltaLabel: '+22,4%', deltaDirection: 'up' as const },
+  {
+    label: 'Faturamento',
+    value: formatBRL(120750),
+    deltaLabel: '+22,4%',
+    deltaDirection: 'up' as const,
+    helpText: 'Soma do valor de venda de todos os pedidos do período, sem descontar nada.',
+  },
   {
     label: 'Custos totais',
     value: formatBRL(80500),
     deltaLabel: '+15,1%',
     deltaDirection: 'up' as const,
     positiveIsGood: false,
+    helpText: 'Soma de tudo que sai do seu bolso no período: custo do produto, frete líquido e taxas da Shopee.',
   },
-  { label: 'Pedidos', value: '356', deltaLabel: '+12,1%', deltaDirection: 'up' as const },
-  { label: 'Ticket médio', value: formatBRL(339.72), deltaLabel: '+8,3%', deltaDirection: 'up' as const },
-  { label: 'Margem de lucro', value: '33,3%', deltaLabel: '+2,8 p.p.', deltaDirection: 'up' as const },
+  {
+    label: 'Líquido Shopee',
+    value: formatBRL(120750 - 18500),
+    deltaLabel: '+19,6%',
+    deltaDirection: 'up' as const,
+    helpText: 'Faturamento menos as taxas cobradas pela Shopee. Ainda não desconta o custo do produto nem o frete.',
+  },
+  {
+    label: 'Pedidos',
+    value: '356',
+    deltaLabel: '+12,1%',
+    deltaDirection: 'up' as const,
+    helpText: 'Quantidade de pedidos concluídos no período selecionado.',
+  },
+  {
+    label: 'Ticket médio',
+    value: formatBRL(339.72),
+    deltaLabel: '+8,3%',
+    deltaDirection: 'up' as const,
+    helpText: 'Faturamento do período dividido pela quantidade de pedidos.',
+  },
+  {
+    label: 'Margem de lucro',
+    value: '33,3%',
+    deltaLabel: '+2,8 p.p.',
+    deltaDirection: 'up' as const,
+    helpText:
+      'Lucro dividido pelo faturamento dos pedidos com custo cadastrado, em porcentagem. Pedido sem custo cadastrado não entra nessa conta.',
+  },
   {
     label: 'Devoluções',
     value: '12',
@@ -192,11 +225,38 @@ export default function InicioScreen() {
 
   const kpiTiles = showingRealData
     ? [
-        { label: 'Faturamento', value: formatBRL(summary!.revenue) },
-        { label: 'Custos totais', value: formatBRL(summary!.cost), positiveIsGood: false },
-        { label: 'Pedidos', value: String(summary!.ordersCount) },
-        { label: 'Ticket médio', value: formatBRL(summary!.avgTicket) },
-        { label: 'Margem de lucro', value: `${summary!.profitMargin.toFixed(1)}%` },
+        {
+          label: 'Faturamento',
+          value: formatBRL(summary!.revenue),
+          helpText: 'Soma do valor de venda de todos os pedidos do período, sem descontar nada.',
+        },
+        {
+          label: 'Custos totais',
+          value: formatBRL(summary!.cost),
+          positiveIsGood: false,
+          helpText: 'Soma de tudo que sai do seu bolso no período: custo do produto, frete líquido e taxas da Shopee.',
+        },
+        {
+          label: 'Líquido Shopee',
+          value: formatBRL(summary!.revenue - summary!.shopeeFees),
+          helpText: 'Faturamento menos as taxas cobradas pela Shopee. Ainda não desconta o custo do produto nem o frete.',
+        },
+        {
+          label: 'Pedidos',
+          value: String(summary!.ordersCount),
+          helpText: 'Quantidade de pedidos concluídos no período selecionado.',
+        },
+        {
+          label: 'Ticket médio',
+          value: formatBRL(summary!.avgTicket),
+          helpText: 'Faturamento do período dividido pela quantidade de pedidos.',
+        },
+        {
+          label: 'Margem de lucro',
+          value: `${summary!.profitMargin.toFixed(1)}%`,
+          helpText:
+            'Lucro dividido pelo faturamento dos pedidos com custo cadastrado, em porcentagem. Pedido sem custo cadastrado não entra nessa conta.',
+        },
       ]
     : MOCK_KPIS;
 

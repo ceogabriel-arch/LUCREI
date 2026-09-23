@@ -1,7 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { BlurredValue } from '@/components/blurred-value';
+import { showAlert } from '@/lib/alert';
 import { useColors } from '@/lib/theme';
 
 type StatTileProps = {
@@ -13,6 +14,8 @@ type StatTileProps = {
   positiveIsGood?: boolean;
   /** Pagamento em atraso/limite estourado - esconde o valor em vez de mostrar. */
   blurred?: boolean;
+  /** Quando preenchido, mostra um "?" no canto que explica de onde vem o valor. */
+  helpText?: string;
 };
 
 export function StatTile({
@@ -22,6 +25,7 @@ export function StatTile({
   deltaDirection = 'up',
   positiveIsGood = true,
   blurred = false,
+  helpText,
 }: StatTileProps) {
   const Colors = useColors();
   const isGood = (deltaDirection === 'up') === positiveIsGood;
@@ -29,7 +33,15 @@ export function StatTile({
 
   return (
     <View className="w-[152px] rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
-      <Text className="text-xs text-lucrei-textMuted" numberOfLines={1}>
+      {helpText && (
+        <Pressable
+          onPress={() => showAlert(label, helpText)}
+          hitSlop={8}
+          className="absolute right-2.5 top-2.5 z-10">
+          <Ionicons name="help-circle-outline" size={15} color={Colors.textMuted} />
+        </Pressable>
+      )}
+      <Text className="pr-4 text-xs text-lucrei-textMuted" numberOfLines={1}>
         {label}
       </Text>
       {blurred ? (
