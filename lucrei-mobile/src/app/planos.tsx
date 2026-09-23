@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 
 import { PixPaymentModal } from '@/components/pix-payment-modal';
@@ -10,7 +10,10 @@ import {
   getCheckoutUrl,
   getCurrentPixCharge,
   getPlans,
+  validateCoupon,
+  ApiError,
   type BillingPeriod,
+  type CouponPreview,
   type Plan,
   type PixCharge,
 } from '@/lib/api';
@@ -32,7 +35,7 @@ function formatIntegrationsLimit(limit: number | null) {
   return limit === 1 ? '1 integração' : `${limit} integrações`;
 }
 
-function PlanCard({ plan }: { plan: Plan }) {
+function PlanCard({ plan, appliedCoupon }: { plan: Plan; appliedCoupon: CouponPreview | null }) {
   const { state, selectPlan, selectPlanPix } = useAuth();
   const Colors = useColors();
   const [savingMethod, setSavingMethod] = useState<'card' | 'pix' | null>(null);
@@ -85,7 +88,7 @@ function PlanCard({ plan }: { plan: Plan }) {
 
   async function handlePressPix() {
     setSavingMethod('pix');
-    const result = await selectPlanPix(plan.key);
+    const result = await selectPlanPix(plan.key, appliedCoupon?.code);
     setSavingMethod(null);
     if (result.ok) {
       if (result.pix) {
@@ -258,6 +261,31 @@ export default function PlanosScreen() {
   const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>(
     authState.status === 'authenticated' ? (authState.user.plan?.billingPeriod ?? 'monthly') : 'monthly'
   );
+  const [couponInput, setCouponInput] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<CouponPreview | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [checkingCoupon, setCheckingCoupon] = useState(false);
+
+  async function handleApplyCoupon() {
+    if (authState.status !== 'authenticated' || !couponInput.trim()) return;
+    setCheckingCoupon(true);
+    setCouponError(null);
+    try {
+      const preview = await validateCoupon(authState.token, couponInput.trim());
+      setAppliedCoupon(preview);
+    } catch (err) {
+      setAppliedCoupon(null);
+      setCouponError(err instanceof ApiError ? err.message : 'Não foi possível validar o cupom.');
+    } finally {
+      setCheckingCoupon(false);
+    }
+  }
+
+  function handleClearCoupon() {
+    setAppliedCoupon(null);
+    setCouponError(null);
+    setCouponInput('');
+  }
 
   // Um "grupo" (Start, Pro, Master, Empresarial) tem uma linha de plano por
   // período de cobrança - mostra a que combina com o seletor, caindo pra
@@ -324,6 +352,60 @@ export default function PlanosScreen() {
         })}
       </View>
 
+      <View className="mt-4 rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+        {appliedCoupon ? (
+          <View className="flex-row items-center justify-between">
+            <View className="flex-1 flex-row items-center gap-2">
+              <Ionicons name="pricetag" size={16} color={Colors.gold} />
+              <Text className="flex-1 text-sm text-lucrei-text">
+                Cupom <Text style={{ fontWeight: '700' }}>{appliedCoupon.code}</Text> aplicado —{' '}
+                <Text style={{ color: Colors.gold, fontWeight: '600' }}>{appliedCoupon.percentOff}% off</Text> na
+                1ª cobrança via Pix.
+              </Text>
+            </View>
+            <Pressable onPress={handleClearCoupon} hitSlop={8}>
+              <Ionicons name="close-circle" size={20} color={Colors.textMuted} />
+            </Pressable>
+          </View>
+        ) : (
+          <>
+            <View className="flex-row items-center gap-2">
+              <Ionicons name="pricetag-outline" size={16} color={Colors.textMuted} />
+              <Text className="text-sm font-medium text-lucrei-text">Tem um cupom de desconto?</Text>
+            </View>
+            <View className="mt-2.5 flex-row gap-2">
+              <TextInput
+                value={couponInput}
+                onChangeText={(v) => {
+                  setCouponInput(v.toUpperCase());
+                  setCouponError(null);
+                }}
+                placeholder="Código do cupom"
+                placeholderTextColor={Colors.textMuted}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                className="flex-1 rounded-xl border border-lucrei-border bg-lucrei-bg px-3.5 py-2.5 text-sm text-lucrei-text"
+              />
+              <Pressable
+                onPress={handleApplyCoupon}
+                disabled={checkingCoupon || !couponInput.trim()}
+                className="items-center justify-center rounded-xl bg-lucrei-surfaceAlt px-4"
+                style={{ opacity: checkingCoupon || !couponInput.trim() ? 0.5 : 1 }}>
+                {checkingCoupon ? (
+                  <ActivityIndicator size="small" color={Colors.gold} />
+                ) : (
+                  <Text className="text-sm font-semibold text-lucrei-gold">Aplicar</Text>
+                )}
+              </Pressable>
+            </View>
+            {couponError && <Text className="mt-2 text-xs text-lucrei-danger">{couponError}</Text>}
+            <Text className="mt-2 text-[11px] leading-4 text-lucrei-textMuted">
+              O desconto vale só na 1ª cobrança, pagando via Pix.
+            </Text>
+          </>
+        )}
+      </View>
+
       {loadState === 'loading' && (
         <View className="mt-10 items-center">
           <ActivityIndicator color={Colors.gold} />
@@ -339,7 +421,7 @@ export default function PlanosScreen() {
       {loadState === 'ready' && (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="pb-8">
           {visiblePlans.map((plan) => (
-            <PlanCard key={plan.key} plan={plan} />
+            <PlanCard key={plan.key} plan={plan} appliedCoupon={appliedCoupon} />
           ))}
         </ScrollView>
       )}

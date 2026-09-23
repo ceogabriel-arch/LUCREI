@@ -3,6 +3,7 @@ import type { Plan, User } from '@prisma/client';
 
 import * as mercadopago from '../../mercadopago-client';
 import { cancelOtherProviderSubscription } from '../../lib/cancel-other-provider-subscription';
+import { applyPercentOff, validateCoupon } from '../../lib/coupons';
 import { prisma } from '../../lib/prisma';
 import { addDays, createOrGetPixCharge, CYCLE_DAYS_BY_PERIOD } from '../../lib/pix-billing';
 import { createProratedUpgradeCharge, findActiveAnnualCycle } from '../../lib/plan-upgrade';
@@ -21,6 +22,27 @@ const selectPlanSchema = {
 } as const;
 
 type SelectPlanBody = { key: string };
+
+const selectPixPlanSchema = {
+  type: 'object',
+  required: ['key'],
+  properties: {
+    key: { type: 'string', minLength: 1 },
+    couponCode: { type: 'string' },
+  },
+} as const;
+
+type SelectPixPlanBody = { key: string; couponCode?: string };
+
+const validateCouponSchema = {
+  type: 'object',
+  required: ['code'],
+  properties: {
+    code: { type: 'string', minLength: 1 },
+  },
+} as const;
+
+type ValidateCouponBody = { code: string };
 
 // Uma loja Shopee que já consumiu o teste grátis (em qualquer conta Lucrei -
 // o shopeeShopId é único e persiste ao trocar de dono) não libera um novo
@@ -198,9 +220,9 @@ export async function plansRoutes(app: FastifyInstance) {
     }
   );
 
-  app.post<{ Body: SelectPlanBody }>(
+  app.post<{ Body: SelectPixPlanBody }>(
     '/plans/select-pix',
-    { onRequest: [app.authenticate], schema: { body: selectPlanSchema } },
+    { onRequest: [app.authenticate], schema: { body: selectPixPlanSchema } },
     async (request, reply) => {
       const plan = await prisma.plan.findUnique({ where: { key: request.body.key } });
       if (!plan) {
@@ -208,6 +230,20 @@ export async function plansRoutes(app: FastifyInstance) {
       }
       if (plan.priceCurrent === null) {
         return reply.status(400).send({ message: 'Este plano é sob consulta. Fale com nosso time de vendas.' });
+      }
+
+      // Validado de novo aqui (não só confia no /coupons/validate anterior) -
+      // o código pode ter expirado ou batido o limite de usos entre a
+      // prévia e o clique de fato em "Pix".
+      let couponPercentOff: number | null = null;
+      let couponId: string | null = null;
+      if (request.body.couponCode) {
+        const validation = await validateCoupon(request.body.couponCode);
+        if (!validation.ok) {
+          return reply.status(400).send({ message: validation.message });
+        }
+        couponPercentOff = validation.coupon.percentOff;
+        couponId = validation.coupon.id;
       }
 
       const user = await prisma.user.findUniqueOrThrow({ where: { id: request.user.sub }, include: { plan: true } });
@@ -267,8 +303,17 @@ export async function plansRoutes(app: FastifyInstance) {
             provider: 'mercado_pago_pix',
             status: trial.eligibleForTrial ? 'trialing' : 'past_due',
             currentPeriodEnd: trial.trialEndsAt,
+            pendingCouponPercentOff: couponPercentOff,
           },
         });
+
+        // Contabiliza o uso assim que o cupom fica de fato preso a uma
+        // assinatura nova - antes de ela virar cobrança de verdade (trial
+        // ainda não cobra), pra não deixar o mesmo código ser reaplicado
+        // criando assinatura atrás de assinatura sem nunca "gastar" o limite.
+        if (couponId) {
+          await prisma.coupon.update({ where: { id: couponId }, data: { redeemedCount: { increment: 1 } } });
+        }
 
         if (trial.eligibleForTrial) {
           await markShopsTrialConsumed(user.id);
@@ -286,17 +331,25 @@ export async function plansRoutes(app: FastifyInstance) {
 
       const periodStart = new Date();
       const periodEnd = addDays(periodStart, CYCLE_DAYS_BY_PERIOD[plan.billingPeriod]);
+      const amount = subscription.pendingCouponPercentOff
+        ? applyPercentOff(Number(plan.priceCurrent), subscription.pendingCouponPercentOff)
+        : Number(plan.priceCurrent);
       let charge;
       try {
         charge = await createOrGetPixCharge({
           subscriptionId: subscription.id,
-          amount: Number(plan.priceCurrent),
+          amount,
           description: `Lucrei - Plano ${plan.name}`,
           payerEmail: user.email,
           periodStart,
           periodEnd,
           idempotencyKey: mercadopago.pixIdempotencyKey(subscription.id, 'initial'),
         });
+        // Consumido: só essa cobrança leva o desconto, ciclos seguintes cobram
+        // o valor cheio do plano.
+        if (subscription.pendingCouponPercentOff) {
+          await prisma.subscription.update({ where: { id: subscription.id }, data: { pendingCouponPercentOff: null } });
+        }
       } catch (err) {
         app.log.error(err);
         return reply.status(502).send({ message: 'Não foi possível gerar o Pix agora. Tente novamente em instantes.' });
@@ -309,6 +362,20 @@ export async function plansRoutes(app: FastifyInstance) {
       });
 
       return reply.send({ ...serializeUser(updated), pix: charge });
+    }
+  );
+
+  // Prévia do desconto antes do usuário confirmar o Pix - não reserva nem
+  // gasta o cupom (só /plans/select-pix faz isso), é só validação/exibição.
+  app.post<{ Body: ValidateCouponBody }>(
+    '/coupons/validate',
+    { onRequest: [app.authenticate], schema: { body: validateCouponSchema } },
+    async (request, reply) => {
+      const validation = await validateCoupon(request.body.code);
+      if (!validation.ok) {
+        return reply.status(400).send({ message: validation.message });
+      }
+      return reply.send({ code: validation.coupon.code, percentOff: validation.coupon.percentOff });
     }
   );
 

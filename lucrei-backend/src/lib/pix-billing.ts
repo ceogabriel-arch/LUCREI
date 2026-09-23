@@ -1,3 +1,4 @@
+import { applyPercentOff } from './coupons';
 import { prisma } from './prisma';
 import * as mercadopago from '../mercadopago-client';
 
@@ -130,9 +131,18 @@ export async function ensureCurrentPixCharge(userId: string): Promise<CurrentPix
   const periodStart = latest?.status === 'approved' && subscription.currentPeriodEnd ? subscription.currentPeriodEnd : now;
   const periodEnd = addDays(periodStart, CYCLE_DAYS_BY_PERIOD[plan.billingPeriod]);
 
+  // Se um cupom ficou pendente na criação (usuário estava em teste grátis,
+  // então a 1ª cobrança de verdade só acontece aqui, quando o trial acaba) -
+  // desconta ela e consome o cupom, pra nenhum ciclo seguinte herdar o
+  // desconto.
+  const hasPendingCoupon = subscription.pendingCouponPercentOff != null;
+  const amount = hasPendingCoupon
+    ? applyPercentOff(Number(plan.priceCurrent), subscription.pendingCouponPercentOff!)
+    : Number(plan.priceCurrent);
+
   const charge = await createOrGetPixCharge({
     subscriptionId: subscription.id,
-    amount: Number(plan.priceCurrent),
+    amount,
     description: `Lucrei - Plano ${plan.name}`,
     payerEmail: user.email,
     periodStart,
@@ -140,7 +150,10 @@ export async function ensureCurrentPixCharge(userId: string): Promise<CurrentPix
     idempotencyKey: mercadopago.pixIdempotencyKey(subscription.id, 'cycle'),
   });
 
-  await prisma.subscription.update({ where: { id: subscription.id }, data: { status: 'past_due' } });
+  await prisma.subscription.update({
+    where: { id: subscription.id },
+    data: { status: 'past_due', ...(hasPendingCoupon ? { pendingCouponPercentOff: null } : {}) },
+  });
   await prisma.user.update({ where: { id: userId }, data: { subscriptionStatus: 'past_due' } });
 
   return charge;

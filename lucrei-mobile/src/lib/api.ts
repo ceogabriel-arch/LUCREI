@@ -337,11 +337,23 @@ export function getCheckoutUrl(token: string) {
 
 export type PixCharge = { qrCode: string; qrCodeBase64: string; expiresAt: string; amount: number };
 
-export function selectPlanPix(token: string, key: string) {
+export function selectPlanPix(token: string, key: string, couponCode?: string) {
   return request<AuthUser & { pix: PixCharge | null }>('/plans/select-pix', {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ key }),
+    body: JSON.stringify(couponCode ? { key, couponCode } : { key }),
+  });
+}
+
+export type CouponPreview = { code: string; percentOff: number };
+
+// Cupom só se aplica ao fluxo Pix (ver comentário em Subscription no
+// backend) - por isso não existe equivalente pra selectPlan (cartão).
+export function validateCoupon(token: string, code: string) {
+  return request<CouponPreview>('/coupons/validate', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ code }),
   });
 }
 

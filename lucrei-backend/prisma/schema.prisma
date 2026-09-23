@@ -306,11 +306,28 @@ model Subscription {
   lastInvoiceUrl         String?
   createdAt              DateTime             @default(now())
   updatedAt              DateTime             @updatedAt
+  // Cupom aplicado na criação (só Pix - assinatura de cartão cobra o mesmo
+  // valor em toda renovação, não dá pra descontar só a 1ª sem risco).
+  // Consumido (zerado) na primeira cobrança criada pra essa assinatura,
+  // trialing ou não - garante que o desconto vale só nela, nunca num ciclo
+  // seguinte.
+  pendingCouponPercentOff Int?
 
   user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   pixCharges PixCharge[]
 
   @@index([userId])
+}
+
+model Coupon {
+  id             String    @id @default(cuid())
+  code           String    @unique
+  percentOff     Int
+  expiresAt      DateTime?
+  maxRedemptions Int?
+  redeemedCount  Int       @default(0)
+  active         Boolean   @default(true)
+  createdAt      DateTime  @default(now())
 }
 
 model PixCharge {
