@@ -285,7 +285,7 @@ function OrphanProductsSection({ token, shopId }: { token: string; shopId: strin
 }
 
 export default function ProdutosScreen() {
-  const { state } = useAuth();
+  const { state, refreshUser } = useAuth();
   // Token em vez do objeto "state" inteiro: refreshUser() troca "state" por
   // um objeto novo a cada chamada (mesmo com os mesmos dados), o que fazia
   // "load" ser recriado e a lista recarregar de novo sem necessidade.
@@ -360,7 +360,12 @@ export default function ProdutosScreen() {
   useFocusEffect(
     useCallback(() => {
       load();
-    }, [load])
+      // Status de pagamento (subscriptionBlocked/subscriptionGraceDaysLeft)
+      // só atualiza quando o objeto "user" é recarregado - sem isso, essa
+      // tela continuava mostrando um aviso de carência desatualizado até o
+      // usuário passar pela tela Início (a única que já chamava isso).
+      refreshUser();
+    }, [load, refreshUser])
   );
 
   // Pedido concluído chegando via push (ver DataRefreshProvider em

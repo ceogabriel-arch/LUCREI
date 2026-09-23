@@ -437,7 +437,7 @@ function ReportRangeCard({
 }
 
 export default function RelatoriosScreen() {
-  const { state } = useAuth();
+  const { state, refreshUser } = useAuth();
   // Token em vez do objeto "state" inteiro: refreshUser() troca "state" por
   // um objeto novo a cada chamada (mesmo com os mesmos dados), o que
   // recarregava o relatório de novo sem necessidade.
@@ -487,7 +487,12 @@ export default function RelatoriosScreen() {
   useFocusEffect(
     useCallback(() => {
       load();
-    }, [load])
+      // Status de pagamento (subscriptionBlocked/subscriptionGraceDaysLeft)
+      // só atualiza quando o objeto "user" é recarregado - sem isso, essa
+      // tela continuava mostrando um aviso de carência desatualizado até o
+      // usuário passar pela tela Início (a única que já chamava isso).
+      refreshUser();
+    }, [load, refreshUser])
   );
 
   // Pedido concluído chegando via push (ver DataRefreshProvider em

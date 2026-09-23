@@ -204,7 +204,7 @@ function OrderRow({ order, onPress, locked }: { order: Order; onPress: () => voi
 }
 
 export default function PedidosScreen() {
-  const { state } = useAuth();
+  const { state, refreshUser } = useAuth();
   // Token em vez do objeto "state" inteiro: refreshUser() troca "state" por
   // um objeto novo a cada chamada (mesmo com os mesmos dados). Como "load"
   // aqui embaixo roda direto num useEffect(() => load(), [load]), qualquer
@@ -264,7 +264,12 @@ export default function PedidosScreen() {
   useFocusEffect(
     useCallback(() => {
       load();
-    }, [load])
+      // Status de pagamento (subscriptionBlocked/subscriptionGraceDaysLeft)
+      // só atualiza quando o objeto "user" é recarregado - sem isso, essa
+      // tela continuava mostrando um aviso de carência desatualizado até o
+      // usuário passar pela tela Início (a única que já chamava isso).
+      refreshUser();
+    }, [load, refreshUser])
   );
 
   // Pedido concluído chegando via push (ver DataRefreshProvider em
