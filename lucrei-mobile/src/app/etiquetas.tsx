@@ -26,11 +26,14 @@ export default function EtiquetasScreen() {
   // já que só rastreamos qual está carregando pra mostrar o spinner certo.
   const [resizing, setResizing] = useState<Marketplace | null>(null);
 
-  async function handleFileSelected(marketplace: Marketplace, file: File) {
-    if (!token) return;
+  async function handleFileSelected(marketplace: Marketplace, file: File, previewWindow: Window | null) {
+    if (!token) {
+      previewWindow?.close();
+      return;
+    }
     setResizing(marketplace);
     try {
-      await resizeLabelPdf(token, file);
+      await resizeLabelPdf(token, file, previewWindow);
     } catch (err) {
       showAlert('Não foi possível redimensionar', err instanceof ApiError ? err.message : 'Tenta de novo em instantes.');
     } finally {
@@ -42,13 +45,30 @@ export default function EtiquetasScreen() {
   // da árvore RN - mesmo truque já usado no export de CSV de Relatórios.
   function pickFile(marketplace: Marketplace) {
     if (Platform.OS !== 'web' || resizing !== null || !token) return;
+
+    // Abre a aba de preview aqui, ainda dentro do clique original do botão -
+    // é o único momento garantido como gesto direto do usuário; abrir depois
+    // do diálogo de arquivo fechar é tarde demais e vira bloqueado como
+    // pop-up (o diálogo nativo consome o gesto do clique).
+    const previewWindow = window.open('', '_blank');
+    previewWindow?.document.write(
+      '<title>Gerando etiqueta...</title><body style="font-family:sans-serif;padding:40px;color:#555">Gerando etiqueta, aguarde...</body>',
+    );
+
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'application/pdf';
     input.onchange = () => {
       const file = input.files?.[0];
-      if (file) handleFileSelected(marketplace, file);
+      if (file) {
+        handleFileSelected(marketplace, file, previewWindow);
+      } else {
+        previewWindow?.close();
+      }
     };
+    // Nem todo navegador dispara "cancel" no <input type=file>, mas os que
+    // suportam evitam deixar a aba de preview presa em "Gerando etiqueta...".
+    input.oncancel = () => previewWindow?.close();
     input.click();
   }
 

@@ -2,18 +2,16 @@ import { API_URL, ApiError } from '@/lib/api';
 
 // Endpoint devolve um PDF puro (não JSON), então não dá pra usar o request()
 // genérico daqui - ele sempre espera um corpo JSON.
-export async function resizeLabelPdf(token: string, file: File): Promise<void> {
+// `previewWindow` precisa ser aberto (window.open) pelo chamador, no clique
+// original do botão - se a gente abre aqui dentro, já é tarde demais: esse
+// código só roda depois do evento "change" do <input type=file>, e o
+// diálogo nativo de escolher arquivo consome o gesto do clique original,
+// então navegadores tratam a chamada como pop-up não solicitado e bloqueiam.
+export async function resizeLabelPdf(token: string, file: File, previewWindow?: Window | null): Promise<void> {
   if (!API_URL) {
+    previewWindow?.close();
     throw new ApiError('Servidor não configurado (EXPO_PUBLIC_API_URL ausente).');
   }
-
-  // Abre a aba já aqui, ainda no mesmo gesto de clique do usuário - se
-  // esperar o fetch terminar pra chamar window.open, o navegador entende
-  // que não foi mais uma ação direta do usuário e bloqueia como pop-up.
-  const previewWindow = window.open('', '_blank');
-  previewWindow?.document.write(
-    '<title>Gerando etiqueta...</title><body style="font-family:sans-serif;padding:40px;color:#555">Gerando etiqueta, aguarde...</body>',
-  );
 
   const form = new FormData();
   form.append('file', file, file.name);
