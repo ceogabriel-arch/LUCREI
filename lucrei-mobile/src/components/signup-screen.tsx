@@ -3,11 +3,12 @@ import { ActivityIndicator, Linking, Pressable, ScrollView, Text, View } from 'r
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AuthBrandPanel } from '@/components/auth-brand-panel';
 import { PasswordField } from '@/components/password-field';
 import { TextField } from '@/components/text-field';
 import { API_URL } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { authCapWidth } from '@/lib/responsive';
+import { authCapWidth, useIsDesktopWeb } from '@/lib/responsive';
 import { useColors } from '@/lib/theme';
 
 type SignupScreenProps = {
@@ -24,6 +25,7 @@ export function SignupScreen({ onNavigateToLogin }: SignupScreenProps) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const isDesktop = useIsDesktopWeb();
   const passwordsMatch = password.length > 0 && password === confirmPassword;
   const canSubmit = name.length > 0 && email.length > 0 && passwordsMatch;
 
@@ -41,10 +43,14 @@ export function SignupScreen({ onNavigateToLogin }: SignupScreenProps) {
   return (
     <SafeAreaView className="flex-1 bg-lucrei-bg">
       <KeyboardAvoidingView behavior="padding" className="flex-1">
-        <ScrollView
-          contentContainerClassName="flex-grow justify-center px-6 py-10"
-          contentContainerStyle={authCapWidth()}
-          keyboardShouldPersistTaps="handled">
+        <View className={isDesktop ? 'flex-1 flex-row' : 'flex-1'}>
+          {isDesktop ? <AuthBrandPanel variant="signup" /> : null}
+
+          <ScrollView
+            className={isDesktop ? 'flex-1' : undefined}
+            contentContainerClassName="flex-grow justify-center px-6 py-10"
+            contentContainerStyle={authCapWidth()}
+            keyboardShouldPersistTaps="handled">
           <View className="items-center">
             <Text className="text-3xl font-bold text-lucrei-text">Criar conta</Text>
             <Text className="mt-1 text-sm text-lucrei-textMuted">Leva menos de um minuto</Text>
@@ -112,7 +118,8 @@ export function SignupScreen({ onNavigateToLogin }: SignupScreenProps) {
               <Text className="text-sm font-semibold text-lucrei-gold">Entrar</Text>
             </Pressable>
           </View>
-        </ScrollView>
+          </ScrollView>
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

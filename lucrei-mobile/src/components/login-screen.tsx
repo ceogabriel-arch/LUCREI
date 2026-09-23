@@ -5,6 +5,7 @@ import { ActivityIndicator, BackHandler, Platform, Pressable, ScrollView, Text, 
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AuthBrandPanel } from '@/components/auth-brand-panel';
 import { GoogleSignInButton } from '@/components/google-signin-button';
 import { PasswordField } from '@/components/password-field';
 import { Sparkline } from '@/components/sparkline';
@@ -129,14 +130,8 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
   const [error, setError] = useState<string | null>(null);
   const [forgotPasswordVisible, setForgotPasswordVisible] = useState(false);
   const isDesktop = useIsDesktopWeb();
-
-  // Numa janela larga de desktop, a logo/gráfico em tamanho de celular
-  // ficavam perdidos no meio de tanto espaço vazio - aumenta os dois, e
-  // deixa o botão "Entrar" um pouco mais compacto (o padding grande é
-  // pensado pra dedo, não faz sentido tão grande com mouse).
-  const logoWidth = isDesktop ? 240 : 180;
+  const logoWidth = 180;
   const logoHeight = logoWidth / LOGO_ASPECT;
-  const sparklineSize = isDesktop ? { width: 340, height: 80 } : { width: 260, height: 60 };
 
   const canSubmit = email.length > 0 && password.length > 0;
 
@@ -160,25 +155,31 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
   return (
     <SafeAreaView className="flex-1 bg-lucrei-bg">
       <KeyboardAvoidingView behavior="padding" className="flex-1">
-        <ScrollView
-          contentContainerClassName="flex-grow justify-center px-6 py-10"
-          contentContainerStyle={authCapWidth()}
-          keyboardShouldPersistTaps="handled">
-          <View className="items-center">
-            <View style={{ width: logoWidth, height: logoHeight }}>
-              <Image
-                source={scheme === 'dark' ? LOGO_DARK : LOGO_LIGHT}
-                style={{ width: '100%', height: '100%' }}
-                contentFit="contain"
-              />
-            </View>
-            <View className="mt-2 items-center">
-              <Text className={isDesktop ? 'text-3xl font-bold text-lucrei-gold' : 'text-2xl font-bold text-lucrei-gold'}>+93%</Text>
-              <Sparkline data={TREND} width={sparklineSize.width} height={sparklineSize.height} />
-            </View>
-          </View>
+        <View className={isDesktop ? 'flex-1 flex-row' : 'flex-1'}>
+          {isDesktop ? <AuthBrandPanel variant="login" /> : null}
 
-          <View className="mt-8 rounded-2xl border border-lucrei-border bg-lucrei-surface p-5">
+          <ScrollView
+            className={isDesktop ? 'flex-1' : undefined}
+            contentContainerClassName="flex-grow justify-center px-6 py-10"
+            contentContainerStyle={authCapWidth()}
+            keyboardShouldPersistTaps="handled">
+            {isDesktop ? null : (
+              <View className="items-center">
+                <View style={{ width: logoWidth, height: logoHeight }}>
+                  <Image
+                    source={scheme === 'dark' ? LOGO_DARK : LOGO_LIGHT}
+                    style={{ width: '100%', height: '100%' }}
+                    contentFit="contain"
+                  />
+                </View>
+                <View className="mt-2 items-center">
+                  <Text className="text-2xl font-bold text-lucrei-gold">+93%</Text>
+                  <Sparkline data={TREND} width={260} height={60} />
+                </View>
+              </View>
+            )}
+
+            <View className={`rounded-2xl border border-lucrei-border bg-lucrei-surface p-5 ${isDesktop ? '' : 'mt-8'}`}>
             <TextField
               label="E-mail"
               placeholder="seu@email.com"
@@ -242,7 +243,8 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
               <Text className="text-sm font-semibold text-lucrei-gold">Criar conta</Text>
             </Pressable>
           </View>
-        </ScrollView>
+          </ScrollView>
+        </View>
       </KeyboardAvoidingView>
 
       <ForgotPasswordModal visible={forgotPasswordVisible} onClose={() => setForgotPasswordVisible(false)} />
