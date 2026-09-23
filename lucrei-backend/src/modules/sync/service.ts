@@ -44,8 +44,6 @@ async function processOrder(
     },
   });
 
-  await prisma.orderLineItem.deleteMany({ where: { orderId: order.id } });
-
   const itemIds = income.items.map((li) => String(li.item_id));
   const products = await prisma.product.findMany({
     where: { shopId: shopDbId, shopeeItemId: { in: itemIds } },
@@ -82,7 +80,18 @@ async function processOrder(
     };
   });
 
-  await prisma.orderLineItem.createMany({ data: lineItemsData });
+  // Sincronização normal e backfill de histórico podem processar o MESMO
+  // pedido ao mesmo tempo (nada impede os dois de rodar juntos hoje). Sem
+  // isso, dois "apaga tudo + recria" concorrentes podiam intercalar (A apaga
+  // e recria, B apaga - já vazio - e recria de novo por cima), duplicando os
+  // itens do pedido e inflando faturamento/lucro. O lock na linha do Order
+  // serializa: quem chegar depois espera o primeiro terminar (e commitar)
+  // antes de apagar/recriar, então sempre vê o estado final correto.
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT id FROM "Order" WHERE id = ${order.id} FOR UPDATE`;
+    await tx.orderLineItem.deleteMany({ where: { orderId: order.id } });
+    await tx.orderLineItem.createMany({ data: lineItemsData });
+  });
 
   // Segue o mesmo critério da rota de listagem de pedidos: só null quando
   // NENHUM item do pedido tem custo cadastrado.
