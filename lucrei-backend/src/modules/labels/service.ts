@@ -45,7 +45,7 @@ function normalize(x: number, y: number): [number, number] {
 // e uma declaração fiscal (DANFE) lado a lado na mesma página, e mesclar as
 // duas cedo demais faria o recorte abranger as duas juntas, encolhendo tudo
 // e sobrando margem enorme. Quem chama decide como agrupar essas marcas.
-async function detectContentMarks(pdfjsPage: {
+export async function detectContentMarks(pdfjsPage: {
   getOperatorList: () => Promise<{ fnArray: number[]; argsArray: unknown[][] }>;
   getTextContent: () => Promise<{ items: Array<{ transform?: number[]; width?: number; height?: number }> }>;
 }): Promise<BBox[]> {
@@ -135,22 +135,29 @@ async function detectContentMarks(pdfjsPage: {
 // intervalo de X está mais perto que o vão mínimo entram no mesmo bloco (é
 // o espaçamento normal entre elementos de UMA etiqueta - código de barras,
 // texto, QR code). Um vão maior indica outra coisa desenhada do lado (a
-// declaração fiscal, outra etiqueta) - vira um bloco separado. O vão mínimo
-// é proporcional à largura da página em vez de fixo, pra não depender da
-// resolução/tamanho exatos do PDF de origem. Etiqueta de envio é sempre a
-// mais à esquerda: é a convenção da Shopee/Mercado Livre quando isso
-// aparece, e continua funcionando quando só existe uma marca mesmo (o caso
-// comum, uma etiqueta só por página).
-export function pickShippingLabelRegion(marks: BBox[], pageWidth: number): BBox | null {
+// declaração fiscal, outra etiqueta) - vira um bloco separado. Etiqueta de
+// envio é sempre a mais à esquerda: é a convenção da Shopee/Mercado Livre
+// quando isso aparece, e continua funcionando quando só existe uma marca
+// mesmo (o caso comum, uma etiqueta só por página).
+//
+// O vão mínimo é um valor fixo, não proporcional à largura da página: numa
+// etiqueta real de Mercado Livre com etiqueta + DANFE lado a lado numa
+// folha A4 deitada (larga), o vão de verdade entre os dois documentos foi
+// medido em ~17.6pt - bem menor que 3% da largura dessa página (~25pt),
+// que juntava os dois por engano. Espaçamentos DENTRO de um mesmo
+// documento (entre linhas de texto, código de barras etc.) ficaram bem
+// abaixo disso (~2pt) nos PDFs reais testados.
+const MIN_ISLAND_GAP_PT = 14;
+
+export function pickShippingLabelRegion(marks: BBox[]): BBox | null {
   if (marks.length === 0) return null;
 
-  const minGap = Math.max(10, pageWidth * 0.03);
   const sorted = [...marks].sort((a, b) => a.minX - b.minX);
   const island: BBox = { ...sorted[0] };
 
   for (let i = 1; i < sorted.length; i++) {
     const mark = sorted[i];
-    if (mark.minX - island.maxX > minGap) break; // próximo bloco - a etiqueta de envio já terminou
+    if (mark.minX - island.maxX > MIN_ISLAND_GAP_PT) break; // próximo bloco - a etiqueta de envio já terminou
     island.minX = Math.min(island.minX, mark.minX);
     island.minY = Math.min(island.minY, mark.minY);
     island.maxX = Math.max(island.maxX, mark.maxX);
@@ -186,7 +193,7 @@ export async function resizePdfToLabel(bytes: Uint8Array): Promise<Uint8Array> {
       const pdfjsPage = await pdfjsDoc.getPage(i + 1);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const marks = await detectContentMarks(pdfjsPage as any);
-      bbox = pickShippingLabelRegion(marks, embedded.width);
+      bbox = pickShippingLabelRegion(marks);
     } catch {
       bbox = null;
     }

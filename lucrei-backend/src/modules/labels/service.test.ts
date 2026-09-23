@@ -40,7 +40,7 @@ describe('resizePdfToLabel', () => {
 
 describe('pickShippingLabelRegion', () => {
   it('returns null when there are no marks', () => {
-    expect(pickShippingLabelRegion([], 600)).toBeNull();
+    expect(pickShippingLabelRegion([])).toBeNull();
   });
 
   it('merges marks that are close together into a single region', () => {
@@ -48,23 +48,24 @@ describe('pickShippingLabelRegion', () => {
       { minX: 0, minY: 0, maxX: 50, maxY: 100 },
       { minX: 55, minY: 0, maxX: 120, maxY: 100 },
     ];
-    expect(pickShippingLabelRegion(marks, 600)).toEqual({ minX: 0, minY: 0, maxX: 120, maxY: 100 });
+    expect(pickShippingLabelRegion(marks)).toEqual({ minX: 0, minY: 0, maxX: 120, maxY: 100 });
   });
 
   it('keeps only the left-most island, ignoring a separate document further right', () => {
-    // Simula uma etiqueta de envio (0-120) e um DANFE separado bem mais à
-    // direita (400-580) na mesma página de 600pt de largura - o vão entre
-    // eles é bem maior que o mínimo (18pt), então tem que cortar fora o DANFE.
+    // Simula uma etiqueta de envio (0-120) e um DANFE separado mais à
+    // direita (140-320) - o vão entre eles (20pt) é maior que o mínimo
+    // fixo (14pt, calibrado com PDFs reais de Mercado Livre), então tem
+    // que cortar fora o DANFE.
     const marks = [
       { minX: 0, minY: 0, maxX: 50, maxY: 100 },
       { minX: 55, minY: 10, maxX: 120, maxY: 90 },
-      { minX: 400, minY: 0, maxX: 580, maxY: 150 },
+      { minX: 140, minY: 0, maxX: 320, maxY: 150 },
     ];
-    expect(pickShippingLabelRegion(marks, 600)).toEqual({ minX: 0, minY: 0, maxX: 120, maxY: 100 });
+    expect(pickShippingLabelRegion(marks)).toEqual({ minX: 0, minY: 0, maxX: 120, maxY: 100 });
   });
 
   it('handles a single mark (the common case of one label per page)', () => {
     const marks = [{ minX: 10, minY: 20, maxX: 200, maxY: 300 }];
-    expect(pickShippingLabelRegion(marks, 600)).toEqual(marks[0]);
+    expect(pickShippingLabelRegion(marks)).toEqual(marks[0]);
   });
 });
