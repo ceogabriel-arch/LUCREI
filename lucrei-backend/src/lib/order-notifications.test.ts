@@ -139,4 +139,29 @@ describe('notifyOrderCompletedIfNeeded', () => {
     expect(prismaMock.user.findUnique).not.toHaveBeenCalled();
     expect(sendPushNotificationMock).not.toHaveBeenCalled();
   });
+
+  it('rolls back notifiedAt when the send itself fails, so a future sync retries it', async () => {
+    prismaMock.order.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.shop.findUnique.mockResolvedValue({ id: 's1', userId: 'u1' });
+    prismaMock.user.findUnique.mockResolvedValue({ id: 'u1', pushToken: 'ExponentPushToken[abc]' });
+    sendPushNotificationMock.mockRejectedValue(new Error('Expo API indisponível'));
+
+    await expect(
+      notifyOrderCompletedIfNeeded({
+        orderId: 'o1',
+        orderSn: 'SN1',
+        shopDbId: 's1',
+        completedAt: new Date(),
+        totalProfit: 10,
+      })
+    ).rejects.toThrow('Expo API indisponível');
+
+    // 1ª chamada reserva o pedido (notifiedAt: null -> agora), 2ª chamada
+    // reverte depois do envio falhar (notifiedAt: not null -> null de novo).
+    expect(prismaMock.order.updateMany).toHaveBeenCalledTimes(2);
+    expect(prismaMock.order.updateMany).toHaveBeenNthCalledWith(2, {
+      where: { id: 'o1', notifiedAt: { not: null } },
+      data: { notifiedAt: null },
+    });
+  });
 });

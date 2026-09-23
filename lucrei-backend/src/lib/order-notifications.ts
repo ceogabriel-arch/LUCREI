@@ -42,5 +42,16 @@ export async function notifyOrderCompletedIfNeeded(params: {
       ? `Você lucrou ${formatBRL(params.totalProfit)} nesse pedido.`
       : 'Cadastre o custo do produto pra ver o lucro desse pedido.';
 
-  await sendPushNotification(owner.pushToken, title, body, { orderSn: params.orderSn });
+  try {
+    await sendPushNotification(owner.pushToken, title, body, { orderSn: params.orderSn });
+  } catch (err) {
+    // O pedido foi "reservado" acima antes de mandar de verdade, pra dois
+    // processos concorrentes (webhook + sync) não mandarem a mesma
+    // notificação em dobro. Mas se o ENVIO em si falhar (token inválido,
+    // Expo fora do ar), reverte a marca - senão o pedido fica etiquetado
+    // como "já notificado" pra sempre, sem a notificação nunca ter chegado
+    // de verdade, e nenhuma sincronização futura tenta de novo.
+    await prisma.order.updateMany({ where: { id: params.orderId, notifiedAt: { not: null } }, data: { notifiedAt: null } });
+    throw err;
+  }
 }
