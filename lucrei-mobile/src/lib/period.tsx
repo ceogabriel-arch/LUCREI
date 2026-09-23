@@ -18,7 +18,7 @@ const PeriodContext = createContext<PeriodContextValue | null>(null);
 // Compartilhado entre Início, Produtos, Relatórios e Pedidos - trocar o
 // período numa tela não deve resetar nas outras.
 export function PeriodProvider({ children }: PropsWithChildren) {
-  const [period, setPeriod] = useState<PeriodLabel>('30 dias');
+  const [period, setPeriod] = useState<PeriodLabel>('Hoje');
   return <PeriodContext.Provider value={{ period, setPeriod }}>{children}</PeriodContext.Provider>;
 }
 
