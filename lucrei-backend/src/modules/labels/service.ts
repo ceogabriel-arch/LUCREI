@@ -1,8 +1,8 @@
 import { PDFDocument } from 'pdf-lib';
 
 // Padrão "10x15" das etiquetadoras térmicas (Elgin, Zebra etc.) usadas pra
-// imprimir etiquetas de envio da Shopee no Brasil: 100mm de largura por
-// 150mm de altura, em pé.
+// imprimir etiquetas de envio da Shopee/Mercado Livre no Brasil: 100mm de
+// largura por 150mm de altura, em pé.
 const MM_TO_PT = 72 / 25.4;
 export const LABEL_WIDTH_PT = 100 * MM_TO_PT;
 export const LABEL_HEIGHT_PT = 150 * MM_TO_PT;
@@ -30,14 +30,15 @@ function normalize(x: number, y: number): [number, number] {
   return [x / len, y / len];
 }
 
-// PDFs de etiqueta que a Shopee gera costumam vir numa folha A4, mas com o
-// conteúdo real (endereço, QR code, código de barras) desenhado no tamanho
-// físico real da etiqueta, ancorado no canto superior esquerdo da página -
-// o resto da folha fica em branco. Se a gente só encolhe a página inteira
-// pra caber em 100x150mm, esse espaço em branco encolhe junto e a etiqueta
-// sai pequena, cercada de margem. Por isso detectamos aqui a área realmente
-// desenhada (imagens, traços e texto) pra usar como referência do
-// recorte/escala, em vez do tamanho bruto da página.
+// PDFs de etiqueta que Shopee/Mercado Livre geram costumam vir numa folha
+// A4, mas com o conteúdo real (endereço, QR code, código de barras)
+// desenhado no tamanho físico real da etiqueta, geralmente ancorado num
+// canto da página - o resto da folha fica em branco. Se a gente só encolhe
+// a página inteira pra caber em 100x150mm, esse espaço em branco encolhe
+// junto e a etiqueta sai pequena, cercada de margem. Por isso detectamos
+// aqui a área realmente desenhada (imagens, traços e texto) pra usar como
+// referência do recorte/escala, em vez do tamanho bruto da página - não
+// depende de onde exatamente o marketplace ancorou o conteúdo.
 async function detectContentBBox(pdfjsPage: {
   getOperatorList: () => Promise<{ fnArray: number[]; argsArray: unknown[][] }>;
   getTextContent: () => Promise<{ items: Array<{ transform?: number[]; width?: number; height?: number }> }>;
