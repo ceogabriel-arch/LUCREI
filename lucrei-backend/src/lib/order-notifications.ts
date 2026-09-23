@@ -9,25 +9,28 @@ import { formatBRL, sendPushNotification } from './push-notifications';
 // recente, não um jeito de notificar tudo retroativamente.
 const FALLBACK_WINDOW_MS = 24 * 60 * 60 * 1000;
 
-// O valor vai no título (é a informação que importa de verdade, olhando de
-// relance) - "Você lucrou -R$ 5,00 nesse pedido" não fazia sentido nenhum
-// num pedido que deu prejuízo, então trata os três casos separados.
-function buildNotificationMessage(totalProfit: number | null): { title: string; body: string } {
+// O lucro vai no título (é a informação que importa de verdade, olhando de
+// relance, e é o que só o Lucrei mostra - a Shopee só expõe o faturamento
+// bruto) - "Você lucrou -R$ 5,00 nesse pedido" não fazia sentido nenhum num
+// pedido que deu prejuízo, então trata os três casos separados. O
+// faturamento entra no corpo como contexto do tamanho do pedido.
+function buildNotificationMessage(totalProfit: number | null, totalRevenue: number): { title: string; body: string } {
+  const revenueText = formatBRL(totalRevenue);
   if (totalProfit === null) {
     return {
       title: 'Pedido concluído',
-      body: 'Cadastre o custo do produto pra saber quanto você lucrou nele.',
+      body: `Pedido de ${revenueText} - cadastre o custo do produto pra saber quanto você lucrou nele.`,
     };
   }
   if (totalProfit < 0) {
     return {
       title: `⚠️ Prejuízo de ${formatBRL(Math.abs(totalProfit))}`,
-      body: 'Um pedido seu completou no prejuízo - vale dar uma olhada.',
+      body: `Pedido de ${revenueText} - esse aqui fechou no prejuízo, vale dar uma olhada.`,
     };
   }
   return {
     title: `💰 Lucro de ${formatBRL(totalProfit)}`,
-    body: 'Um pedido seu acabou de completar na Shopee.',
+    body: `Pedido de ${revenueText} - lucro líquido já calculado, na hora.`,
   };
 }
 
@@ -37,6 +40,7 @@ export async function notifyOrderCompletedIfNeeded(params: {
   shopDbId: string;
   completedAt: Date | null;
   totalProfit: number | null;
+  totalRevenue: number;
 }) {
   if (!params.completedAt || Date.now() - params.completedAt.getTime() > FALLBACK_WINDOW_MS) {
     return;
@@ -58,7 +62,7 @@ export async function notifyOrderCompletedIfNeeded(params: {
   const owner = await prisma.user.findUnique({ where: { id: shop.userId } });
   if (!owner?.pushToken) return;
 
-  const { title, body } = buildNotificationMessage(params.totalProfit);
+  const { title, body } = buildNotificationMessage(params.totalProfit, params.totalRevenue);
 
   try {
     await sendPushNotification(owner.pushToken, title, body, { orderSn: params.orderSn });

@@ -107,6 +107,7 @@ async function processOrder(
   // Segue o mesmo critério da rota de listagem de pedidos: só null quando
   // NENHUM item do pedido tem custo cadastrado.
   const totalProfit = itemsMissingCost === income.items.length ? null : profitSum;
+  const totalRevenue = lineItemsData.reduce((sum, li) => sum + li.salePrice, 0);
 
   // Rede de segurança contra o push da Shopee não avisar (não garante
   // entrega) - roda em toda sincronização, não só quando vem do webhook, mas
@@ -119,6 +120,7 @@ async function processOrder(
     shopDbId,
     completedAt: order.completedAt,
     totalProfit,
+    totalRevenue,
   }).catch(() => {});
 
   return { orderId: order.id, totalProfit };

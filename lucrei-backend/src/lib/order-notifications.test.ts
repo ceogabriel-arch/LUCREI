@@ -35,6 +35,7 @@ describe('notifyOrderCompletedIfNeeded', () => {
       shopDbId: 's1',
       completedAt: null,
       totalProfit: 10,
+      totalRevenue: 150,
     });
     expect(prismaMock.order.updateMany).not.toHaveBeenCalled();
     expect(sendPushNotificationMock).not.toHaveBeenCalled();
@@ -48,6 +49,7 @@ describe('notifyOrderCompletedIfNeeded', () => {
       shopDbId: 's1',
       completedAt: old,
       totalProfit: 10,
+      totalRevenue: 150,
     });
     expect(prismaMock.order.updateMany).not.toHaveBeenCalled();
     expect(sendPushNotificationMock).not.toHaveBeenCalled();
@@ -61,6 +63,7 @@ describe('notifyOrderCompletedIfNeeded', () => {
       shopDbId: 's1',
       completedAt: new Date(),
       totalProfit: 10,
+      totalRevenue: 150,
     });
     expect(prismaMock.shop.findUnique).not.toHaveBeenCalled();
     expect(sendPushNotificationMock).not.toHaveBeenCalled();
@@ -77,12 +80,13 @@ describe('notifyOrderCompletedIfNeeded', () => {
       shopDbId: 's1',
       completedAt: new Date(),
       totalProfit: 42.5,
+      totalRevenue: 150,
     });
 
     expect(sendPushNotificationMock).toHaveBeenCalledWith(
       'ExponentPushToken[abc]',
       expect.stringContaining('42,50'),
-      expect.any(String),
+      expect.stringContaining('150,00'),
       { orderSn: 'SN123' }
     );
   });
@@ -98,6 +102,7 @@ describe('notifyOrderCompletedIfNeeded', () => {
       shopDbId: 's1',
       completedAt: new Date(),
       totalProfit: -5,
+      totalRevenue: 150,
     });
 
     expect(sendPushNotificationMock).toHaveBeenCalledWith(
@@ -122,12 +127,13 @@ describe('notifyOrderCompletedIfNeeded', () => {
       shopDbId: 's1',
       completedAt: new Date(),
       totalProfit: null,
+      totalRevenue: 150,
     });
 
     expect(sendPushNotificationMock).toHaveBeenCalledWith(
       'ExponentPushToken[abc]',
       expect.any(String),
-      expect.stringContaining('Cadastre o custo'),
+      expect.stringContaining('cadastre o custo'),
       { orderSn: 'SN123' }
     );
   });
@@ -143,6 +149,7 @@ describe('notifyOrderCompletedIfNeeded', () => {
       shopDbId: 's1',
       completedAt: new Date(),
       totalProfit: 10,
+      totalRevenue: 150,
     });
 
     expect(sendPushNotificationMock).not.toHaveBeenCalled();
@@ -158,6 +165,7 @@ describe('notifyOrderCompletedIfNeeded', () => {
       shopDbId: 's1',
       completedAt: new Date(),
       totalProfit: 10,
+      totalRevenue: 150,
     });
 
     expect(prismaMock.user.findUnique).not.toHaveBeenCalled();
@@ -177,6 +185,7 @@ describe('notifyOrderCompletedIfNeeded', () => {
         shopDbId: 's1',
         completedAt: new Date(),
         totalProfit: 10,
+        totalRevenue: 150,
       })
     ).rejects.toThrow('Expo API indisponível');
 
