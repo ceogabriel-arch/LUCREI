@@ -1,4 +1,4 @@
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
 
 // Padrão "10x15" das etiquetadoras térmicas (Elgin, Zebra etc.) usadas pra
 // imprimir etiquetas de envio da Shopee/Mercado Livre no Brasil: 100mm de
@@ -167,13 +167,90 @@ export function pickShippingLabelRegion(marks: BBox[]): BBox | null {
   return island;
 }
 
+// Número do pedido da Shopee (ex: "260923QART6FYH"): 6 dígitos de data
+// (AAMMDD) + 8 caracteres alfanuméricos maiúsculos, sempre 14 no total. Bem
+// mais confiável que procurar o valor perto do texto "Pedido:" na etiqueta -
+// a ordem dos itens de texto no PDF não segue a ordem visual do layout, o
+// rótulo e o valor não ficam nem perto um do outro na lista.
+const ORDER_SN_PATTERN = /^\d{6}[A-Z0-9]{8}$/;
+
+// Extrai o número do pedido de cada página (ou null se não achar) - usado
+// por quem chama pra cruzar com os pedidos já sincronizados no Lucrei e
+// escrever o nome do produto na própria etiqueta. Só funciona pra etiquetas
+// da Shopee, que é o único marketplace com pedidos sincronizados no banco.
+export async function extractOrderSnsByPage(bytes: Uint8Array): Promise<Array<string | null>> {
+  const pdfjsLib = (await import('pdfjs-dist/legacy/build/pdf.mjs')) as unknown as {
+    getDocument: (opts: { data: Uint8Array }) => {
+      promise: Promise<{
+        numPages: number;
+        getPage: (n: number) => Promise<{ getTextContent: () => Promise<{ items: Array<{ str?: string }> }> }>;
+      }>;
+    };
+  };
+  const doc = await pdfjsLib.getDocument({ data: new Uint8Array(bytes) }).promise;
+
+  const result: Array<string | null> = [];
+  for (let i = 1; i <= doc.numPages; i++) {
+    const page = await doc.getPage(i);
+    const textContent = await page.getTextContent();
+    const match = textContent.items.find((item) => item.str && ORDER_SN_PATTERN.test(item.str.trim()));
+    result.push(match?.str?.trim() ?? null);
+  }
+  return result;
+}
+
+// Altura reservada no topo da etiqueta pro nome do produto, quando a gente
+// consegue identificar o pedido - encolhe um pouco o conteúdo de envio
+// (proporcionalmente, sem distorcer) pra abrir espaço sem sobrepor nada,
+// já que a etiqueta normalmente já preenche a página inteira.
+const PRODUCT_BAND_HEIGHT_PT = 12 * MM_TO_PT;
+const PRODUCT_BAND_SIDE_MARGIN_PT = 6;
+
+function drawProductBand(page: PDFPage, font: PDFFont, label: string, contentAreaHeight: number) {
+  const maxWidth = LABEL_WIDTH_PT - PRODUCT_BAND_SIDE_MARGIN_PT * 2;
+
+  let size = 10;
+  while (size > 6 && font.widthOfTextAtSize(label, size) > maxWidth) {
+    size -= 0.5;
+  }
+
+  let display = label;
+  while (display.length > 1 && font.widthOfTextAtSize(`${display}…`, size) > maxWidth) {
+    display = display.slice(0, -1);
+  }
+  if (display !== label) display += '…';
+
+  const textWidth = font.widthOfTextAtSize(display, size);
+  const bandTop = LABEL_HEIGHT_PT;
+  const bandBottom = contentAreaHeight;
+
+  page.drawText(display, {
+    x: (LABEL_WIDTH_PT - textWidth) / 2,
+    y: (bandTop + bandBottom) / 2 - size * 0.35,
+    size,
+    font,
+    color: rgb(0, 0, 0),
+  });
+  page.drawLine({
+    start: { x: PRODUCT_BAND_SIDE_MARGIN_PT, y: bandBottom },
+    end: { x: LABEL_WIDTH_PT - PRODUCT_BAND_SIDE_MARGIN_PT, y: bandBottom },
+    thickness: 0.75,
+    color: rgb(0, 0, 0),
+  });
+}
+
 // Encaixa a área de conteúdo de cada página do PDF original numa página de
 // 100x150mm, mantendo a proporção original (sem esticar) e centralizada.
 // Isso evita distorcer código de barras/QR code, que ficam ilegíveis se
 // esticados fora de escala.
-export async function resizePdfToLabel(bytes: Uint8Array): Promise<Uint8Array> {
+export async function resizePdfToLabel(
+  bytes: Uint8Array,
+  opts?: { productLabelByPage?: Array<string | null | undefined> }
+): Promise<Uint8Array> {
   const srcDoc = await PDFDocument.load(bytes);
   const outDoc = await PDFDocument.create();
+  const productLabelByPage = opts?.productLabelByPage;
+  const boldFont = productLabelByPage?.some(Boolean) ? await outDoc.embedFont(StandardFonts.HelveticaBold) : null;
 
   const pdfjsLib = (await import('pdfjs-dist/legacy/build/pdf.mjs')) as unknown as {
     getDocument: (opts: { data: Uint8Array }) => { promise: Promise<{ getPage: (n: number) => Promise<unknown> }> };
@@ -220,15 +297,22 @@ export async function resizePdfToLabel(bytes: Uint8Array): Promise<Uint8Array> {
     const regionW = region.maxX - region.minX;
     const regionH = region.maxY - region.minY;
 
+    const productLabel = productLabelByPage?.[i];
+    const contentAreaHeight = productLabel && boldFont ? LABEL_HEIGHT_PT - PRODUCT_BAND_HEIGHT_PT : LABEL_HEIGHT_PT;
+
     const outPage = outDoc.addPage([LABEL_WIDTH_PT, LABEL_HEIGHT_PT]);
-    const scale = Math.min(LABEL_WIDTH_PT / regionW, LABEL_HEIGHT_PT / regionH);
+    const scale = Math.min(LABEL_WIDTH_PT / regionW, contentAreaHeight / regionH);
 
     outPage.drawPage(embedded, {
       x: (LABEL_WIDTH_PT - regionW * scale) / 2 - region.minX * scale,
-      y: (LABEL_HEIGHT_PT - regionH * scale) / 2 - region.minY * scale,
+      y: (contentAreaHeight - regionH * scale) / 2 - region.minY * scale,
       xScale: scale,
       yScale: scale,
     });
+
+    if (productLabel && boldFont) {
+      drawProductBand(outPage, boldFont, productLabel, contentAreaHeight);
+    }
   }
 
   return outDoc.save();
