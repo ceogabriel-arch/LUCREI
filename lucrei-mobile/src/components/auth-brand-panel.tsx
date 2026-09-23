@@ -22,7 +22,7 @@ const TAGLINES = {
 
 export function AuthBrandPanel({ variant }: { variant: keyof typeof TAGLINES }) {
   return (
-    <View className="flex-1 items-center px-12 pt-28" style={{ backgroundColor: BRAND_BG }}>
+    <View className="flex-1 items-center px-12 pt-44" style={{ backgroundColor: BRAND_BG }}>
       <View style={{ width: LOGO_WIDTH, height: LOGO_WIDTH / LOGO_ASPECT }}>
         <Image source={LOGO} style={{ width: '100%', height: '100%' }} contentFit="contain" />
       </View>
