@@ -12,7 +12,7 @@
       "icon": "./assets/images/icon.png"
     },
     "android": {
-      "versionCode": 9,
+      "versionCode": 10,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#0A0A0B",
