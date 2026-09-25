@@ -66,6 +66,16 @@ export default function InicioScreen() {
         } else {
           showAlert('Não foi possível conectar', 'Tente novamente em instantes.');
         }
+      } else if (result.status === 'cancelled') {
+        // Cobre tanto quem fechou a tela de propósito quanto o caso real de
+        // travar em "Please login first" na própria página da Shopee - os
+        // dois chegam como 'cancelled' aqui (não dá pra distinguir, já que
+        // nenhum dos dois volta pro nosso callback), então a mensagem cobre
+        // ambos sem soar como erro forçado.
+        showAlert(
+          'Conexão não concluída',
+          'Se a Shopee ficou travada pedindo login, faça login direto em shopee.com.br pelo navegador antes de conectar, ou tente por outro navegador/computador.'
+        );
       }
     } catch (err) {
       showAlert('Erro', err instanceof ApiError ? err.message : 'Algo deu errado.');
