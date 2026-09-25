@@ -7,7 +7,6 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, T
 
 import { AchievementsCard } from '@/components/achievements-card';
 import { BlurredValue } from '@/components/blurred-value';
-import { DeltaBadge } from '@/components/delta-badge';
 import { PastDueBanner } from '@/components/past-due-banner';
 import { Screen } from '@/components/screen';
 import { ShopPicker } from '@/components/shop-picker';
@@ -33,62 +32,6 @@ type BackendStatus = 'checking' | 'online' | 'offline';
 const LOGO_ASPECT = 449 / 153;
 const LOGO_HEIGHT = 30;
 const LOGO_WIDTH = LOGO_HEIGHT * LOGO_ASPECT;
-
-// Exemplo apenas — valores reais chegam quando a loja Shopee for conectada (Fase 2).
-const MOCK_TREND = [18400, 19200, 21000, 20500, 23800, 26100, 27400, 31200, 33600, 35900, 38100, 40250];
-const MOCK_KPIS = [
-  {
-    label: 'Faturamento',
-    value: formatBRL(120750),
-    deltaLabel: '+22,4%',
-    deltaDirection: 'up' as const,
-    helpText: 'Soma do valor de venda de todos os pedidos do período, sem descontar nada.',
-  },
-  {
-    label: 'Custos totais',
-    value: formatBRL(80500),
-    deltaLabel: '+15,1%',
-    deltaDirection: 'up' as const,
-    positiveIsGood: false,
-    helpText: 'Soma de tudo que sai do seu bolso no período: custo do produto, frete líquido e taxas da Shopee.',
-  },
-  {
-    label: 'Líquido Shopee',
-    value: formatBRL(120750 - 18500),
-    deltaLabel: '+19,6%',
-    deltaDirection: 'up' as const,
-    helpText: 'Faturamento menos as taxas cobradas pela Shopee. Ainda não desconta o custo do produto nem o frete.',
-  },
-  {
-    label: 'Pedidos',
-    value: '356',
-    deltaLabel: '+12,1%',
-    deltaDirection: 'up' as const,
-    helpText: 'Quantidade de pedidos concluídos no período selecionado.',
-  },
-  {
-    label: 'Ticket médio',
-    value: formatBRL(339.72),
-    deltaLabel: '+8,3%',
-    deltaDirection: 'up' as const,
-    helpText: 'Faturamento do período dividido pela quantidade de pedidos.',
-  },
-  {
-    label: 'Margem de lucro',
-    value: '33,3%',
-    deltaLabel: '+2,8 p.p.',
-    deltaDirection: 'up' as const,
-    helpText:
-      'Lucro dividido pelo faturamento dos pedidos com custo cadastrado, em porcentagem. Pedido sem custo cadastrado não entra nessa conta.',
-  },
-  {
-    label: 'Devoluções',
-    value: '12',
-    deltaLabel: '-7,7%',
-    deltaDirection: 'down' as const,
-    positiveIsGood: false,
-  },
-];
 
 export default function InicioScreen() {
   const { state, refreshUser } = useAuth();
@@ -258,7 +201,7 @@ export default function InicioScreen() {
             'Lucro dividido pelo faturamento dos pedidos com custo cadastrado, em porcentagem. Pedido sem custo cadastrado não entra nessa conta.',
         },
       ]
-    : MOCK_KPIS;
+    : [];
 
   return (
     <Screen>
@@ -353,80 +296,90 @@ export default function InicioScreen() {
           {!stillLoading && summaryLoading && <ActivityIndicator size="small" color={Colors.gold} />}
         </View>
 
-        <View className="mt-4 overflow-hidden rounded-3xl border border-lucrei-border">
-          <LinearGradient
-            colors={[Colors.surfaceAlt, Colors.surface]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={StyleSheet.absoluteFill}
-          />
-          <View className={isDesktop ? 'flex-row items-center justify-between p-8' : 'p-6'}>
-            <View className={isDesktop ? 'flex-1' : undefined}>
-              <View className="flex-row items-center gap-2">
-                <Text className="text-sm text-lucrei-textMuted">Você lucrou</Text>
-                {!stillLoading && summaryLoading && <ActivityIndicator size="small" color={Colors.textMuted} />}
-                {!stillLoading && !showingRealData && (
-                  <View className="rounded-full px-2 py-0.5" style={{ backgroundColor: Colors.surfaceAlt }}>
-                    <Text className="text-[10px] font-semibold uppercase tracking-wide text-lucrei-textMuted">
-                      Exemplo
-                    </Text>
+        {stillLoading || showingRealData ? (
+          <>
+            <View className="mt-4 overflow-hidden rounded-3xl border border-lucrei-border">
+              <LinearGradient
+                colors={[Colors.surfaceAlt, Colors.surface]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
+              <View className={isDesktop ? 'flex-row items-center justify-between p-8' : 'p-6'}>
+                <View className={isDesktop ? 'flex-1' : undefined}>
+                  <View className="flex-row items-center gap-2">
+                    <Text className="text-sm text-lucrei-textMuted">Você lucrou</Text>
+                    {!stillLoading && summaryLoading && <ActivityIndicator size="small" color={Colors.textMuted} />}
                   </View>
+                  {stillLoading ? (
+                    <View className="mt-3 h-[52px] justify-center">
+                      <ActivityIndicator color={Colors.gold} />
+                    </View>
+                  ) : subscriptionAccess.isPastDue ? (
+                    <View className="mt-3">
+                      <BlurredValue width={180} height={isDesktop ? 52 : 44} />
+                    </View>
+                  ) : (
+                    <Text className={isDesktop ? 'mt-1 text-6xl font-bold text-lucrei-gold' : 'mt-1 text-5xl font-bold text-lucrei-gold'}>
+                      {formatBRL(summary!.profit)}
+                    </Text>
+                  )}
+                  {!stillLoading && summary!.itemsMissingCost > 0 && (
+                    <Text className="mt-2 text-xs text-lucrei-textMuted">
+                      {summary!.itemsMissingCost} item(ns) sem custo cadastrado, não entram nesse total.
+                    </Text>
+                  )}
+
+                  {!stillLoading && !isDesktop && (
+                    <View className="mt-5">
+                      <Sparkline data={summary!.trend.map((t) => t.profit)} />
+                    </View>
+                  )}
+                </View>
+
+                {!stillLoading && isDesktop && (
+                  <Sparkline data={summary!.trend.map((t) => t.profit)} width={380} height={110} />
                 )}
               </View>
-              {stillLoading ? (
-                <View className="mt-3 h-[52px] justify-center">
-                  <ActivityIndicator color={Colors.gold} />
-                </View>
-              ) : showingRealData && subscriptionAccess.isPastDue ? (
-                <View className="mt-3">
-                  <BlurredValue width={180} height={isDesktop ? 52 : 44} />
-                </View>
-              ) : (
-                <Text className={isDesktop ? 'mt-1 text-6xl font-bold text-lucrei-gold' : 'mt-1 text-5xl font-bold text-lucrei-gold'}>
-                  {formatBRL(showingRealData ? summary!.profit : 40250)}
-                </Text>
-              )}
-              {!stillLoading && !showingRealData && <DeltaBadge label="+18,7% vs período anterior" direction="up" />}
-              {!stillLoading && showingRealData && summary!.itemsMissingCost > 0 && (
-                <Text className="mt-2 text-xs text-lucrei-textMuted">
-                  {summary!.itemsMissingCost} item(ns) sem custo cadastrado, não entram nesse total.
-                </Text>
-              )}
-
-              {!stillLoading && !isDesktop && (
-                <View className="mt-5">
-                  <Sparkline data={showingRealData ? summary!.trend.map((t) => t.profit) : MOCK_TREND} />
-                </View>
-              )}
             </View>
 
-            {!stillLoading && isDesktop && (
-              <Sparkline data={showingRealData ? summary!.trend.map((t) => t.profit) : MOCK_TREND} width={380} height={110} />
+            <PastDueBanner />
+
+            <Text className="mt-6 text-sm font-medium text-lucrei-textMuted">Resumo do período</Text>
+            {isDesktop ? (
+              <View className="mt-3 flex-row flex-wrap gap-3">
+                {!stillLoading &&
+                  kpiTiles.map((kpi) => (
+                    <StatTile key={kpi.label} {...kpi} blurred={subscriptionAccess.isPastDue} />
+                  ))}
+              </View>
+            ) : (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                className="-mx-5 mt-3"
+                contentContainerClassName="gap-3 px-5">
+                {!stillLoading &&
+                  kpiTiles.map((kpi) => (
+                    <StatTile key={kpi.label} {...kpi} blurred={subscriptionAccess.isPastDue} />
+                  ))}
+              </ScrollView>
             )}
-          </View>
-        </View>
-
-        <PastDueBanner />
-
-        <Text className="mt-6 text-sm font-medium text-lucrei-textMuted">Resumo do período</Text>
-        {isDesktop ? (
-          <View className="mt-3 flex-row flex-wrap gap-3">
-            {!stillLoading &&
-              kpiTiles.map((kpi) => (
-                <StatTile key={kpi.label} {...kpi} blurred={showingRealData && subscriptionAccess.isPastDue} />
-              ))}
-          </View>
+          </>
         ) : (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            className="-mx-5 mt-3"
-            contentContainerClassName="gap-3 px-5">
-            {!stillLoading &&
-              kpiTiles.map((kpi) => (
-                <StatTile key={kpi.label} {...kpi} blurred={showingRealData && subscriptionAccess.isPastDue} />
-              ))}
-          </ScrollView>
+          // Sem loja conectada ainda - antes mostrava um período/lucro/KPIs
+          // de exemplo com números inventados (ex: "R$ 40.250,00"), o que
+          // dava a entender que era algo real. Um estado vazio simples é
+          // mais honesto e já deixa claro o que fazer a seguir.
+          <View className="mt-6 items-center rounded-3xl border border-lucrei-border bg-lucrei-surface px-6 py-12">
+            <Ionicons name="storefront-outline" size={32} color={Colors.textMuted} />
+            <Text className="mt-3 text-center text-base font-semibold text-lucrei-text">
+              Conecte sua loja Shopee pra ver seu lucro real aqui
+            </Text>
+            <Text className="mt-1 max-w-xs text-center text-sm text-lucrei-textMuted">
+              Faturamento, custos e lucro de cada venda aparecem automaticamente assim que você conectar.
+            </Text>
+          </View>
         )}
 
         {state.status === 'authenticated' && hasShop && lifetimeProfit !== null && (

@@ -41,8 +41,9 @@ export function StatTile({
       // dela, cortando/bagunçando visualmente quem passa o mouse.
       style={{ overflow: 'visible', zIndex: showTooltip ? 30 : 1 }}>
       {helpText && (
-        <View className="absolute right-2.5 top-2.5 z-20">
+        <>
           <Pressable
+            className="absolute right-2.5 top-2.5 z-20"
             onPress={() => setShowTooltip((v) => !v)}
             onHoverIn={() => setShowTooltip(true)}
             onHoverOut={() => setShowTooltip(false)}
@@ -51,12 +52,24 @@ export function StatTile({
           </Pressable>
           {showTooltip && (
             <View
-              className="absolute right-0 top-6 w-44 rounded-xl border border-lucrei-border bg-lucrei-bg p-2.5"
-              style={{ shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 12 }}>
+              className="absolute top-7 w-40 rounded-xl border border-lucrei-border bg-lucrei-bg p-2.5"
+              // Centralizada sob o card inteiro (não grudada no ícone, que
+              // fica perto da borda direita) - ancorada só no ícone, ela
+              // ficava desalinhada e cortava o texto pros cards nas pontas
+              // do grid, já que é mais larga (160px) que o card (152px).
+              style={{
+                left: '50%',
+                marginLeft: -80,
+                shadowColor: '#000',
+                shadowOpacity: 0.35,
+                shadowRadius: 10,
+                shadowOffset: { width: 0, height: 4 },
+                elevation: 12,
+              }}>
               <Text className="text-[11px] leading-4 text-lucrei-text">{helpText}</Text>
             </View>
           )}
-        </View>
+        </>
       )}
       <Text className="pr-4 text-xs text-lucrei-textMuted" numberOfLines={1}>
         {label}
