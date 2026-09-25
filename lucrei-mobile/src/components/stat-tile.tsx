@@ -33,7 +33,13 @@ export function StatTile({
   const [showTooltip, setShowTooltip] = useState(false);
 
   return (
-    <View className="w-[152px] rounded-2xl border border-lucrei-border bg-lucrei-surface p-4" style={{ overflow: 'visible' }}>
+    <View
+      className="w-[152px] rounded-2xl border border-lucrei-border bg-lucrei-surface p-4"
+      // A dica escapa da caixa do card (é mais larga que ele) via overflow
+      // visible - sem promover o z-index do card INTEIRO (não só do ícone),
+      // o próximo card do grid (que vem depois no HTML) pinta por cima
+      // dela, cortando/bagunçando visualmente quem passa o mouse.
+      style={{ overflow: 'visible', zIndex: showTooltip ? 30 : 1 }}>
       {helpText && (
         <View className="absolute right-2.5 top-2.5 z-20">
           <Pressable
