@@ -24,7 +24,9 @@ async function processOrder(
     income.actual_shipping_fee,
     income.buyer_paid_shipping_fee,
     income.commission_fee,
-    income.service_fee
+    income.service_fee,
+    income.shopee_shipping_rebate,
+    income.shipping_fee_discount_from_3pl
   );
 
   // update_time é "última mudança de status" - pra um pedido que só chega

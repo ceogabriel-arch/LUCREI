@@ -26,6 +26,22 @@ describe('computeOrderTotals', () => {
     const totals = computeOrderTotals([], 10, 25, 0, 0);
     expect(totals.netShippingCost).toBe(0);
   });
+
+  it('nets out Shopee\'s own shipping rebate - a real order fully subsidized by Shopee costs the seller nothing in shipping', () => {
+    // Caso real: extrato de repasse da Shopee mostrou frete cobrado pelo
+    // parceiro logístico de R$13,25, comprador pagou R$0, e a Shopee cobriu
+    // os R$13,25 inteiros via "Desconto de frete estimado da Shopee" - sem
+    // subtrair esse desconto, o app cobrava esse frete do vendedor por
+    // engano mesmo ele não tendo pago nada.
+    const totals = computeOrderTotals([], 13.25, 0, 6.46, 4.72, 13.25, 0);
+    expect(totals.netShippingCost).toBe(0);
+    expect(totals.totalShopeeFee).toBeCloseTo(11.18);
+  });
+
+  it('still charges the seller for whatever part of the shipping gap no rebate covers', () => {
+    const totals = computeOrderTotals([], 20, 5, 0, 0, 6, 0);
+    expect(totals.netShippingCost).toBe(9); // 20 - 5 - 6 - 0
+  });
 });
 
 describe('allocateLineItem', () => {

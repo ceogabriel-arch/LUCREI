@@ -15,10 +15,20 @@ export function computeOrderTotals(
   actualShippingFee: number,
   buyerPaidShippingFee: number,
   commissionFee: number,
-  serviceFee: number
+  serviceFee: number,
+  shopeeShippingRebate = 0,
+  shippingFeeDiscountFrom3pl = 0
 ): OrderTotals {
   const totalItemValue = items.reduce((sum, item) => sum + item.discounted_price * item.quantity_purchased, 0);
-  const netShippingCost = Math.max(actualShippingFee - buyerPaidShippingFee, 0);
+  // O que sobra do frete cobrado pelo parceiro logístico depois de descontar
+  // o que o comprador pagou E os subsídios que a própria Shopee (ou o
+  // parceiro logístico) bancam - só essa sobra é custo de verdade pro
+  // vendedor. Sem os dois últimos termos, um pedido com frete 100% coberto
+  // pela Shopee aparecia como se o vendedor tivesse pago o frete inteiro.
+  const netShippingCost = Math.max(
+    actualShippingFee - buyerPaidShippingFee - shopeeShippingRebate - shippingFeeDiscountFrom3pl,
+    0
+  );
   const totalShopeeFee = commissionFee + serviceFee;
 
   return { totalItemValue, netShippingCost, totalShopeeFee };

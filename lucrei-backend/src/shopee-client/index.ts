@@ -243,6 +243,14 @@ type EscrowDetailResponse = {
       escrow_amount: number;
       buyer_paid_shipping_fee: number;
       actual_shipping_fee: number;
+      // A Shopee cobre parte (ou tudo) do frete via subsídio próprio - sem
+      // isso, actual_shipping_fee - buyer_paid_shipping_fee sozinho faz
+      // parecer que o vendedor pagou um frete que na real foi bancado pela
+      // Shopee (confirmado comparando com o extrato de repasse real da
+      // Shopee, que mostra essa mesma linha como "Desconto de frete
+      // estimado da Shopee").
+      shopee_shipping_rebate: number;
+      shipping_fee_discount_from_3pl: number;
       commission_fee: number;
       service_fee: number;
       items: {
