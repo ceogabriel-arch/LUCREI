@@ -34,13 +34,18 @@ async function main() {
   }
 
   await app.register(cors, { origin: true });
-  // zstd exige Node 22.15+/23.8+ - no ambiente de produção (Railway) a
-  // compressão zstd falha silenciosamente (Content-Encoding: zstd, corpo
-  // vazio, Content-Length correto mas nunca escrito), quebrando qualquer
-  // resposta pra cliente que ofereça zstd no Accept-Encoding (Chrome
-  // moderno manda isso por padrão). br/gzip/deflate continuam funcionando
-  // normalmente - só remove o zstd da negociação até confirmar suporte.
-  await app.register(compress, { global: true, encodings: ['br', 'gzip', 'deflate'] });
+  // Achado depois de trocar o zstd por br/gzip/deflate: o problema não era
+  // zstd - QUALQUER compressão (br OU gzip) devolve Content-Encoding e
+  // Content-Length corretos só que corpo vazio, especificamente nas rotas
+  // /termos e /privacidade (as outras duas rotas legais, mais curtas,
+  // comprimem normal - reproduzido de forma 100% determinística, não é
+  // flutuação de rede). Comprimir esses mesmos arquivos localmente com
+  // zlib puro funciona sem erro, então a causa real ainda não está clara -
+  // pode afetar outras respostas grandes o bastante em produção, não só
+  // essas duas páginas. Desativa a compressão de resposta inteira até
+  // investigar direito (mantém a descompressão de request ligada, caso
+  // algum webhook mande corpo comprimido).
+  await app.register(compress, { global: true, globalCompression: false });
   await app.register(jwt, { secret: process.env.JWT_SECRET });
   // Limite generoso: etiquetas em PDF costumam ter várias páginas (um pedido
   // por página) quando o vendedor baixa um lote inteiro da Shopee de uma vez.
