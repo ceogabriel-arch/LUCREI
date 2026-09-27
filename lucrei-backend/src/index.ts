@@ -34,7 +34,13 @@ async function main() {
   }
 
   await app.register(cors, { origin: true });
-  await app.register(compress, { global: true });
+  // zstd exige Node 22.15+/23.8+ - no ambiente de produção (Railway) a
+  // compressão zstd falha silenciosamente (Content-Encoding: zstd, corpo
+  // vazio, Content-Length correto mas nunca escrito), quebrando qualquer
+  // resposta pra cliente que ofereça zstd no Accept-Encoding (Chrome
+  // moderno manda isso por padrão). br/gzip/deflate continuam funcionando
+  // normalmente - só remove o zstd da negociação até confirmar suporte.
+  await app.register(compress, { global: true, encodings: ['br', 'gzip', 'deflate'] });
   await app.register(jwt, { secret: process.env.JWT_SECRET });
   // Limite generoso: etiquetas em PDF costumam ter várias páginas (um pedido
   // por página) quando o vendedor baixa um lote inteiro da Shopee de uma vez.
