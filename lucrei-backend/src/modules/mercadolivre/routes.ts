@@ -32,12 +32,16 @@ export async function mercadolivreRoutes(app: FastifyInstance) {
       const integrationsLimit = user?.plan?.integrationsLimit ?? null;
 
       if (integrationsLimit != null) {
-        const activeShops = await prisma.shop.count({ where: { userId: request.user.sub, status: 'active' } });
+        // Contado POR marketplace, não no total - ver comentário equivalente
+        // em shops/routes.ts (/shopee/authorize-url).
+        const activeShops = await prisma.shop.count({
+          where: { userId: request.user.sub, status: 'active', provider: 'mercado_livre' },
+        });
         if (activeShops >= integrationsLimit) {
           return reply.status(403).send({
             message:
-              `Seu plano ${user?.plan?.name ?? ''} permite conectar até ${integrationsLimit} loja${integrationsLimit === 1 ? '' : 's'}. ` +
-              'Faça upgrade pra um plano com mais integrações pra conectar outra loja.',
+              `Seu plano ${user?.plan?.name ?? ''} permite conectar até ${integrationsLimit} loja${integrationsLimit === 1 ? '' : 's'} Mercado Livre. ` +
+              'Faça upgrade pra um plano com mais integrações pra conectar outra loja Mercado Livre.',
             code: 'integrations_limit_reached',
           });
         }

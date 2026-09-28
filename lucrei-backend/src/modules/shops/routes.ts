@@ -62,12 +62,18 @@ export async function shopRoutes(app: FastifyInstance) {
       const integrationsLimit = user?.plan?.integrationsLimit ?? null;
 
       if (integrationsLimit != null) {
-        const activeShops = await prisma.shop.count({ where: { userId: request.user.sub, status: 'active' } });
+        // Contado POR marketplace, não no total - o limite do plano vale
+        // pra "quantas lojas Shopee" e "quantas lojas Mercado Livre"
+        // independentemente, senão já ter uma Shopee conectada bloquearia
+        // conectar a primeira Mercado Livre no plano Start (visto ao vivo).
+        const activeShops = await prisma.shop.count({
+          where: { userId: request.user.sub, status: 'active', provider: 'shopee' },
+        });
         if (activeShops >= integrationsLimit) {
           return reply.status(403).send({
             message:
               `Seu plano ${user?.plan?.name ?? ''} permite conectar até ${integrationsLimit} loja${integrationsLimit === 1 ? '' : 's'} Shopee. ` +
-              'Faça upgrade pra um plano com mais integrações pra conectar outra loja.',
+              'Faça upgrade pra um plano com mais integrações pra conectar outra loja Shopee.',
             code: 'integrations_limit_reached',
           });
         }
