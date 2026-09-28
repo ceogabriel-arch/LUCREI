@@ -55,7 +55,6 @@ const ProductRow = memo(function ProductRow({
   dirty,
   selected,
   disabled,
-  readOnly,
   onChangeCost,
   onToggleSelect,
   period,
@@ -65,12 +64,6 @@ const ProductRow = memo(function ProductRow({
   dirty: boolean;
   selected: boolean;
   disabled: boolean;
-  // Diferente de "disabled" (que é um estado temporário - salvando - e por
-  // isso apaga a linha inteira pra deixar isso óbvio): "Todas as lojas" não
-  // permite editar, mas o produto continua sendo só pra LER, não devia ficar
-  // com essa cara de "desativado temporariamente" - some só o que não pode
-  // ser usado (caixinha de seleção, campo de custo virando texto simples).
-  readOnly?: boolean;
   onChangeCost: (shopeeItemId: string, text: string) => void;
   onToggleSelect: (shopeeItemId: string) => void;
   period: PeriodLabel;
@@ -81,15 +74,13 @@ const ProductRow = memo(function ProductRow({
     <View
       className="flex-row items-center gap-3 rounded-2xl border bg-lucrei-surface p-3"
       style={{ borderColor: dirty ? Colors.gold : Colors.border, opacity: disabled ? 0.5 : 1 }}>
-      {!readOnly && (
-        <Pressable onPress={() => onToggleSelect(product.shopeeItemId)} disabled={disabled} hitSlop={8}>
-          <Ionicons
-            name={selected ? 'checkbox' : 'square-outline'}
-            size={20}
-            color={selected ? Colors.gold : Colors.textMuted}
-          />
-        </Pressable>
-      )}
+      <Pressable onPress={() => onToggleSelect(product.shopeeItemId)} disabled={disabled} hitSlop={8}>
+        <Ionicons
+          name={selected ? 'checkbox' : 'square-outline'}
+          size={20}
+          color={selected ? Colors.gold : Colors.textMuted}
+        />
+      </Pressable>
 
       {product.image ? (
         <Image source={{ uri: product.image }} style={{ width: 48, height: 48, borderRadius: 10 }} />
@@ -131,20 +122,16 @@ const ProductRow = memo(function ProductRow({
 
       <View className="items-end gap-1">
         <Text className="text-[11px] text-lucrei-textMuted">Custo (R$)</Text>
-        {readOnly ? (
-          <Text className="text-base text-lucrei-text">{value || '—'}</Text>
-        ) : (
-          <TextInput
-            value={value}
-            onChangeText={(text) => onChangeCost(product.shopeeItemId, text)}
-            editable={!disabled}
-            placeholder="0,00"
-            placeholderTextColor={Colors.textMuted}
-            keyboardType="decimal-pad"
-            className="w-24 rounded-xl border bg-lucrei-bg px-2.5 py-2 text-right text-base text-lucrei-text"
-            style={{ borderColor: dirty ? Colors.gold : Colors.border }}
-          />
-        )}
+        <TextInput
+          value={value}
+          onChangeText={(text) => onChangeCost(product.shopeeItemId, text)}
+          editable={!disabled}
+          placeholder="0,00"
+          placeholderTextColor={Colors.textMuted}
+          keyboardType="decimal-pad"
+          className="w-24 rounded-xl border bg-lucrei-bg px-2.5 py-2 text-right text-base text-lucrei-text"
+          style={{ borderColor: dirty ? Colors.gold : Colors.border }}
+        />
       </View>
     </View>
   );
@@ -379,7 +366,11 @@ export default function ProdutosScreen() {
         const products = viewingAll
           ? await Promise.all(
               shopeeShops.map((shop) => getShopeeProducts(token, shop.id, PERIOD_TO_API[period], force))
-            ).then((results) => results.flatMap((r, i) => r.products.map((p) => ({ ...p, shopName: shopeeShops[i].shopName }))))
+            ).then((results) =>
+              results.flatMap((r, i) =>
+                r.products.map((p) => ({ ...p, shopName: shopeeShops[i].shopName, shopId: shopeeShops[i].id }))
+              )
+            )
           : await getShopeeProducts(token, selectedShop!.id, PERIOD_TO_API[period], force).then((r) => r.products);
         setProducts(products);
         setEdits({});
@@ -494,9 +485,14 @@ export default function ProdutosScreen() {
   }
 
   async function handleSaveAll() {
-    if (pendingChanges.length === 0 || state.status !== 'authenticated' || !selectedShop) return;
+    if (pendingChanges.length === 0 || state.status !== 'authenticated') return;
 
-    const items: ProductCostInput[] = [];
+    // Combinado: cada produto carrega a loja de origem (product.shopId) -
+    // saveProductCosts só aceita uma loja por chamada, então agrupa aqui e
+    // dispara uma chamada por loja. Fora do combinado, product.shopId não
+    // existe (a API não devolve isso numa busca de loja só) e cai na loja
+    // selecionada, igual sempre funcionou.
+    const itemsByShop = new Map<string, ProductCostInput[]>();
     const invalidNames: string[] = [];
     for (const { product, text } of pendingChanges) {
       const parsed = Number(text.replace(',', '.'));
@@ -504,7 +500,11 @@ export default function ProdutosScreen() {
         invalidNames.push(product.name);
         continue;
       }
-      items.push({ shopeeItemId: product.shopeeItemId, name: product.name, costPrice: parsed });
+      const shopId = product.shopId ?? selectedShop?.id;
+      if (!shopId) continue;
+      const list = itemsByShop.get(shopId) ?? [];
+      list.push({ shopeeItemId: product.shopeeItemId, name: product.name, costPrice: parsed });
+      itemsByShop.set(shopId, list);
     }
 
     if (invalidNames.length > 0) {
@@ -517,8 +517,11 @@ export default function ProdutosScreen() {
 
     setSaving(true);
     try {
-      await saveProductCosts(state.token, selectedShop.id, items);
-      const itemByShopeeId = new Map(items.map((i) => [i.shopeeItemId, i]));
+      await Promise.all(
+        [...itemsByShop.entries()].map(([shopId, items]) => saveProductCosts(state.token, shopId, items))
+      );
+      const allItems = [...itemsByShop.values()].flat();
+      const itemByShopeeId = new Map(allItems.map((i) => [i.shopeeItemId, i]));
       setProducts((prev) =>
         prev.map((p) => {
           const item = itemByShopeeId.get(p.shopeeItemId);
@@ -527,7 +530,7 @@ export default function ProdutosScreen() {
       );
       setEdits((prev) => {
         const next = { ...prev };
-        for (const item of items) delete next[item.shopeeItemId];
+        for (const item of allItems) delete next[item.shopeeItemId];
         return next;
       });
     } catch (err) {
@@ -541,9 +544,7 @@ export default function ProdutosScreen() {
     <Screen>
       <Text className="text-2xl font-bold text-lucrei-text">Produtos</Text>
       <Text className="mt-2 text-base text-lucrei-textMuted">
-        {viewingAll
-          ? 'Veja o catálogo de todas as lojas juntas. Troque pra uma loja só pra editar custo.'
-          : 'Informe o custo de cada produto e salve tudo de uma vez pra calcularmos seu lucro real.'}
+        Informe o custo de cada produto e salve tudo de uma vez pra calcularmos seu lucro real.
       </Text>
       {activeShops.length > 1 && (
         <ShopPicker />
@@ -635,7 +636,7 @@ export default function ProdutosScreen() {
             className="mt-4 rounded-xl border border-lucrei-border bg-lucrei-surface px-4 py-3 text-sm text-lucrei-text"
           />
 
-          {!viewingAll && selected.size === 0 && missingCostProducts.length >= MISSING_COST_NUDGE_THRESHOLD && (
+          {selected.size === 0 && missingCostProducts.length >= MISSING_COST_NUDGE_THRESHOLD && (
             <View className="mt-3 flex-row items-center gap-3 rounded-2xl border border-lucrei-border bg-lucrei-surface p-3">
               <Text className="flex-1 text-xs text-lucrei-textMuted">
                 {missingCostProducts.length} produtos sem custo cadastrado — selecionar todos pra aplicar um valor de
@@ -647,7 +648,7 @@ export default function ProdutosScreen() {
             </View>
           )}
 
-          {!viewingAll && filteredProducts.length > 0 && (
+          {filteredProducts.length > 0 && (
             <Pressable
               onPress={handleToggleSelectAll}
               disabled={saving}
@@ -709,7 +710,6 @@ export default function ProdutosScreen() {
                     dirty={dirty}
                     selected={selected.has(product.shopeeItemId)}
                     disabled={saving}
-                    readOnly={viewingAll}
                     onChangeCost={handleChangeCost}
                     onToggleSelect={handleToggleSelect}
                     period={period}
