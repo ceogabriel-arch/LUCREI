@@ -1,5 +1,9 @@
+import type { Plan, User } from '@prisma/client';
+
 import { prisma } from './prisma';
 import { formatBRL, sendPushNotification } from './push-notifications';
+import { getSalesLimitStatus } from './sales-usage';
+import { getSubscriptionAccessStatus } from './subscription-access';
 
 // O push de status de pedido da Shopee não tem entrega garantida - a
 // sincronização normal (roda de qualquer forma, a cada poucos minutos)
@@ -34,6 +38,28 @@ function buildNotificationMessage(totalProfit: number | null, totalRevenue: numb
   };
 }
 
+// Conta sem acesso (pagamento atrasado além da carência, limite de vendas
+// estourado além da carência, ou teste grátis vencido) não devia continuar
+// recebendo "você lucrou R$X" - a pessoa nem consegue ver os dados reais (
+// ficam borrados no app), a notificação só confunde. O teste grátis é o caso
+// mais sutil: subscriptionStatus só vira 'past_due' de fato na próxima vez
+// que o app abre a tela de fatura (ver ensureCurrentPixCharge) - sem checar
+// trialEndsAt aqui direto, quem nunca abre aquela tela depois do teste
+// acabar continuaria "trialing" pro resto da vida e recebendo notificação.
+async function isAccountNotifiable(owner: User & { plan: Plan | null }): Promise<boolean> {
+  if (owner.subscriptionStatus === 'trialing' && owner.trialEndsAt && owner.trialEndsAt <= new Date()) {
+    return false;
+  }
+
+  const subscriptionAccess = await getSubscriptionAccessStatus(owner);
+  if (subscriptionAccess.blocked) return false;
+
+  const salesLimit = await getSalesLimitStatus(owner);
+  if (salesLimit.blocked) return false;
+
+  return true;
+}
+
 export async function notifyOrderCompletedIfNeeded(params: {
   orderId: string;
   orderSn: string;
@@ -46,6 +72,20 @@ export async function notifyOrderCompletedIfNeeded(params: {
     return;
   }
 
+  const shop = await prisma.shop.findUnique({ where: { id: params.shopDbId } });
+  if (!shop) return;
+
+  const owner = await prisma.user.findUnique({ where: { id: shop.userId }, include: { plan: true } });
+  if (!owner?.pushToken) return;
+
+  // Checado ANTES de reservar o pedido (não depois) - deixando notifiedAt
+  // null enquanto a conta estiver sem acesso, se ela for regularizada dentro
+  // da janela de FALLBACK_WINDOW_MS acima, a próxima sincronização tenta de
+  // novo e a notificação (atrasada) ainda chega. Passada a janela, fica sem
+  // notificar mesmo - é só rede de segurança pra pedido recente, não um jeito
+  // de notificar tudo retroativamente depois de reativar a conta.
+  if (!(await isAccountNotifiable(owner))) return;
+
   // updateMany com notifiedAt: null como condição é o que garante mandar UMA
   // notificação só - o webhook e a sincronização normal podem chegar aqui
   // quase ao mesmo tempo pro mesmo pedido, só o primeiro que "ganha" a
@@ -55,12 +95,6 @@ export async function notifyOrderCompletedIfNeeded(params: {
     data: { notifiedAt: new Date() },
   });
   if (claimed.count === 0) return;
-
-  const shop = await prisma.shop.findUnique({ where: { id: params.shopDbId } });
-  if (!shop) return;
-
-  const owner = await prisma.user.findUnique({ where: { id: shop.userId } });
-  if (!owner?.pushToken) return;
 
   const { title, body } = buildNotificationMessage(params.totalProfit, params.totalRevenue);
 

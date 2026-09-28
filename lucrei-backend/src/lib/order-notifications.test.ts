@@ -5,9 +5,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // "cannot access before initialization".
 const { prismaMock, sendPushNotificationMock } = vi.hoisted(() => ({
   prismaMock: {
-    order: { updateMany: vi.fn() },
+    order: { updateMany: vi.fn(), count: vi.fn() },
     shop: { findUnique: vi.fn() },
     user: { findUnique: vi.fn() },
+    subscription: { findFirst: vi.fn() },
   },
   sendPushNotificationMock: vi.fn(),
 }));
@@ -56,6 +57,8 @@ describe('notifyOrderCompletedIfNeeded', () => {
   });
 
   it('skips sending when the order was already notified (updateMany não bate nenhuma linha)', async () => {
+    prismaMock.shop.findUnique.mockResolvedValue({ id: 's1', userId: 'u1' });
+    prismaMock.user.findUnique.mockResolvedValue({ id: 'u1', pushToken: 'ExponentPushToken[abc]' });
     prismaMock.order.updateMany.mockResolvedValue({ count: 0 });
     await notifyOrderCompletedIfNeeded({
       orderId: 'o1',
@@ -65,8 +68,61 @@ describe('notifyOrderCompletedIfNeeded', () => {
       totalProfit: 10,
       totalRevenue: 150,
     });
-    expect(prismaMock.shop.findUnique).not.toHaveBeenCalled();
     expect(sendPushNotificationMock).not.toHaveBeenCalled();
+  });
+
+  it('does not notify when the subscription is blocked (pagamento atrasado além da carência)', async () => {
+    prismaMock.shop.findUnique.mockResolvedValue({ id: 's1', userId: 'u1' });
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: 'u1',
+      pushToken: 'ExponentPushToken[abc]',
+      subscriptionStatus: 'past_due',
+      updatedAt: new Date(),
+      plan: null,
+    });
+    // currentPeriodEnd 10 dias atrás - carência de 7 dias já esgotada.
+    prismaMock.subscription.findFirst.mockResolvedValue({
+      currentPeriodEnd: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+      createdAt: new Date(Date.now() - 40 * 24 * 60 * 60 * 1000),
+    });
+
+    await notifyOrderCompletedIfNeeded({
+      orderId: 'o1',
+      orderSn: 'SN1',
+      shopDbId: 's1',
+      completedAt: new Date(),
+      totalProfit: 10,
+      totalRevenue: 150,
+    });
+
+    expect(prismaMock.order.updateMany).not.toHaveBeenCalled();
+    expect(sendPushNotificationMock).not.toHaveBeenCalled();
+  });
+
+  it('does not notify when the free trial already ended (mesmo com subscriptionStatus ainda "trialing" no banco)', async () => {
+    prismaMock.shop.findUnique.mockResolvedValue({ id: 's1', userId: 'u1' });
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: 'u1',
+      pushToken: 'ExponentPushToken[abc]',
+      subscriptionStatus: 'trialing',
+      trialEndsAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
+      plan: null,
+    });
+
+    await notifyOrderCompletedIfNeeded({
+      orderId: 'o1',
+      orderSn: 'SN1',
+      shopDbId: 's1',
+      completedAt: new Date(),
+      totalProfit: 10,
+      totalRevenue: 150,
+    });
+
+    expect(prismaMock.order.updateMany).not.toHaveBeenCalled();
+    expect(sendPushNotificationMock).not.toHaveBeenCalled();
+    // Trial vencido é checado só com o que já veio de user.findUnique - não
+    // deveria nem precisar consultar assinatura pra chegar nessa conclusão.
+    expect(prismaMock.subscription.findFirst).not.toHaveBeenCalled();
   });
 
   it('sends the profit message once it claims the order and the owner has a push token', async () => {
