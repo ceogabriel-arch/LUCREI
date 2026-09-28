@@ -52,14 +52,18 @@ export function StatTile({
           </Pressable>
           {showTooltip && (
             <View
-              className="absolute top-7 w-40 rounded-xl border border-lucrei-border bg-lucrei-bg p-2.5"
-              // Centralizada sob o card inteiro (não grudada no ícone, que
-              // fica perto da borda direita) - ancorada só no ícone, ela
-              // ficava desalinhada e cortava o texto pros cards nas pontas
-              // do grid, já que é mais larga (160px) que o card (152px).
+              className="absolute w-40 rounded-xl border border-lucrei-border bg-lucrei-bg p-2.5"
+              // Abaixo do card inteiro, não por cima do valor - por cima (top-7)
+              // dependia da dica cobrir o card inteiro sem sobrar nada, e no
+              // web a caixa não ficava opaca o bastante: o texto da dica e o
+              // valor (ex.: "R$ 0,00") ficavam se misturando, ilegíveis.
+              // Embaixo nunca sobrepõe o próprio conteúdo do card.
               style={{
+                top: '100%',
+                marginTop: 8,
                 left: '50%',
                 marginLeft: -80,
+                zIndex: 40,
                 shadowColor: '#000',
                 shadowOpacity: 0.35,
                 shadowRadius: 10,
