@@ -53,17 +53,18 @@ export function StatTile({
           {showTooltip && (
             <View
               className="absolute w-40 rounded-xl border border-lucrei-border bg-lucrei-bg p-2.5"
-              // Abaixo do card inteiro, não por cima do valor - por cima (top-7)
-              // dependia da dica cobrir o card inteiro sem sobrar nada, e no
-              // web a caixa não ficava opaca o bastante: o texto da dica e o
-              // valor (ex.: "R$ 0,00") ficavam se misturando, ilegíveis.
-              // Fixo em pixels (não '100%') - porcentagem depende do card já
-              // ter uma altura resolvida antes do filho absoluto calcular a
-              // posição, o que quebrou o hover inteiro numa tentativa anterior.
-              // 92px cobre com folga label + valor + linha de delta (a
-              // variante mais alta do card).
+              // Acima do card inteiro, não por cima do valor - por cima
+              // sobrepondo (top-7) dependia da dica cobrir o card sem sobrar
+              // nada, e no web a caixa não ficava opaca o bastante: o texto
+              // da dica e o valor (ex.: "R$ 0,00") ficavam se misturando,
+              // ilegíveis. "bottom" fixo em pixels (não 'top: 100%') - a
+              // caixa cresce pra cima a partir daí sozinha, não depende de
+              // saber a altura da dica (que varia com o texto) nem de
+              // porcentagem, que quebrou o hover inteiro numa tentativa
+              // anterior. 100px garante que o "bottom" fique acima até da
+              // variante mais alta do card (com linha de delta).
               style={{
-                top: 92,
+                bottom: 100,
                 left: '50%',
                 marginLeft: -80,
                 zIndex: 40,
