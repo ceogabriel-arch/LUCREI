@@ -156,7 +156,12 @@ export default function InicioScreen() {
       .catch(() => setLifetimeProfit(null));
   }, [state.status, selectedShop]);
 
-  const hasShop = shops.length > 0;
+  // Só loja ATIVA conta - com uma loja só desconectada, "hasShop" contando
+  // qualquer status fazia esse trecho achar que tinha loja de verdade
+  // (escondia o estado vazio de "conecte sua loja", e quebrava a asserção
+  // selectedShop! mais abaixo, já que selectedShop nunca aponta pra uma
+  // desconectada).
+  const hasShop = shops.some((s) => s.status === 'active');
   const showingRealData = hasShop && summary !== null;
   const stillLoading = !shopsLoaded || (hasShop && summaryLoading && summary === null);
 

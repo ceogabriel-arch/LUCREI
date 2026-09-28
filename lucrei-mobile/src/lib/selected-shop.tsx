@@ -31,7 +31,13 @@ export function SelectedShopProvider({ children }: PropsWithChildren) {
     try {
       const { shops } = await getShops(token);
       setShops(shops);
-      setSelectedShopIdState((prev) => (prev && shops.some((s) => s.id === prev) ? prev : (shops[0]?.id ?? null)));
+      // Só considera loja ATIVA pra manter selecionada/escolher automático -
+      // sem isso, uma loja desconectada (ex: reconexão que falhou) continuava
+      // "selecionada" e a Início mostrava o nome dela como se estivesse
+      // conectada de verdade (cabeçalho + "Loja conectada: X"), contradizendo
+      // "Lojas conectadas" em Configurações, que mostra o status real.
+      const active = shops.filter((s) => s.status === 'active');
+      setSelectedShopIdState((prev) => (prev && active.some((s) => s.id === prev) ? prev : (active[0]?.id ?? null)));
     } catch {
       // mantém o que já tinha carregado
     } finally {
@@ -58,7 +64,10 @@ export function SelectedShopProvider({ children }: PropsWithChildren) {
     persistSelectedShopId(shopId);
   }
 
-  const selectedShop = shops.find((s) => s.id === selectedShopId) ?? shops[0] ?? null;
+  // Mesmo raciocínio do refresh() acima - selectedShop nunca aponta pra uma
+  // loja desconectada, mesmo que o id persistido/o primeiro da lista seja um.
+  const activeShops = shops.filter((s) => s.status === 'active');
+  const selectedShop = activeShops.find((s) => s.id === selectedShopId) ?? activeShops[0] ?? null;
 
   return (
     <SelectedShopContext.Provider value={{ shops, selectedShop, loaded, selectShop, refresh }}>
