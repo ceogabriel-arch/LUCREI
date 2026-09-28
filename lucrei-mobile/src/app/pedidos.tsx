@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BlurredValue } from '@/components/blurred-value';
 import { PastDueBanner } from '@/components/past-due-banner';
 import { Screen } from '@/components/screen';
+import { ShopPicker } from '@/components/shop-picker';
 import { ToastBanner, useToast } from '@/components/toast';
 import {
   ApiError,
@@ -170,12 +171,20 @@ function OrderRow({ order, onPress, locked }: { order: Order; onPress: () => voi
         <Text className="text-xs text-lucrei-textMuted">{dateFormatter.format(new Date(order.orderDate))}</Text>
       </View>
 
-      <View className="mt-2 flex-row items-center justify-between">
+      <View className="mt-2 flex-row flex-wrap items-center gap-1.5">
         <View className="rounded-full bg-lucrei-surfaceAlt px-2.5 py-1">
           <Text className="text-xs text-lucrei-textMuted">
             {STATUS_LABELS[order.orderStatus] ?? order.orderStatus}
           </Text>
         </View>
+        {order.shopName && (
+          <View className="rounded-full bg-lucrei-surfaceAlt px-2.5 py-1">
+            <Text className="text-xs text-lucrei-textMuted" numberOfLines={1}>
+              {order.shopName}
+            </Text>
+          </View>
+        )}
+        <View className="flex-1" />
         {locked ? <BlurredValue width={80} /> : (
           <Text className="text-sm text-lucrei-textMuted">Venda: {formatBRL(order.revenue)}</Text>
         )}
@@ -212,7 +221,11 @@ export default function PedidosScreen() {
   // recarregava os pedidos de novo sem necessidade.
   const token = state.status === 'authenticated' ? state.token : null;
   const Colors = useColors();
-  const { selectedShop, loaded: shopsLoaded } = useSelectedShop();
+  const { shops, selectedShop, loaded: shopsLoaded } = useSelectedShop();
+  // "Todas as lojas" é local dessa tela (mesmo padrão do Início) - Produtos e
+  // Relatórios não são afetados.
+  const [viewingAll, setViewingAll] = useState(false);
+  const activeShops = shops.filter((s) => s.status === 'active');
   const { period, setPeriod } = usePeriod();
   const { refreshSignal } = useDataRefresh();
   const [loadState, setLoadState] = useState<LoadState>('loading');
@@ -236,17 +249,24 @@ export default function PedidosScreen() {
 
   const load = useCallback(async () => {
     if (!token || !shopsLoaded) return;
-    if (!selectedShop) {
+    if (viewingAll ? activeShops.length === 0 : !selectedShop) {
       setLoadState('no-shop');
       return;
     }
     setLoadState((prev) => (prev === 'ready' ? prev : 'loading'));
     setReloading(true);
     try {
-      const [{ orders }, salesUsage] = await Promise.all([
-        getOrders(token, selectedShop.id, PERIOD_TO_API[period]),
-        getSalesUsage(token),
-      ]);
+      // Combinado: busca cada loja em paralelo, marca cada pedido com o nome
+      // da loja de origem (pra distinguir na lista) e junta tudo ordenado
+      // por data - igual o backend já devolve pra uma loja só.
+      const ordersPromise = viewingAll
+        ? Promise.all(activeShops.map((shop) => getOrders(token, shop.id, PERIOD_TO_API[period]))).then((results) =>
+            results
+              .flatMap((r, i) => r.orders.map((o) => ({ ...o, shopName: activeShops[i].shopName })))
+              .sort((a, b) => (a.orderDate < b.orderDate ? 1 : -1))
+          )
+        : getOrders(token, selectedShop!.id, PERIOD_TO_API[period]).then((r) => r.orders);
+      const [orders, salesUsage] = await Promise.all([ordersPromise, getSalesUsage(token)]);
       setOrders(orders);
       setUsage(salesUsage);
       setLoadState('ready');
@@ -255,7 +275,7 @@ export default function PedidosScreen() {
     } finally {
       setReloading(false);
     }
-  }, [token, shopsLoaded, selectedShop, period]);
+  }, [token, shopsLoaded, selectedShop, period, viewingAll, activeShops]);
 
   // Só useFocusEffect (dispara no mount e a cada vez que a tela ganha foco) -
   // um useEffect(load, [load]) junto disparava a MESMA busca duas vezes em
@@ -382,8 +402,17 @@ export default function PedidosScreen() {
         <View>
           <Text className="text-2xl font-bold text-lucrei-text">Pedidos</Text>
           <Text className="mt-1 text-sm text-lucrei-textMuted">Lucro de cada pedido sincronizado.</Text>
+          {activeShops.length > 1 && (
+            <ShopPicker
+              viewingAll={viewingAll}
+              onSelectAll={() => setViewingAll(true)}
+              onSelectShop={() => setViewingAll(false)}
+            />
+          )}
         </View>
-        {loadState === 'ready' && (
+        {/* Sincronizar é uma ação por loja - sem uma loja específica
+            selecionada (modo "Todas as lojas"), não tem o que o botão faria. */}
+        {loadState === 'ready' && !viewingAll && (
           <Pressable
             onPress={handleSync}
             disabled={syncing}
@@ -435,7 +464,7 @@ export default function PedidosScreen() {
 
       {loadState === 'no-shop' && (
         <Text className="mt-8 text-sm text-lucrei-textMuted">
-          Conecte uma loja Shopee na tela Início pra ver seus pedidos aqui.
+          Conecte uma loja Shopee ou Mercado Livre na tela Início pra ver seus pedidos aqui.
         </Text>
       )}
 
@@ -468,9 +497,11 @@ export default function PedidosScreen() {
                 <Text className="text-sm text-lucrei-textMuted">
                   Nenhum pedido sincronizado nesse período.
                 </Text>
-                <Pressable onPress={handleSync} disabled={syncing} className="rounded-xl bg-lucrei-surface px-4 py-2">
-                  <Text className="text-sm text-lucrei-gold">Sincronizar agora</Text>
-                </Pressable>
+                {!viewingAll && (
+                  <Pressable onPress={handleSync} disabled={syncing} className="rounded-xl bg-lucrei-surface px-4 py-2">
+                    <Text className="text-sm text-lucrei-gold">Sincronizar agora</Text>
+                  </Pressable>
+                )}
               </View>
             ) : filteredOrders.length === 0 ? (
               <Text className="text-sm text-lucrei-textMuted">Nenhum pedido encontrado pra "{search}".</Text>

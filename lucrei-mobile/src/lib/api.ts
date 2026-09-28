@@ -242,6 +242,10 @@ export type Order = {
   profit: number | null;
   itemsMissingCost: number;
   lineItems: OrderLineItem[];
+  // Preenchido só no cliente ao combinar pedidos de várias lojas (ver
+  // pedidos.tsx, modo "Todas as lojas") - a resposta da API em si nunca
+  // manda isso, já que cada chamada já é por uma loja só.
+  shopName?: string;
 };
 
 export function getOrders(token: string, shopId: string, period: Period) {
