@@ -350,12 +350,18 @@ export default function ProdutosScreen() {
       setLoadState((prev) => (prev === 'ready' ? prev : 'loading'));
       setReloading(true);
       try {
-        // Combinado: busca cada loja em paralelo e marca cada produto com o
-        // nome da loja de origem - mesmo padrão de pedidos.tsx.
+        // Combinado: busca cada loja Shopee em paralelo e marca cada produto
+        // com o nome da loja de origem (mesmo padrão de pedidos.tsx) -
+        // Mercado Livre ainda não sincroniza catálogo (Fase 2, não
+        // construída), então chamar essa rota Shopee-específica pra uma
+        // loja ML sempre falha (502, "Falha ao buscar catálogo na
+        // Shopee") - filtra fora em vez de derrubar a lista combinada
+        // inteira por causa de UMA loja sem suporte ainda.
+        const shopeeShops = activeShops.filter((s) => s.provider !== 'mercado_livre');
         const products = viewingAll
           ? await Promise.all(
-              activeShops.map((shop) => getShopeeProducts(token, shop.id, PERIOD_TO_API[period], force))
-            ).then((results) => results.flatMap((r, i) => r.products.map((p) => ({ ...p, shopName: activeShops[i].shopName }))))
+              shopeeShops.map((shop) => getShopeeProducts(token, shop.id, PERIOD_TO_API[period], force))
+            ).then((results) => results.flatMap((r, i) => r.products.map((p) => ({ ...p, shopName: shopeeShops[i].shopName }))))
           : await getShopeeProducts(token, selectedShop!.id, PERIOD_TO_API[period], force).then((r) => r.products);
         setProducts(products);
         setEdits({});
