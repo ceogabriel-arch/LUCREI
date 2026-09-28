@@ -6,7 +6,7 @@ import { cancelOtherProviderSubscription } from '../../lib/cancel-other-provider
 import { applyPercentOff, validateCoupon } from '../../lib/coupons';
 import { prisma } from '../../lib/prisma';
 import { addDays, createOrGetPixCharge, CYCLE_DAYS_BY_PERIOD } from '../../lib/pix-billing';
-import { createProratedUpgradeCharge, findActiveAnnualCycle } from '../../lib/plan-upgrade';
+import { createProratedUpgradeCharge, findActivePaidCycle } from '../../lib/plan-upgrade';
 import { getSalesLimitStatus } from '../../lib/sales-usage';
 import { serializeUser, userWithPlan } from './serialize-user';
 
@@ -109,10 +109,10 @@ export async function plansRoutes(app: FastifyInstance) {
       }
 
       if (user.plan && user.plan.id !== plan.id) {
-        const activeCycle = await findActiveAnnualCycle(user);
+        const activeCycle = await findActivePaidCycle(user);
         if (activeCycle) {
           return reply.status(400).send({
-            message: `Seu plano anual já está pago até ${new Intl.DateTimeFormat('pt-BR').format(activeCycle.currentPeriodEnd)}. Pra não perder esse período, a troca para um plano de valor igual ou menor só é possível depois da renovação.`,
+            message: `Seu plano atual já está pago até ${new Intl.DateTimeFormat('pt-BR').format(activeCycle.currentPeriodEnd)}. Pra não perder esse período, a troca para um plano de valor igual ou menor só é possível depois da renovação.`,
           });
         }
       }
@@ -259,10 +259,10 @@ export async function plansRoutes(app: FastifyInstance) {
       }
 
       if (user.plan && user.plan.id !== plan.id) {
-        const activeCycle = await findActiveAnnualCycle(user);
+        const activeCycle = await findActivePaidCycle(user);
         if (activeCycle) {
           return reply.status(400).send({
-            message: `Seu plano anual já está pago até ${new Intl.DateTimeFormat('pt-BR').format(activeCycle.currentPeriodEnd)}. Pra não perder esse período, a troca para um plano de valor igual ou menor via Pix só é possível depois da renovação.`,
+            message: `Seu plano atual já está pago até ${new Intl.DateTimeFormat('pt-BR').format(activeCycle.currentPeriodEnd)}. Pra não perder esse período, a troca para um plano de valor igual ou menor via Pix só é possível depois da renovação.`,
           });
         }
       }

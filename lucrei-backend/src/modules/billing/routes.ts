@@ -42,7 +42,7 @@ async function handlePreapprovalEvent(dataId: string) {
   // A cada renovação a Mercado Pago não manda um webhook novo de status (o
   // preapproval continua 'authorized') - por isso guardamos aqui a próxima
   // data de cobrança sempre que consultamos, não só quando o status muda.
-  // É isso que createProratedUpgradeCharge/findActiveAnnualCycle usam pra
+  // É isso que createProratedUpgradeCharge/findActivePaidCycle usam pra
   // saber até quando uma assinatura de cartão está paga.
   const nextPeriodEnd = preapproval.next_payment_date ? new Date(preapproval.next_payment_date) : undefined;
   if (!status && !nextPeriodEnd) return;

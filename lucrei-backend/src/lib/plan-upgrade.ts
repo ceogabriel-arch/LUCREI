@@ -1,10 +1,8 @@
 import type { Plan, User } from '@prisma/client';
 
 import { pixIdempotencyKey } from '../mercadopago-client';
-import { createOrGetPixCharge, type PixChargeResponse } from './pix-billing';
+import { CYCLE_DAYS_BY_PERIOD, createOrGetPixCharge, type PixChargeResponse } from './pix-billing';
 import { prisma } from './prisma';
-
-const YEAR_MS = 365 * 24 * 60 * 60 * 1000;
 
 export type ProrationCharge = PixChargeResponse | null;
 
@@ -19,15 +17,20 @@ async function findLatestPaidSubscription(userId: string) {
 }
 
 /**
- * Plano anual trocado no meio do ciclo por um mais caro precisa de uma
- * cobrança avulsa agora (proporcional aos meses restantes) - sem isso, a
- * pessoa ficaria no plano novo de graça até a renovação, quase um ano depois.
- * Não mexe em downgrade (sem reembolso automático), em planos mensais (o
- * ciclo é curto demais pra valer a pena complicar), nem em assinatura ainda
- * em teste grátis (nada foi pago ainda, não tem "proporcional" a cobrar).
- * Cobrança sempre por Pix,
- * independente de como a assinatura atual é paga - não temos como cobrar um
- * valor avulso no cartão salvo de uma assinatura existente na Mercado Pago.
+ * Plano trocado no meio do ciclo (mensal ou anual) por um mais caro precisa
+ * de uma cobrança avulsa agora (proporcional ao tempo restante) - sem isso,
+ * a pessoa ficaria no plano novo de graça até a renovação. Crucial: essa
+ * cobrança fica presa à assinatura ATUAL (não cria/cancela nada) e o plano
+ * só é aplicado de verdade quando o pagamento é confirmado via webhook (ver
+ * handleUpgradeChargePaid) - a assinatura antiga, já paga, continua intacta
+ * se a pessoa abandonar esse pagamento. Não mexe em downgrade (sem reembolso
+ * automático - ver findActivePaidCycle, que bloqueia até a renovação), em
+ * troca de período de cobrança (mensal<->anual muda a frequência de cobrança
+ * na Mercado Pago, não é só valor), nem em assinatura ainda em teste grátis
+ * (nada foi pago ainda, não tem "proporcional" a cobrar). Cobrança sempre
+ * por Pix, independente de como a assinatura atual é paga - não temos como
+ * cobrar um valor avulso no cartão salvo de uma assinatura existente na
+ * Mercado Pago.
  * Retorna null quando a troca não precisa de cobrança (caminho normal segue).
  */
 export async function createProratedUpgradeCharge(
@@ -35,7 +38,7 @@ export async function createProratedUpgradeCharge(
   newPlan: Plan
 ): Promise<ProrationCharge> {
   if (!user.plan || user.plan.id === newPlan.id) return null;
-  if (user.plan.billingPeriod !== 'annual' || newPlan.billingPeriod !== 'annual') return null;
+  if (user.plan.billingPeriod !== newPlan.billingPeriod) return null;
   if (user.plan.priceCurrent === null || newPlan.priceCurrent === null) return null;
 
   const priceDiff = Number(newPlan.priceCurrent) - Number(user.plan.priceCurrent);
@@ -47,7 +50,8 @@ export async function createProratedUpgradeCharge(
   const remainingMs = subscription.currentPeriodEnd.getTime() - Date.now();
   if (remainingMs <= 0) return null;
 
-  const remainingFraction = Math.min(1, remainingMs / YEAR_MS);
+  const cycleMs = CYCLE_DAYS_BY_PERIOD[user.plan.billingPeriod] * 24 * 60 * 60 * 1000;
+  const remainingFraction = Math.min(1, remainingMs / cycleMs);
   const proratedAmount = Math.round(priceDiff * remainingFraction * 100) / 100;
   if (proratedAmount <= 0) return null;
 
@@ -64,17 +68,21 @@ export async function createProratedUpgradeCharge(
 }
 
 /**
- * O fluxo de Pix sempre cria uma assinatura nova do zero (ver ensureCurrentPixCharge)
- * - ótimo pra assinar um plano novo, mas se a pessoa já está num plano anual pago
- * (cartão ou Pix, não importa) e pede pra trocar por um de valor igual ou menor,
- * isso jogaria fora o tempo já pago e cobraria o preço cheio do plano novo na
- * hora. Upgrade de verdade (mais caro) já é tratado à parte por
- * createProratedUpgradeCharge antes desse bloqueio entrar em ação. Só se
- * aplica a quem JÁ PAGOU o ciclo atual (ver findLatestPaidSubscription) -
+ * Trocar de plano sempre cancela a assinatura atual e cria uma nova do zero
+ * (ver /plans/select e /plans/select-pix) - ótimo pra assinar um plano novo,
+ * mas se a pessoa já está num plano pago (mensal ou anual, cartão ou Pix) e
+ * pede pra trocar por um de valor igual ou menor, isso cancelaria a
+ * assinatura já paga ANTES da nova ser confirmada - exatamente o bug de
+ * "plano some ao cancelar o pagamento". Upgrade de verdade (mais caro, mesmo
+ * período de cobrança) já é tratado à parte por createProratedUpgradeCharge
+ * antes desse bloqueio entrar em ação, sem cancelar nada até o pagamento
+ * confirmar. Downgrade e troca de período de cobrança (mensal<->anual) não
+ * têm esse caminho seguro ainda, então ficam bloqueados até a renovação. Só
+ * se aplica a quem JÁ PAGOU o ciclo atual (ver findLatestPaidSubscription) -
  * ninguém em teste grátis "já pagou" nada, então nunca é bloqueado.
  */
-export async function findActiveAnnualCycle(user: User & { plan: Plan | null }) {
-  if (!user.plan || user.plan.billingPeriod !== 'annual') return null;
+export async function findActivePaidCycle(user: User & { plan: Plan | null }) {
+  if (!user.plan || user.plan.priceCurrent === null) return null;
 
   const subscription = await findLatestPaidSubscription(user.id);
   if (!subscription?.currentPeriodEnd || subscription.currentPeriodEnd.getTime() <= Date.now()) return null;
