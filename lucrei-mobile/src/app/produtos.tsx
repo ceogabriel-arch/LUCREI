@@ -55,6 +55,7 @@ const ProductRow = memo(function ProductRow({
   dirty,
   selected,
   disabled,
+  readOnly,
   onChangeCost,
   onToggleSelect,
   period,
@@ -64,6 +65,12 @@ const ProductRow = memo(function ProductRow({
   dirty: boolean;
   selected: boolean;
   disabled: boolean;
+  // Diferente de "disabled" (que é um estado temporário - salvando - e por
+  // isso apaga a linha inteira pra deixar isso óbvio): "Todas as lojas" não
+  // permite editar, mas o produto continua sendo só pra LER, não devia ficar
+  // com essa cara de "desativado temporariamente" - some só o que não pode
+  // ser usado (caixinha de seleção, campo de custo virando texto simples).
+  readOnly?: boolean;
   onChangeCost: (shopeeItemId: string, text: string) => void;
   onToggleSelect: (shopeeItemId: string) => void;
   period: PeriodLabel;
@@ -74,13 +81,15 @@ const ProductRow = memo(function ProductRow({
     <View
       className="flex-row items-center gap-3 rounded-2xl border bg-lucrei-surface p-3"
       style={{ borderColor: dirty ? Colors.gold : Colors.border, opacity: disabled ? 0.5 : 1 }}>
-      <Pressable onPress={() => onToggleSelect(product.shopeeItemId)} disabled={disabled} hitSlop={8}>
-        <Ionicons
-          name={selected ? 'checkbox' : 'square-outline'}
-          size={20}
-          color={selected ? Colors.gold : Colors.textMuted}
-        />
-      </Pressable>
+      {!readOnly && (
+        <Pressable onPress={() => onToggleSelect(product.shopeeItemId)} disabled={disabled} hitSlop={8}>
+          <Ionicons
+            name={selected ? 'checkbox' : 'square-outline'}
+            size={20}
+            color={selected ? Colors.gold : Colors.textMuted}
+          />
+        </Pressable>
+      )}
 
       {product.image ? (
         <Image source={{ uri: product.image }} style={{ width: 48, height: 48, borderRadius: 10 }} />
@@ -122,16 +131,20 @@ const ProductRow = memo(function ProductRow({
 
       <View className="items-end gap-1">
         <Text className="text-[11px] text-lucrei-textMuted">Custo (R$)</Text>
-        <TextInput
-          value={value}
-          onChangeText={(text) => onChangeCost(product.shopeeItemId, text)}
-          editable={!disabled}
-          placeholder="0,00"
-          placeholderTextColor={Colors.textMuted}
-          keyboardType="decimal-pad"
-          className="w-24 rounded-xl border bg-lucrei-bg px-2.5 py-2 text-right text-base text-lucrei-text"
-          style={{ borderColor: dirty ? Colors.gold : Colors.border }}
-        />
+        {readOnly ? (
+          <Text className="text-base text-lucrei-text">{value || '—'}</Text>
+        ) : (
+          <TextInput
+            value={value}
+            onChangeText={(text) => onChangeCost(product.shopeeItemId, text)}
+            editable={!disabled}
+            placeholder="0,00"
+            placeholderTextColor={Colors.textMuted}
+            keyboardType="decimal-pad"
+            className="w-24 rounded-xl border bg-lucrei-bg px-2.5 py-2 text-right text-base text-lucrei-text"
+            style={{ borderColor: dirty ? Colors.gold : Colors.border }}
+          />
+        )}
       </View>
     </View>
   );
@@ -697,7 +710,8 @@ export default function ProdutosScreen() {
                     value={value}
                     dirty={dirty}
                     selected={selected.has(product.shopeeItemId)}
-                    disabled={saving || viewingAll}
+                    disabled={saving}
+                    readOnly={viewingAll}
                     onChangeCost={handleChangeCost}
                     onToggleSelect={handleToggleSelect}
                     period={period}
