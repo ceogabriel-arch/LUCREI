@@ -20,6 +20,7 @@ import { plansRoutes } from './modules/plans/routes';
 import { productRoutes } from './modules/products/routes';
 import { rewardsRoutes } from './modules/rewards/routes';
 import { shopRoutes } from './modules/shops/routes';
+import { mercadolivreRoutes } from './modules/mercadolivre/routes';
 import { summaryRoutes } from './modules/summary/routes';
 import { syncRoutes } from './modules/sync/routes';
 
@@ -117,6 +118,7 @@ async function main() {
 
   await app.register(authRoutes);
   await app.register(shopRoutes);
+  await app.register(mercadolivreRoutes);
   await app.register(syncRoutes);
   await app.register(productRoutes);
   await app.register(summaryRoutes);

@@ -407,9 +407,14 @@ function ShopRow({ shop, onDisconnected }: { shop: Shop; onDisconnected: () => v
   return (
     <View className="rounded-xl border border-lucrei-border bg-lucrei-surface p-3.5">
       <View className="flex-row items-center justify-between">
-        <Text className="flex-1 pr-2 text-sm text-lucrei-text" numberOfLines={1}>
-          {shop.shopName}
-        </Text>
+        <View className="flex-1 pr-2">
+          <Text className="text-sm text-lucrei-text" numberOfLines={1}>
+            {shop.shopName}
+          </Text>
+          <Text className="text-[11px] text-lucrei-textMuted">
+            {shop.provider === 'mercado_livre' ? 'Mercado Livre' : 'Shopee'}
+          </Text>
+        </View>
         <View
           className="rounded-full px-2 py-0.5"
           style={{ backgroundColor: active ? Colors.gold : Colors.surfaceAlt }}>

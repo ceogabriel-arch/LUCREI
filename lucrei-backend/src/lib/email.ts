@@ -74,7 +74,12 @@ export async function sendPasswordResetEmail(app: FastifyInstance, to: string, r
   }
 }
 
-export async function sendShopReconnectAttemptEmail(app: FastifyInstance, to: string, shopName: string) {
+export async function sendShopReconnectAttemptEmail(
+  app: FastifyInstance,
+  to: string,
+  shopName: string,
+  marketplaceName: string = 'Shopee'
+) {
   const apiKey = process.env.RESEND_API_KEY;
   const html = `<meta charset="utf-8">
 <meta name="color-scheme" content="light only">
@@ -96,8 +101,8 @@ export async function sendShopReconnectAttemptEmail(app: FastifyInstance, to: st
         </tr>
         <tr>
           <td bgcolor="#FFFFFF" class="lucrei-card">
-            <p class="lucrei-text" style="color:#1a1a1a;">Alguém tentou conectar a loja Shopee <strong>${shopName}</strong> em outra conta Lucrei, mas ela já está conectada na sua conta - por isso bloqueamos a tentativa.</p>
-            <p class="lucrei-text" style="color:#1a1a1a;">Se foi você mesmo (por exemplo, testando em outra conta), pode ignorar este e-mail. Se não reconhece essa tentativa, recomendamos trocar a senha da sua conta Shopee.</p>
+            <p class="lucrei-text" style="color:#1a1a1a;">Alguém tentou conectar a loja ${marketplaceName} <strong>${shopName}</strong> em outra conta Lucrei, mas ela já está conectada na sua conta - por isso bloqueamos a tentativa.</p>
+            <p class="lucrei-text" style="color:#1a1a1a;">Se foi você mesmo (por exemplo, testando em outra conta), pode ignorar este e-mail. Se não reconhece essa tentativa, recomendamos trocar a senha da sua conta ${marketplaceName}.</p>
           </td>
         </tr>
         <tr>

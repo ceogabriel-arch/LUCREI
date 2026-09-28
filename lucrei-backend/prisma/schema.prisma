@@ -36,6 +36,11 @@ enum ShopStatus {
   disconnected
 }
 
+enum Marketplace {
+  shopee
+  mercado_livre
+}
+
 enum ProductCostSource {
   manual
   import
@@ -122,7 +127,11 @@ model RewardClaim {
 model Shop {
   id            String     @id @default(cuid())
   userId        String
-  shopeeShopId  String     @unique
+  // Nullable porque uma loja Mercado Livre não tem shopeeShopId (e vice-versa
+  // com mercadoLivreShopId) - ver Marketplace/provider abaixo.
+  shopeeShopId  String?     @unique
+  mercadoLivreShopId String? @unique
+  provider      Marketplace @default(shopee)
   shopName      String
   region        String     @default("BR")
   status        ShopStatus @default(active)
@@ -155,6 +164,7 @@ model Shop {
 
   user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   oauthToken    ShopeeOAuthToken?
+  mercadoLivreOAuthToken MercadoLivreOAuthToken?
   products      Product[]
   orders        Order[]
   importBatches CostImportBatch[]
@@ -170,6 +180,20 @@ model ShopeeOAuthToken {
   accessTokenExpiresAt   DateTime
   refreshTokenExpiresAt  DateTime
   updatedAt              DateTime @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+}
+
+// Ao contrário do refresh token da Shopee (fixo por 30 dias, reutilizável), o
+// refresh_token do Mercado Livre roda UMA vez só - cada refresh devolve um
+// novo que precisa substituir o salvo aqui, senão o próximo refresh falha.
+model MercadoLivreOAuthToken {
+  id                    String   @id @default(cuid())
+  shopId                String   @unique
+  accessToken           String
+  refreshToken          String
+  accessTokenExpiresAt  DateTime
+  updatedAt             DateTime @updatedAt
 
   shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
 }

@@ -187,10 +187,13 @@ export async function shopRoutes(app: FastifyInstance) {
     }
   });
 
+  // Nome da rota ficou "/shopee/shops" por histórico, mas devolve as lojas
+  // de QUALQUER marketplace conectado (Shopee e Mercado Livre) - manter uma
+  // lista só é mais simples pro app do que separar por provider.
   app.get('/shopee/shops', { onRequest: [app.authenticate] }, async (request) => {
     const shops = await prisma.shop.findMany({
       where: { userId: request.user.sub },
-      select: { id: true, shopName: true, status: true, connectedAt: true, disconnectedAt: true },
+      select: { id: true, shopName: true, status: true, connectedAt: true, disconnectedAt: true, provider: true },
     });
     return { shops };
   });
@@ -204,7 +207,11 @@ export async function shopRoutes(app: FastifyInstance) {
       });
       if (!shop) return reply.status(404).send({ message: 'Loja não encontrada.' });
 
+      // deleteMany não erra quando não acha nada - seguro chamar os dois
+      // mesmo sabendo que só um vai ter linha de verdade, dependendo do
+      // provider dessa loja.
       await prisma.shopeeOAuthToken.deleteMany({ where: { shopId: shop.id } });
+      await prisma.mercadoLivreOAuthToken.deleteMany({ where: { shopId: shop.id } });
       const updated = await prisma.shop.update({
         where: { id: shop.id },
         data: { status: 'disconnected', disconnectedAt: new Date() },

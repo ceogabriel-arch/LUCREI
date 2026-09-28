@@ -120,6 +120,7 @@ export type Shop = {
   status: string;
   connectedAt: string;
   disconnectedAt: string | null;
+  provider: 'shopee' | 'mercado_livre';
 };
 
 export function getShops(token: string) {

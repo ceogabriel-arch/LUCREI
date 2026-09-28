@@ -19,6 +19,7 @@ import { useDataRefresh } from '@/lib/data-refresh';
 import { formatBRL } from '@/lib/format';
 import { PERIOD_TO_API, PERIODS, usePeriod } from '@/lib/period';
 import { useIsDesktopWeb } from '@/lib/responsive';
+import { connectMercadoLivreStore } from '@/lib/mercado-livre';
 import { useSelectedShop } from '@/lib/selected-shop';
 import { connectShopeeStore } from '@/lib/shopee';
 import { useSubscriptionAccess } from '@/lib/subscription-access';
@@ -43,7 +44,7 @@ export default function InicioScreen() {
   const { refreshSignal } = useDataRefresh();
   const subscriptionAccess = useSubscriptionAccess();
   const [backendStatus, setBackendStatus] = useState<BackendStatus>('checking');
-  const [connecting, setConnecting] = useState(false);
+  const [connecting, setConnecting] = useState<'shopee' | 'mercado_livre' | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [lifetimeProfit, setLifetimeProfit] = useState<number | null>(null);
@@ -51,7 +52,7 @@ export default function InicioScreen() {
 
   async function handleConnectShopee() {
     if (state.status !== 'authenticated') return;
-    setConnecting(true);
+    setConnecting('shopee');
     try {
       const result = await connectShopeeStore(state.token);
       if (result.status === 'success') {
@@ -93,7 +94,47 @@ export default function InicioScreen() {
     } catch (err) {
       showAlert('Erro', err instanceof ApiError ? err.message : 'Algo deu errado.');
     } finally {
-      setConnecting(false);
+      setConnecting(null);
+    }
+  }
+
+  // Espelha handleConnectShopee - mesmo shape de erro/motivo, só troca o
+  // texto pro Mercado Livre. Sincronização de pedido pra loja ML ainda não
+  // existe (Fase 2) - conectar aqui só guarda o token, sem sincronizar nada.
+  async function handleConnectMercadoLivre() {
+    if (state.status !== 'authenticated') return;
+    setConnecting('mercado_livre');
+    try {
+      const result = await connectMercadoLivreStore(state.token);
+      if (result.status === 'success') {
+        showAlert('Loja conectada!', 'Sua loja Mercado Livre foi conectada com sucesso.');
+        await refreshShops();
+      } else if (result.status === 'error') {
+        if (result.reason === 'shop_taken') {
+          showAlert(
+            'Loja já conectada em outra conta',
+            'Essa loja Mercado Livre já está conectada em outra conta Lucrei. Peça para desconectá-la lá (em Configurações) antes de conectar aqui.'
+          );
+        } else if (result.reason === 'invalid_state') {
+          showAlert(
+            'O link de conexão expirou',
+            'Demorou demais pra terminar o login no Mercado Livre e o link venceu. Toque em "Conectar Mercado Livre" e tente de novo.'
+          );
+        } else if (result.reason === 'exchange_failed') {
+          showAlert(
+            'O Mercado Livre não respondeu a tempo',
+            'Falha temporária na comunicação com o Mercado Livre. Tente conectar de novo em instantes.'
+          );
+        } else {
+          showAlert('Não foi possível conectar', 'Tente novamente em instantes.');
+        }
+      } else if (result.status === 'cancelled') {
+        showAlert('Conexão não concluída', 'A conexão com o Mercado Livre não foi concluída. Tente de novo.');
+      }
+    } catch (err) {
+      showAlert('Erro', err instanceof ApiError ? err.message : 'Algo deu errado.');
+    } finally {
+      setConnecting(null);
     }
   }
 
@@ -402,7 +443,7 @@ export default function InicioScreen() {
           <View className="mt-6 items-center rounded-3xl border border-lucrei-border bg-lucrei-surface px-6 py-12">
             <Ionicons name="storefront-outline" size={32} color={Colors.textMuted} />
             <Text className="mt-3 text-center text-base font-semibold text-lucrei-text">
-              Conecte sua loja Shopee pra ver seu lucro real aqui
+              Conecte sua loja Shopee ou Mercado Livre pra ver seu lucro real aqui
             </Text>
             <Text className="mt-1 max-w-xs text-center text-sm text-lucrei-textMuted">
               Faturamento, custos e lucro de cada venda aparecem automaticamente assim que você conectar.
@@ -414,20 +455,39 @@ export default function InicioScreen() {
           <AchievementsCard totalProfit={lifetimeProfit} accountCreatedAt={state.user.createdAt} />
         )}
 
-        <Pressable
-          onPress={handleConnectShopee}
-          disabled={connecting}
-          className="mt-8 flex-row items-center justify-center gap-2 self-center rounded-2xl bg-lucrei-gold py-4"
-          style={{ opacity: connecting ? 0.7 : 1, width: isDesktop ? 360 : '100%' }}>
-          {connecting ? (
-            <ActivityIndicator color={Colors.onGold} />
-          ) : (
-            <Ionicons name="storefront-outline" size={18} color={Colors.onGold} />
-          )}
-          <Text className="text-base font-semibold text-lucrei-onGold">
-            {connecting ? 'Conectando...' : hasShop ? 'Conectar outra loja' : 'Conectar loja Shopee'}
-          </Text>
-        </Pressable>
+        <View className="mt-8 flex-row gap-2.5 self-center" style={{ width: isDesktop ? 360 : '100%' }}>
+          <Pressable
+            onPress={handleConnectShopee}
+            disabled={connecting !== null}
+            className="flex-1 flex-row items-center justify-center gap-2 rounded-2xl bg-lucrei-gold py-4"
+            style={{ opacity: connecting !== null ? 0.7 : 1 }}>
+            {connecting === 'shopee' ? (
+              <ActivityIndicator color={Colors.onGold} />
+            ) : (
+              <Ionicons name="storefront-outline" size={18} color={Colors.onGold} />
+            )}
+            <Text className="text-base font-semibold text-lucrei-onGold" numberOfLines={1}>
+              {connecting === 'shopee' ? 'Conectando...' : 'Shopee'}
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={handleConnectMercadoLivre}
+            disabled={connecting !== null}
+            className="flex-1 flex-row items-center justify-center gap-2 rounded-2xl bg-lucrei-gold py-4"
+            style={{ opacity: connecting !== null ? 0.7 : 1 }}>
+            {connecting === 'mercado_livre' ? (
+              <ActivityIndicator color={Colors.onGold} />
+            ) : (
+              <Ionicons name="storefront-outline" size={18} color={Colors.onGold} />
+            )}
+            <Text className="text-base font-semibold text-lucrei-onGold" numberOfLines={1}>
+              {connecting === 'mercado_livre' ? 'Conectando...' : 'Mercado Livre'}
+            </Text>
+          </Pressable>
+        </View>
+        <Text className="mt-2 text-center text-xs text-lucrei-textMuted">
+          {hasShop ? 'Conectar outra loja' : 'Conecte sua loja'}
+        </Text>
         {!stillLoading && (
           <Text className="mt-3 text-center text-xs text-lucrei-textMuted">
             {showingRealData
