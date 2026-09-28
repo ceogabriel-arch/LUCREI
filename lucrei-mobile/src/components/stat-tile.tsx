@@ -57,10 +57,13 @@ export function StatTile({
               // dependia da dica cobrir o card inteiro sem sobrar nada, e no
               // web a caixa não ficava opaca o bastante: o texto da dica e o
               // valor (ex.: "R$ 0,00") ficavam se misturando, ilegíveis.
-              // Embaixo nunca sobrepõe o próprio conteúdo do card.
+              // Fixo em pixels (não '100%') - porcentagem depende do card já
+              // ter uma altura resolvida antes do filho absoluto calcular a
+              // posição, o que quebrou o hover inteiro numa tentativa anterior.
+              // 92px cobre com folga label + valor + linha de delta (a
+              // variante mais alta do card).
               style={{
-                top: '100%',
-                marginTop: 8,
+                top: 92,
                 left: '50%',
                 marginLeft: -80,
                 zIndex: 40,

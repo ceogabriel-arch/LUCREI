@@ -14,6 +14,7 @@ import { AlertHost } from '@/components/alert-host';
 import { DesktopShell } from '@/components/desktop-shell';
 import { LoginScreen } from '@/components/login-screen';
 import { SignupScreen } from '@/components/signup-screen';
+import { WhatsNewModal } from '@/components/whats-new-modal';
 import { DarkCssVars, LightCssVars } from '@/constants/theme';
 import { savePushToken } from '@/lib/api';
 import { AuthProvider, useAuth } from '@/lib/auth';
@@ -77,6 +78,7 @@ function RootNavigator() {
     return (
       <DesktopShell>
         <AppTabs />
+        <WhatsNewModal />
       </DesktopShell>
     );
   }
