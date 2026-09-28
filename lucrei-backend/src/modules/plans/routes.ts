@@ -238,7 +238,7 @@ export async function plansRoutes(app: FastifyInstance) {
       let couponPercentOff: number | null = null;
       let couponId: string | null = null;
       if (request.body.couponCode) {
-        const validation = await validateCoupon(request.body.couponCode);
+        const validation = await validateCoupon(request.body.couponCode, request.user.sub);
         if (!validation.ok) {
           return reply.status(400).send({ message: validation.message });
         }
@@ -313,6 +313,7 @@ export async function plansRoutes(app: FastifyInstance) {
         // criando assinatura atrás de assinatura sem nunca "gastar" o limite.
         if (couponId) {
           await prisma.coupon.update({ where: { id: couponId }, data: { redeemedCount: { increment: 1 } } });
+          await prisma.couponRedemption.create({ data: { couponId, userId: user.id } });
         }
 
         if (trial.eligibleForTrial) {
@@ -371,7 +372,7 @@ export async function plansRoutes(app: FastifyInstance) {
     '/coupons/validate',
     { onRequest: [app.authenticate], schema: { body: validateCouponSchema } },
     async (request, reply) => {
-      const validation = await validateCoupon(request.body.code);
+      const validation = await validateCoupon(request.body.code, request.user.sub);
       if (!validation.ok) {
         return reply.status(400).send({ message: validation.message });
       }

@@ -5,7 +5,7 @@ export type CouponValidation = { ok: true; coupon: { id: string; code: string; p
 // Cupom só desconta a 1ª cobrança de uma assinatura via Pix (ver comentário
 // em Subscription.pendingCouponPercentOff) - não existe fluxo de cartão
 // aqui de propósito.
-export async function validateCoupon(rawCode: string): Promise<CouponValidation> {
+export async function validateCoupon(rawCode: string, userId: string): Promise<CouponValidation> {
   const code = rawCode.trim().toUpperCase();
   if (!code) return { ok: false, message: 'Informe um código de cupom.' };
 
@@ -15,6 +15,14 @@ export async function validateCoupon(rawCode: string): Promise<CouponValidation>
   if (coupon.maxRedemptions !== null && coupon.redeemedCount >= coupon.maxRedemptions) {
     return { ok: false, message: 'Esse cupom já atingiu o limite de usos.' };
   }
+
+  // Limite por conta (independente do limite global acima) - uma vez usado,
+  // nunca mais volta a valer pra essa mesma conta, mesmo cancelando e
+  // assinando de novo depois.
+  const alreadyRedeemed = await prisma.couponRedemption.findUnique({
+    where: { couponId_userId: { couponId: coupon.id, userId } },
+  });
+  if (alreadyRedeemed) return { ok: false, message: 'Você já usou esse cupom antes.' };
 
   return { ok: true, coupon: { id: coupon.id, code: coupon.code, percentOff: coupon.percentOff } };
 }

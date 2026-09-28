@@ -87,10 +87,11 @@ model User {
   createdAt                    DateTime            @default(now())
   updatedAt                    DateTime            @updatedAt
 
-  plan          Plan?           @relation(fields: [planId], references: [id])
-  shops         Shop[]
-  subscriptions Subscription[]
-  rewardClaims  RewardClaim[]
+  plan              Plan?              @relation(fields: [planId], references: [id])
+  shops             Shop[]
+  subscriptions     Subscription[]
+  rewardClaims      RewardClaim[]
+  couponRedemptions CouponRedemption[]
 
   @@index([planId])
   @@index([passwordResetTokenHash])
@@ -336,6 +337,24 @@ model Coupon {
   redeemedCount  Int       @default(0)
   active         Boolean   @default(true)
   createdAt      DateTime  @default(now())
+
+  redemptions CouponRedemption[]
+}
+
+// Uma linha por (cupom, conta) que já resgatou - trava reuso do mesmo
+// código pela mesma conta pra sempre, mesmo cancelando e assinando de novo
+// depois. maxRedemptions/redeemedCount no Coupon é um limite GLOBAL (entre
+// contas diferentes); isso aqui é o limite POR conta.
+model CouponRedemption {
+  id        String   @id @default(cuid())
+  couponId  String
+  userId    String
+  createdAt DateTime @default(now())
+
+  coupon Coupon @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([couponId, userId])
 }
 
 model PixCharge {
