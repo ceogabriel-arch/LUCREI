@@ -39,7 +39,7 @@ export default function InicioScreen() {
   const router = useRouter();
   const { scheme, colors: Colors } = useAppTheme();
   const isDesktop = useIsDesktopWeb();
-  const { shops, selectedShop, loaded: shopsLoaded, refresh: refreshShops } = useSelectedShop();
+  const { shops, selectedShop, viewingAll, loaded: shopsLoaded, refresh: refreshShops } = useSelectedShop();
   const { period, setPeriod } = usePeriod();
   const { refreshSignal } = useDataRefresh();
   const subscriptionAccess = useSubscriptionAccess();
@@ -48,10 +48,6 @@ export default function InicioScreen() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [lifetimeProfit, setLifetimeProfit] = useState<number | null>(null);
-  // "Todas as lojas" é um modo só dessa tela (não faz parte do contexto
-  // compartilhado useSelectedShop, que Pedidos/Produtos/Relatórios também
-  // usam e continuam sempre olhando uma loja de cada vez).
-  const [viewingAll, setViewingAll] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   async function handleConnectShopee() {
@@ -297,11 +293,7 @@ export default function InicioScreen() {
               style={{ width: LOGO_WIDTH, height: LOGO_HEIGHT }}
               contentFit="contain"
             />
-            <ShopPicker
-              viewingAll={viewingAll}
-              onSelectAll={() => setViewingAll(true)}
-              onSelectShop={() => setViewingAll(false)}
-            />
+            <ShopPicker />
           </View>
           <View
             className="h-2 w-2 rounded-full"

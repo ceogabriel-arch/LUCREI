@@ -7,17 +7,11 @@ import { useModalPresentation } from '@/lib/responsive';
 import { useSelectedShop } from '@/lib/selected-shop';
 import { useColors } from '@/lib/theme';
 
-type ShopPickerProps = {
-  // "Todas as lojas" é um modo só do Início, não faz parte do contexto
-  // compartilhado (useSelectedShop) - as outras telas (Pedidos, Produtos,
-  // Relatórios) continuam sempre olhando uma loja de cada vez.
-  viewingAll?: boolean;
-  onSelectAll?: () => void;
-  onSelectShop?: () => void;
-};
-
-export function ShopPicker({ viewingAll = false, onSelectAll, onSelectShop }: ShopPickerProps) {
-  const { shops, selectedShop, selectShop } = useSelectedShop();
+export function ShopPicker() {
+  // "Todas as lojas" agora é do contexto compartilhado (persiste sozinho,
+  // igual escolher uma loja específica já fazia) - qualquer tela que use
+  // esse picker ganha o modo automaticamente.
+  const { shops, selectedShop, viewingAll, selectShop, selectAllShops } = useSelectedShop();
   const Colors = useColors();
   const modal = useModalPresentation();
   const [open, setOpen] = useState(false);
@@ -45,10 +39,10 @@ export function ShopPicker({ viewingAll = false, onSelectAll, onSelectShop }: Sh
               </Pressable>
             </View>
             <ScrollView style={{ flexShrink: 1 }} contentContainerClassName="gap-2.5 p-5">
-              {onSelectAll && activeShopsCount > 1 && (
+              {activeShopsCount > 1 && (
                 <Pressable
                   onPress={() => {
-                    onSelectAll();
+                    selectAllShops();
                     setOpen(false);
                   }}
                   className="flex-row items-center justify-between rounded-2xl border p-4"
@@ -64,7 +58,6 @@ export function ShopPicker({ viewingAll = false, onSelectAll, onSelectShop }: Sh
                     key={shop.id}
                     onPress={() => {
                       selectShop(shop.id);
-                      onSelectShop?.();
                       setOpen(false);
                     }}
                     className="flex-row items-center justify-between rounded-2xl border p-4"

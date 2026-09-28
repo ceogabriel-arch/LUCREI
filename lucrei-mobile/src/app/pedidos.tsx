@@ -221,10 +221,7 @@ export default function PedidosScreen() {
   // recarregava os pedidos de novo sem necessidade.
   const token = state.status === 'authenticated' ? state.token : null;
   const Colors = useColors();
-  const { shops, selectedShop, loaded: shopsLoaded } = useSelectedShop();
-  // "Todas as lojas" é local dessa tela (mesmo padrão do Início) - Produtos e
-  // Relatórios não são afetados.
-  const [viewingAll, setViewingAll] = useState(false);
+  const { shops, selectedShop, viewingAll, loaded: shopsLoaded } = useSelectedShop();
   // useMemo (não só shops.filter direto) é essencial aqui - .filter() sempre
   // devolve um array NOVO, e activeShops é dependência do useCallback "load"
   // abaixo. Sem memoizar, cada render recriava load, o que recriava o
@@ -408,13 +405,7 @@ export default function PedidosScreen() {
         <View>
           <Text className="text-2xl font-bold text-lucrei-text">Pedidos</Text>
           <Text className="mt-1 text-sm text-lucrei-textMuted">Lucro de cada pedido sincronizado.</Text>
-          {activeShops.length > 1 && (
-            <ShopPicker
-              viewingAll={viewingAll}
-              onSelectAll={() => setViewingAll(true)}
-              onSelectShop={() => setViewingAll(false)}
-            />
-          )}
+          {activeShops.length > 1 && <ShopPicker />}
         </View>
         {/* Sincronizar é uma ação por loja - sem uma loja específica
             selecionada (modo "Todas as lojas"), não tem o que o botão faria. */}

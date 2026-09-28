@@ -4,11 +4,22 @@ import { getShops, type Shop } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { getSelectedShopId, setSelectedShopId as persistSelectedShopId } from '@/lib/shop-storage';
 
+// Sentinela salvo na mesma chave que já persiste a loja escolhida - shopId
+// de verdade nunca vai bater com essa string, então dá pra guardar os dois
+// tipos de escolha (loja específica ou "todas") na mesma persistência sem
+// precisar de uma chave nova.
+const ALL_SHOPS = 'all';
+
 type SelectedShopContextValue = {
   shops: Shop[];
   selectedShop: Shop | null;
+  // "Todas as lojas" - usado hoje em Início/Pedidos/Produtos. Persiste igual
+  // escolher uma loja específica: a pessoa escolhe uma vez e isso continua
+  // valendo da próxima vez que abrir o app.
+  viewingAll: boolean;
   loaded: boolean;
   selectShop: (shopId: string) => void;
+  selectAllShops: () => void;
   refresh: () => Promise<void>;
 };
 
@@ -18,6 +29,7 @@ export function SelectedShopProvider({ children }: PropsWithChildren) {
   const { state } = useAuth();
   const [shops, setShops] = useState<Shop[]>([]);
   const [selectedShopId, setSelectedShopIdState] = useState<string | null>(null);
+  const [viewingAll, setViewingAllState] = useState(false);
   const [loaded, setLoaded] = useState(false);
   // refreshUser() troca o objeto "state" inteiro por um novo a cada chamada,
   // mesmo com os mesmos dados (ver auth.tsx) - depender de "state" aqui
@@ -37,6 +49,10 @@ export function SelectedShopProvider({ children }: PropsWithChildren) {
       // conectada de verdade (cabeçalho + "Loja conectada: X"), contradizendo
       // "Lojas conectadas" em Configurações, que mostra o status real.
       const active = shops.filter((s) => s.status === 'active');
+      // "Todas as lojas" só faz sentido com 2+ lojas ativas - se ficou só
+      // com uma (ou nenhuma), volta pra seleção normal em vez de continuar
+      // "combinando" uma loja só.
+      setViewingAllState((prev) => prev && active.length > 1);
       setSelectedShopIdState((prev) => (prev && active.some((s) => s.id === prev) ? prev : (active[0]?.id ?? null)));
     } catch {
       // mantém o que já tinha carregado
@@ -49,19 +65,30 @@ export function SelectedShopProvider({ children }: PropsWithChildren) {
     if (state.status !== 'authenticated') {
       setShops([]);
       setSelectedShopIdState(null);
+      setViewingAllState(false);
       setLoaded(false);
       return;
     }
     (async () => {
       const persisted = await getSelectedShopId();
-      setSelectedShopIdState(persisted);
+      if (persisted === ALL_SHOPS) {
+        setViewingAllState(true);
+      } else {
+        setSelectedShopIdState(persisted);
+      }
       await refresh();
     })();
   }, [state.status]);
 
   function selectShop(shopId: string) {
+    setViewingAllState(false);
     setSelectedShopIdState(shopId);
     persistSelectedShopId(shopId);
+  }
+
+  function selectAllShops() {
+    setViewingAllState(true);
+    persistSelectedShopId(ALL_SHOPS);
   }
 
   // Mesmo raciocínio do refresh() acima - selectedShop nunca aponta pra uma
@@ -70,7 +97,8 @@ export function SelectedShopProvider({ children }: PropsWithChildren) {
   const selectedShop = activeShops.find((s) => s.id === selectedShopId) ?? activeShops[0] ?? null;
 
   return (
-    <SelectedShopContext.Provider value={{ shops, selectedShop, loaded, selectShop, refresh }}>
+    <SelectedShopContext.Provider
+      value={{ shops, selectedShop, viewingAll, loaded, selectShop, selectAllShops, refresh }}>
       {children}
     </SelectedShopContext.Provider>
   );

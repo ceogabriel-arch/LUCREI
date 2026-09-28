@@ -306,11 +306,9 @@ export default function ProdutosScreen() {
   // "load" ser recriado e a lista recarregar de novo sem necessidade.
   const token = state.status === 'authenticated' ? state.token : null;
   const Colors = useColors();
-  const { shops, selectedShop, loaded: shopsLoaded } = useSelectedShop();
-  // "Todas as lojas" é local dessa tela (mesmo padrão de Início/Pedidos) -
+  const { shops, selectedShop, viewingAll, loaded: shopsLoaded } = useSelectedShop();
   // useMemo é essencial (não computar shops.filter direto) - ver o bug de
   // loop infinito corrigido em pedidos.tsx pelo mesmo motivo.
-  const [viewingAll, setViewingAll] = useState(false);
   const activeShops = useMemo(() => shops.filter((s) => s.status === 'active'), [shops]);
   const { period, setPeriod } = usePeriod();
   const { refreshSignal } = useDataRefresh();
@@ -323,6 +321,13 @@ export default function ProdutosScreen() {
   const [bulkCost, setBulkCost] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [viewMode, setViewMode] = useState<'catalog' | 'orphans'>('catalog');
+  // "Sem cadastro" não existe no modo combinado (precisa de uma loja
+  // específica pra salvar) - se "Todas as lojas" for escolhida (inclusive
+  // já vindo assim persistido de outra tela), garante que não fica preso
+  // numa aba escondida.
+  useEffect(() => {
+    if (viewingAll) setViewMode('catalog');
+  }, [viewingAll]);
   // Trocar de período com a tela já pronta mantém loadState em 'ready' (de
   // propósito, pra não piscar a tela inteira de loading) - sem isso, nada
   // avisa que a lista está recalculando enquanto o pedido não volta.
@@ -541,14 +546,7 @@ export default function ProdutosScreen() {
           : 'Informe o custo de cada produto e salve tudo de uma vez pra calcularmos seu lucro real.'}
       </Text>
       {activeShops.length > 1 && (
-        <ShopPicker
-          viewingAll={viewingAll}
-          onSelectAll={() => {
-            setViewingAll(true);
-            setViewMode('catalog');
-          }}
-          onSelectShop={() => setViewingAll(false)}
-        />
+        <ShopPicker />
       )}
 
       <View className="mt-5 flex-row self-start rounded-full bg-lucrei-surface p-1">
