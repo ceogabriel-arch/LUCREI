@@ -184,6 +184,10 @@ export type ShopeeProduct = {
   profit: number | null;
   revenue: number | null;
   orders: number;
+  // Preenchido só no cliente no modo "Todas as lojas" (ver produtos.tsx),
+  // igual Order.shopName - a API nunca manda isso, cada chamada já é de
+  // uma loja só.
+  shopName?: string;
 };
 
 export function getShopeeProducts(token: string, shopId: string, period: Period, force = false) {

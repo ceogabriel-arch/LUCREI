@@ -7,6 +7,7 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, TextInp
 import { BlurredValue } from '@/components/blurred-value';
 import { PastDueBanner } from '@/components/past-due-banner';
 import { Screen } from '@/components/screen';
+import { ShopPicker } from '@/components/shop-picker';
 import {
   ApiError,
   getOrphanProducts,
@@ -93,6 +94,7 @@ const ProductRow = memo(function ProductRow({
         </Text>
         <Text className="mt-0.5 text-xs text-lucrei-textMuted">
           {product.price != null ? `Preço: ${formatBRL(product.price)}` : 'Sem preço informado'}
+          {product.shopName ? ` · ${product.shopName}` : ''}
         </Text>
         {subscriptionAccess.isPastDue && product.profit != null ? (
           <View className="mt-1">
@@ -291,7 +293,12 @@ export default function ProdutosScreen() {
   // "load" ser recriado e a lista recarregar de novo sem necessidade.
   const token = state.status === 'authenticated' ? state.token : null;
   const Colors = useColors();
-  const { selectedShop, loaded: shopsLoaded } = useSelectedShop();
+  const { shops, selectedShop, loaded: shopsLoaded } = useSelectedShop();
+  // "Todas as lojas" é local dessa tela (mesmo padrão de Início/Pedidos) -
+  // useMemo é essencial (não computar shops.filter direto) - ver o bug de
+  // loop infinito corrigido em pedidos.tsx pelo mesmo motivo.
+  const [viewingAll, setViewingAll] = useState(false);
+  const activeShops = useMemo(() => shops.filter((s) => s.status === 'active'), [shops]);
   const { period, setPeriod } = usePeriod();
   const { refreshSignal } = useDataRefresh();
   const [loadState, setLoadState] = useState<LoadState>('loading');
@@ -336,14 +343,20 @@ export default function ProdutosScreen() {
   const load = useCallback(
     async (force = false) => {
       if (!token || !shopsLoaded) return;
-      if (!selectedShop) {
+      if (viewingAll ? activeShops.length === 0 : !selectedShop) {
         setLoadState('no-shop');
         return;
       }
       setLoadState((prev) => (prev === 'ready' ? prev : 'loading'));
       setReloading(true);
       try {
-        const { products } = await getShopeeProducts(token, selectedShop.id, PERIOD_TO_API[period], force);
+        // Combinado: busca cada loja em paralelo e marca cada produto com o
+        // nome da loja de origem - mesmo padrão de pedidos.tsx.
+        const products = viewingAll
+          ? await Promise.all(
+              activeShops.map((shop) => getShopeeProducts(token, shop.id, PERIOD_TO_API[period], force))
+            ).then((results) => results.flatMap((r, i) => r.products.map((p) => ({ ...p, shopName: activeShops[i].shopName }))))
+          : await getShopeeProducts(token, selectedShop!.id, PERIOD_TO_API[period], force).then((r) => r.products);
         setProducts(products);
         setEdits({});
         setSelected(new Set());
@@ -354,7 +367,7 @@ export default function ProdutosScreen() {
         setReloading(false);
       }
     },
-    [token, shopsLoaded, selectedShop, period]
+    [token, shopsLoaded, selectedShop, period, viewingAll, activeShops]
   );
 
   useFocusEffect(
@@ -504,8 +517,20 @@ export default function ProdutosScreen() {
     <Screen>
       <Text className="text-2xl font-bold text-lucrei-text">Produtos</Text>
       <Text className="mt-2 text-base text-lucrei-textMuted">
-        Informe o custo de cada produto e salve tudo de uma vez pra calcularmos seu lucro real.
+        {viewingAll
+          ? 'Veja o catálogo de todas as lojas juntas. Troque pra uma loja só pra editar custo.'
+          : 'Informe o custo de cada produto e salve tudo de uma vez pra calcularmos seu lucro real.'}
       </Text>
+      {activeShops.length > 1 && (
+        <ShopPicker
+          viewingAll={viewingAll}
+          onSelectAll={() => {
+            setViewingAll(true);
+            setViewMode('catalog');
+          }}
+          onSelectShop={() => setViewingAll(false)}
+        />
+      )}
 
       <View className="mt-5 flex-row self-start rounded-full bg-lucrei-surface p-1">
         <Pressable
@@ -518,16 +543,21 @@ export default function ProdutosScreen() {
             Catálogo
           </Text>
         </Pressable>
-        <Pressable
-          onPress={() => setViewMode('orphans')}
-          className="rounded-full px-3.5 py-1.5"
-          style={{ backgroundColor: viewMode === 'orphans' ? Colors.gold : 'transparent' }}>
-          <Text
-            className="text-xs font-medium"
-            style={{ color: viewMode === 'orphans' ? Colors.onGold : Colors.textMuted }}>
-            Sem cadastro
-          </Text>
-        </Pressable>
+        {/* "Sem cadastro" edita o custo de um produto de UMA loja - sem
+            sentido no modo combinado, onde não tem uma loja definida pra
+            salvar o cadastro. */}
+        {!viewingAll && (
+          <Pressable
+            onPress={() => setViewMode('orphans')}
+            className="rounded-full px-3.5 py-1.5"
+            style={{ backgroundColor: viewMode === 'orphans' ? Colors.gold : 'transparent' }}>
+            <Text
+              className="text-xs font-medium"
+              style={{ color: viewMode === 'orphans' ? Colors.onGold : Colors.textMuted }}>
+              Sem cadastro
+            </Text>
+          </Pressable>
+        )}
       </View>
 
       {viewMode === 'orphans' && token && selectedShop && (
@@ -565,7 +595,7 @@ export default function ProdutosScreen() {
 
       {loadState === 'no-shop' && (
         <Text className="mt-8 text-sm text-lucrei-textMuted">
-          Conecte uma loja Shopee na tela Início pra ver seus produtos aqui.
+          Conecte uma loja Shopee ou Mercado Livre na tela Início pra ver seus produtos aqui.
         </Text>
       )}
 
@@ -588,7 +618,7 @@ export default function ProdutosScreen() {
             className="mt-4 rounded-xl border border-lucrei-border bg-lucrei-surface px-4 py-3 text-sm text-lucrei-text"
           />
 
-          {selected.size === 0 && missingCostProducts.length >= MISSING_COST_NUDGE_THRESHOLD && (
+          {!viewingAll && selected.size === 0 && missingCostProducts.length >= MISSING_COST_NUDGE_THRESHOLD && (
             <View className="mt-3 flex-row items-center gap-3 rounded-2xl border border-lucrei-border bg-lucrei-surface p-3">
               <Text className="flex-1 text-xs text-lucrei-textMuted">
                 {missingCostProducts.length} produtos sem custo cadastrado — selecionar todos pra aplicar um valor de
@@ -600,7 +630,7 @@ export default function ProdutosScreen() {
             </View>
           )}
 
-          {filteredProducts.length > 0 && (
+          {!viewingAll && filteredProducts.length > 0 && (
             <Pressable
               onPress={handleToggleSelectAll}
               disabled={saving}
@@ -661,7 +691,7 @@ export default function ProdutosScreen() {
                     value={value}
                     dirty={dirty}
                     selected={selected.has(product.shopeeItemId)}
-                    disabled={saving}
+                    disabled={saving || viewingAll}
                     onChangeCost={handleChangeCost}
                     onToggleSelect={handleToggleSelect}
                     period={period}
