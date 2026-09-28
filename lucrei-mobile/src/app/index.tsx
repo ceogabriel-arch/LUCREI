@@ -63,6 +63,19 @@ export default function InicioScreen() {
             'Loja já conectada em outra conta',
             'Essa loja Shopee já está conectada em outra conta Lucrei. Peça para desconectá-la lá (em Configurações) antes de conectar aqui.'
           );
+        } else if (result.reason === 'invalid_state') {
+          // Token de autorização (válido por 30min) venceu antes da pessoa
+          // terminar o login/SMS da Shopee - o link inteiro precisa recomeçar,
+          // não dá pra retomar de onde parou.
+          showAlert(
+            'O link de conexão expirou',
+            'Demorou demais pra terminar o login na Shopee e o link venceu. Toque em "Conectar outra loja" e tente de novo.'
+          );
+        } else if (result.reason === 'exchange_failed') {
+          showAlert(
+            'A Shopee não respondeu a tempo',
+            'Falha temporária na comunicação com a Shopee. Tente conectar de novo em instantes.'
+          );
         } else {
           showAlert('Não foi possível conectar', 'Tente novamente em instantes.');
         }

@@ -74,7 +74,10 @@ export async function shopRoutes(app: FastifyInstance) {
       }
 
       const returnUrl = request.query.returnUrl || DEFAULT_RETURN_URL;
-      const state = app.jwt.sign({ sub: request.user.sub, returnUrl }, { expiresIn: '15m' });
+      // 15min dava "invalid_state" pra quem demorasse no login/SMS da própria
+      // Shopee (2FA, trocar de conta, etc) - o link em si continua válido,
+      // só o nosso token de estado é que vencia cedo demais.
+      const state = app.jwt.sign({ sub: request.user.sub, returnUrl }, { expiresIn: '30m' });
       const url = getAuthorizationUrl(state);
       return { url };
     }
