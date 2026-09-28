@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Dimensions, Modal, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -225,7 +225,13 @@ export default function PedidosScreen() {
   // "Todas as lojas" é local dessa tela (mesmo padrão do Início) - Produtos e
   // Relatórios não são afetados.
   const [viewingAll, setViewingAll] = useState(false);
-  const activeShops = shops.filter((s) => s.status === 'active');
+  // useMemo (não só shops.filter direto) é essencial aqui - .filter() sempre
+  // devolve um array NOVO, e activeShops é dependência do useCallback "load"
+  // abaixo. Sem memoizar, cada render recriava load, o que recriava o
+  // useFocusEffect, que chamava load() de novo, causando um loop infinito de
+  // requisições (visto ao vivo: centenas de chamadas em segundos, travando
+  // no rate limit com erro 429).
+  const activeShops = useMemo(() => shops.filter((s) => s.status === 'active'), [shops]);
   const { period, setPeriod } = usePeriod();
   const { refreshSignal } = useDataRefresh();
   const [loadState, setLoadState] = useState<LoadState>('loading');
