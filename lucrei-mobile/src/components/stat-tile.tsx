@@ -1,9 +1,18 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Platform, Pressable, Text, View } from 'react-native';
 
 import { BlurredValue } from '@/components/blurred-value';
 import { useColors } from '@/lib/theme';
+
+// Toque em touchscreen dispara hover sintético (mouseenter/mouseleave) no
+// navegador, então misturar onPress (alternando) com onHoverIn/onHoverOut
+// (web) causava uma corrida: o toque abria pelo hover e fechava em seguida
+// pelo próprio toque, cancelando um ao outro - "toca e não acontece nada".
+// Detectando se o dispositivo tem hover de verdade, usa só um jeito de
+// interação por vez: hover no mouse, toque alternando em quem não tem mouse.
+const supportsHover =
+  Platform.OS === 'web' && typeof window !== 'undefined' && window.matchMedia?.('(hover: hover)').matches === true;
 
 type StatTileProps = {
   label: string;
@@ -44,9 +53,9 @@ export function StatTile({
         <>
           <Pressable
             className="absolute right-2.5 top-2.5 z-20"
-            onPress={() => setShowTooltip((v) => !v)}
-            onHoverIn={() => setShowTooltip(true)}
-            onHoverOut={() => setShowTooltip(false)}
+            onPress={supportsHover ? undefined : () => setShowTooltip((v) => !v)}
+            onHoverIn={supportsHover ? () => setShowTooltip(true) : undefined}
+            onHoverOut={supportsHover ? () => setShowTooltip(false) : undefined}
             hitSlop={8}>
             <Ionicons name="help-circle-outline" size={15} color={Colors.textMuted} />
           </Pressable>
