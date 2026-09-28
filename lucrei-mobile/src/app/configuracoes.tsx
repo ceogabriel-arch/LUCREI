@@ -183,14 +183,21 @@ function SettingsModal({
   visible,
   onClose,
   children,
+  desktopMaxWidth,
 }: {
   title: string;
   visible: boolean;
   onClose: () => void;
   children: React.ReactNode;
+  // Sobrepõe a largura padrão (480px) no desktop web - "Lojas conectadas"
+  // cresce em lista (mais lojas, mais marketplaces) e ficava apertada
+  // demais nessa largura fixa pensada pra formulários curtos (nome, senha).
+  desktopMaxWidth?: number;
 }) {
   const Colors = useColors();
   const modal = useModalPresentation();
+  const panelWidthStyle =
+    modal.isDesktop && desktopMaxWidth ? { ...modal.panelWidthStyle, maxWidth: desktopMaxWidth } : modal.panelWidthStyle;
 
   // Um <Modal> nativo é uma janela Android separada que não participa do
   // resize da Activity quando o teclado abre - por isso KeyboardAvoidingView
@@ -211,7 +218,7 @@ function SettingsModal({
   return (
     <View style={fullscreenOverlayStyle} className={`${modal.overlayClassName} ${modal.overlayBgClassName}`}>
       <KeyboardAvoidingView behavior="padding">
-        <SafeAreaView edges={['bottom']} style={{ maxHeight: '85%', ...modal.panelWidthStyle }} className={`${modal.panelClassName} bg-lucrei-bg`}>
+        <SafeAreaView edges={['bottom']} style={{ maxHeight: '85%', ...panelWidthStyle }} className={`${modal.panelClassName} bg-lucrei-bg`}>
           <View className="flex-row items-center justify-between border-b border-lucrei-border px-5 py-4">
             <Text className="text-base font-semibold text-lucrei-text">{title}</Text>
             <Pressable onPress={onClose} hitSlop={8}>
@@ -406,8 +413,8 @@ function ShopRow({ shop, onDisconnected }: { shop: Shop; onDisconnected: () => v
 
   return (
     <View className="rounded-xl border border-lucrei-border bg-lucrei-surface p-3.5">
-      <View className="flex-row items-center justify-between">
-        <View className="flex-1 pr-2">
+      <View className="flex-row items-center justify-between gap-3">
+        <View className="flex-1">
           <Text className="text-sm text-lucrei-text" numberOfLines={1}>
             {shop.shopName}
           </Text>
@@ -415,24 +422,27 @@ function ShopRow({ shop, onDisconnected }: { shop: Shop; onDisconnected: () => v
             {shop.provider === 'mercado_livre' ? 'Mercado Livre' : 'Shopee'}
           </Text>
         </View>
-        <View
-          className="rounded-full px-2 py-0.5"
-          style={{ backgroundColor: active ? Colors.gold : Colors.surfaceAlt }}>
-          <Text className="text-[10px] font-medium" style={{ color: active ? Colors.onGold : Colors.textMuted }}>
-            {active ? 'Ativa' : 'Desconectada'}
-          </Text>
+        <View className="flex-row items-center gap-3">
+          <View
+            className="rounded-full px-2 py-0.5"
+            style={{ backgroundColor: active ? Colors.gold : Colors.surfaceAlt }}>
+            <Text className="text-[10px] font-medium" style={{ color: active ? Colors.onGold : Colors.textMuted }}>
+              {active ? 'Ativa' : 'Desconectada'}
+            </Text>
+          </View>
+          {active && (
+            <Pressable onPress={confirmDisconnect} disabled={disconnecting} hitSlop={8}>
+              {disconnecting ? (
+                <ActivityIndicator size="small" color={Colors.danger} />
+              ) : (
+                <Text className="text-xs font-medium text-lucrei-danger">Desconectar</Text>
+              )}
+            </Pressable>
+          )}
         </View>
       </View>
 
-      {active ? (
-        <Pressable onPress={confirmDisconnect} disabled={disconnecting} className="mt-3 self-start">
-          {disconnecting ? (
-            <ActivityIndicator size="small" color={Colors.danger} />
-          ) : (
-            <Text className="text-xs font-medium text-lucrei-danger">Desconectar</Text>
-          )}
-        </Pressable>
-      ) : (
+      {!active && (
         <Text className="mt-2 text-xs text-lucrei-textMuted">
           Desconectada em {shop.disconnectedAt ? dateFormatter.format(new Date(shop.disconnectedAt)) : '—'}. Seus
           dados ficam guardados — conecte de novo na tela Início quando quiser.
@@ -612,7 +622,11 @@ export default function ConfiguracoesScreen() {
         <PasswordSection />
       </SettingsModal>
 
-      <SettingsModal title="Lojas conectadas" visible={openMenu === 'shops'} onClose={() => setOpenMenu(null)}>
+      <SettingsModal
+        title="Lojas conectadas"
+        visible={openMenu === 'shops'}
+        onClose={() => setOpenMenu(null)}
+        desktopMaxWidth={640}>
         <ShopsList />
       </SettingsModal>
 
