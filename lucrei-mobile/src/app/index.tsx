@@ -12,7 +12,7 @@ import { Screen } from '@/components/screen';
 import { ShopPicker } from '@/components/shop-picker';
 import { Sparkline } from '@/components/sparkline';
 import { StatTile } from '@/components/stat-tile';
-import { ApiError, getSummary, type Summary } from '@/lib/api';
+import { ApiError, getCombinedSummary, getSummary, type Summary } from '@/lib/api';
 import { showAlert } from '@/lib/alert';
 import { useAuth } from '@/lib/auth';
 import { useDataRefresh } from '@/lib/data-refresh';
@@ -48,6 +48,10 @@ export default function InicioScreen() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [lifetimeProfit, setLifetimeProfit] = useState<number | null>(null);
+  // "Todas as lojas" é um modo só dessa tela (não faz parte do contexto
+  // compartilhado useSelectedShop, que Pedidos/Produtos/Relatórios também
+  // usam e continuam sempre olhando uma loja de cada vez).
+  const [viewingAll, setViewingAll] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   async function handleConnectShopee() {
@@ -152,21 +156,23 @@ export default function InicioScreen() {
   const token = state.status === 'authenticated' ? state.token : null;
 
   const loadSummary = useCallback(async () => {
-    if (!token || !selectedShop) {
+    if (!token || (!viewingAll && !selectedShop)) {
       setSummary(null);
       setSummaryLoading(false);
       return;
     }
     setSummaryLoading(true);
     try {
-      const s = await getSummary(token, selectedShop.id, PERIOD_TO_API[period]);
+      const s = viewingAll
+        ? await getCombinedSummary(token, PERIOD_TO_API[period])
+        : await getSummary(token, selectedShop!.id, PERIOD_TO_API[period]);
       setSummary(s);
     } catch {
       setSummary(null);
     } finally {
       setSummaryLoading(false);
     }
-  }, [token, selectedShop, period]);
+  }, [token, selectedShop, period, viewingAll]);
 
   useEffect(() => {
     setSummary(null);
@@ -187,15 +193,19 @@ export default function InicioScreen() {
     setRefreshing(false);
   }
 
+  // Sempre soma TODAS as lojas, independente do modo de visualização atual
+  // ("Todas as lojas" ou uma loja só) - as conquistas são da conta, não da
+  // loja selecionada no momento (lucrar R$100 numa loja e R$50 noutra conta
+  // R$150 pra desbloquear um patamar, não fica separado por loja).
   useEffect(() => {
-    if (state.status !== 'authenticated' || !selectedShop) {
+    if (state.status !== 'authenticated') {
       setLifetimeProfit(null);
       return;
     }
-    getSummary(state.token, selectedShop.id, 'all')
+    getCombinedSummary(state.token, 'all')
       .then((s) => setLifetimeProfit(s.profit))
       .catch(() => setLifetimeProfit(null));
-  }, [state.status, selectedShop]);
+  }, [state.status, token, shops.length]);
 
   // Só loja ATIVA conta - com uma loja só desconectada, "hasShop" contando
   // qualquer status fazia esse trecho achar que tinha loja de verdade
@@ -287,7 +297,11 @@ export default function InicioScreen() {
               style={{ width: LOGO_WIDTH, height: LOGO_HEIGHT }}
               contentFit="contain"
             />
-            <ShopPicker />
+            <ShopPicker
+              viewingAll={viewingAll}
+              onSelectAll={() => setViewingAll(true)}
+              onSelectShop={() => setViewingAll(false)}
+            />
           </View>
           <View
             className="h-2 w-2 rounded-full"
@@ -490,11 +504,12 @@ export default function InicioScreen() {
         </Text>
         {!stillLoading && (
           <Text className="mt-3 text-center text-xs text-lucrei-textMuted">
-            {showingRealData
-              ? `Loja conectada: ${selectedShop!.shopName}.`
-              : hasShop
-                ? `Loja conectada: ${selectedShop!.shopName}. Ainda sem pedidos sincronizados nesse período.`
-                : 'Os números acima são um exemplo. Conecte sua loja para ver o seu lucro real.'}
+            {(() => {
+              const shopLabel = viewingAll ? 'Todas as lojas' : selectedShop!.shopName;
+              if (showingRealData) return `Loja conectada: ${shopLabel}.`;
+              if (hasShop) return `Loja conectada: ${shopLabel}. Ainda sem pedidos sincronizados nesse período.`;
+              return 'Os números acima são um exemplo. Conecte sua loja para ver o seu lucro real.';
+            })()}
           </Text>
         )}
       </ScrollView>

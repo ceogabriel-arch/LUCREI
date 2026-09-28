@@ -157,6 +157,15 @@ export function getSummary(token: string, shopId: string, period: Period) {
   });
 }
 
+// Soma o resumo de todas as lojas ativas da conta (qualquer marketplace) -
+// usado pra "Todas as lojas" no Início e pro lucro vitalício das conquistas
+// (que sempre precisa ser cross-loja, não só da loja selecionada no momento).
+export function getCombinedSummary(token: string, period: Period) {
+  return request<Summary>(`/summary?period=${period}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 // from/to (ISO) pro relatório de ano/mês específico em Relatórios - period
 // só cobre os presets fixos (hoje/7d/30d/all), não um intervalo arbitrário.
 export function getSummaryRange(token: string, shopId: string, from: Date, to: Date) {

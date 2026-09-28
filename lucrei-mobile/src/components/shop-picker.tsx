@@ -7,11 +7,23 @@ import { useModalPresentation } from '@/lib/responsive';
 import { useSelectedShop } from '@/lib/selected-shop';
 import { useColors } from '@/lib/theme';
 
-export function ShopPicker() {
+type ShopPickerProps = {
+  // "Todas as lojas" é um modo só do Início, não faz parte do contexto
+  // compartilhado (useSelectedShop) - as outras telas (Pedidos, Produtos,
+  // Relatórios) continuam sempre olhando uma loja de cada vez.
+  viewingAll?: boolean;
+  onSelectAll?: () => void;
+  onSelectShop?: () => void;
+};
+
+export function ShopPicker({ viewingAll = false, onSelectAll, onSelectShop }: ShopPickerProps) {
   const { shops, selectedShop, selectShop } = useSelectedShop();
   const Colors = useColors();
   const modal = useModalPresentation();
   const [open, setOpen] = useState(false);
+  const activeShopsCount = shops.filter((s) => s.status === 'active').length;
+
+  const displayName = viewingAll ? 'Todas as lojas' : (selectedShop?.shopName ?? 'Nenhuma loja conectada');
 
   return (
     <>
@@ -19,7 +31,7 @@ export function ShopPicker() {
         onPress={() => shops.length > 0 && setOpen(true)}
         className="mt-1.5 flex-row items-center gap-1"
         hitSlop={8}>
-        <Text className="text-xs text-lucrei-textMuted">{selectedShop?.shopName ?? 'Nenhuma loja conectada'}</Text>
+        <Text className="text-xs text-lucrei-textMuted">{displayName}</Text>
         {shops.length > 1 && <Ionicons name="chevron-down" size={12} color={Colors.textMuted} />}
       </Pressable>
 
@@ -33,13 +45,26 @@ export function ShopPicker() {
               </Pressable>
             </View>
             <ScrollView style={{ flexShrink: 1 }} contentContainerClassName="gap-2.5 p-5">
+              {onSelectAll && activeShopsCount > 1 && (
+                <Pressable
+                  onPress={() => {
+                    onSelectAll();
+                    setOpen(false);
+                  }}
+                  className="flex-row items-center justify-between rounded-2xl border p-4"
+                  style={{ borderColor: viewingAll ? Colors.gold : Colors.border }}>
+                  <Text className="text-sm text-lucrei-text">Todas as lojas</Text>
+                  {viewingAll && <Ionicons name="checkmark-circle" size={18} color={Colors.gold} />}
+                </Pressable>
+              )}
               {shops.map((shop) => {
-                const active = shop.id === selectedShop?.id;
+                const active = !viewingAll && shop.id === selectedShop?.id;
                 return (
                   <Pressable
                     key={shop.id}
                     onPress={() => {
                       selectShop(shop.id);
+                      onSelectShop?.();
                       setOpen(false);
                     }}
                     className="flex-row items-center justify-between rounded-2xl border p-4"
