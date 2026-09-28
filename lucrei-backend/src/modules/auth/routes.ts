@@ -230,6 +230,16 @@ export async function authRoutes(app: FastifyInstance) {
     '/auth/push-token',
     { onRequest: [app.authenticate], schema: { body: pushTokenSchema } },
     async (request, reply) => {
+      // pushToken não é único no banco por conta nenhuma regra impedir -
+      // trocar de conta no MESMO aparelho (login/logout, várias contas de
+      // teste) deixava a conta antiga com o token "preso", e as duas
+      // recebiam notificação no mesmo celular. Registrar aqui rouba o token
+      // de qualquer outra conta que o tivesse antes, garantindo que só a
+      // conta logada agora nesse aparelho recebe push por ele.
+      await prisma.user.updateMany({
+        where: { pushToken: request.body.token, id: { not: request.user.sub } },
+        data: { pushToken: null },
+      });
       await prisma.user.update({
         where: { id: request.user.sub },
         data: { pushToken: request.body.token },
