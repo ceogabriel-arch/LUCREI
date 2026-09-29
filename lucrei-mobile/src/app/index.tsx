@@ -516,7 +516,9 @@ export default function InicioScreen() {
           </View>
         )}
 
-        {state.status === 'authenticated' && hasShop && lifetimeProfit !== null && (
+        {/* No desktop largo, Conquistas já mora fixa na barra lateral (ver
+            DesktopShell) - manter aqui também seria duplicado. */}
+        {!isDesktop && state.status === 'authenticated' && hasShop && lifetimeProfit !== null && (
           <AchievementsCard totalProfit={lifetimeProfit} accountCreatedAt={state.user.createdAt} />
         )}
 

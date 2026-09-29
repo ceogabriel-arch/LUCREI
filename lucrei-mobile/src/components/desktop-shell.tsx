@@ -1,11 +1,14 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { usePathname, useRouter } from 'expo-router';
-import type { PropsWithChildren } from 'react';
+import { useEffect, useState, type PropsWithChildren } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
+import { AchievementsCard } from '@/components/achievements-card';
+import { getCombinedSummary } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useIsDesktopWeb } from '@/lib/responsive';
+import { useSelectedShop } from '@/lib/selected-shop';
 import { useAppTheme } from '@/lib/theme';
 
 const LOGO_LIGHT = require('../../assets/images/lucrei-logo-light.png');
@@ -39,9 +42,27 @@ export function DesktopShell({ children }: PropsWithChildren) {
 
 function DesktopShellInner({ children }: PropsWithChildren) {
   const { scheme, colors: Colors } = useAppTheme();
-  const { logout } = useAuth();
+  const { state, logout } = useAuth();
+  const { shops } = useSelectedShop();
   const pathname = usePathname();
   const router = useRouter();
+  const [lifetimeProfit, setLifetimeProfit] = useState<number | null>(null);
+
+  const token = state.status === 'authenticated' ? state.token : null;
+  const hasShop = shops.some((s) => s.status === 'active');
+
+  // Mesmo lucro vitalício que alimentava o card de Conquistas na tela
+  // Início - fica aqui porque no desktop largo o card mora fixo na barra
+  // lateral (visível em toda tela, não só na Início).
+  useEffect(() => {
+    if (!token) {
+      setLifetimeProfit(null);
+      return;
+    }
+    getCombinedSummary(token, 'all')
+      .then((s) => setLifetimeProfit(s.profit))
+      .catch(() => setLifetimeProfit(null));
+  }, [token, shops.length]);
 
   return (
     <View className="flex-1 flex-row bg-lucrei-bg">
@@ -54,6 +75,12 @@ function DesktopShellInner({ children }: PropsWithChildren) {
               contentFit="contain"
             />
           </View>
+
+          {state.status === 'authenticated' && hasShop && lifetimeProfit !== null && (
+            <View className="mb-4">
+              <AchievementsCard compact totalProfit={lifetimeProfit} accountCreatedAt={state.user.createdAt} />
+            </View>
+          )}
 
           <View className="gap-1">
             {NAV_ITEMS.map((item) => {

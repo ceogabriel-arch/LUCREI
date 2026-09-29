@@ -270,9 +270,14 @@ function ClaimFormModal({
 export function AchievementsCard({
   totalProfit,
   accountCreatedAt,
+  compact = false,
 }: {
   totalProfit: number;
   accountCreatedAt: string;
+  // Versão mais estreita pra caber na barra lateral do desktop (240px, bem
+  // menos que a largura do conteúdo da tela Início) - badge menor e sem o
+  // texto "Lucrei" no título, senão os 6 círculos não cabem numa linha só.
+  compact?: boolean;
 }) {
   const { state: authState } = useAuth();
   const Colors = useColors();
@@ -308,21 +313,27 @@ export function AchievementsCard({
     <>
       <Pressable
         onPress={() => setExpanded(true)}
-        className="mt-4 rounded-3xl border border-lucrei-border bg-lucrei-surface">
-        <View className="p-4">
+        className={compact ? 'rounded-2xl border border-lucrei-border bg-lucrei-surface' : 'mt-4 rounded-3xl border border-lucrei-border bg-lucrei-surface'}>
+        <View className={compact ? 'p-3' : 'p-4'}>
           <View className="flex-row items-center justify-between">
             <View className="flex-row items-center gap-2">
               <View className="h-7 w-7 items-center justify-center rounded-full" style={{ backgroundColor: Colors.gold }}>
                 <Ionicons name="trophy" size={14} color={Colors.onGold} />
               </View>
-              <Text className="text-sm font-semibold text-lucrei-text">Conquistas Lucrei</Text>
+              <Text className="text-sm font-semibold text-lucrei-text">{compact ? 'Conquistas' : 'Conquistas Lucrei'}</Text>
             </View>
             <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
           </View>
 
           <View className="mt-4 flex-row items-center justify-between">
             {TIERS.map((tier, i) => (
-              <TierBadge key={tier.threshold} tier={tier} unlocked={unlockedFlags[i]} isNext={i === nextIndex} />
+              <TierBadge
+                key={tier.threshold}
+                tier={tier}
+                unlocked={unlockedFlags[i]}
+                isNext={i === nextIndex}
+                size={compact ? 22 : 30}
+              />
             ))}
           </View>
 
@@ -330,7 +341,7 @@ export function AchievementsCard({
             <>
               <View className="mt-4 flex-row items-center gap-2">
                 <Ionicons name={nextTier.icon} size={14} color={Colors.gold} />
-                <Text className="flex-1 text-sm font-medium text-lucrei-text" numberOfLines={1}>
+                <Text className="flex-1 text-sm font-medium text-lucrei-text" numberOfLines={compact ? 2 : 1}>
                   {nextTier.reward}
                 </Text>
               </View>
