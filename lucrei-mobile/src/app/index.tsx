@@ -7,6 +7,7 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, T
 
 import { AchievementsCard } from '@/components/achievements-card';
 import { BlurredValue } from '@/components/blurred-value';
+import { MarketplaceBadge } from '@/components/marketplace-badge';
 import { PastDueBanner } from '@/components/past-due-banner';
 import { Screen } from '@/components/screen';
 import { ShopPicker } from '@/components/shop-picker';
@@ -55,6 +56,9 @@ export default function InicioScreen() {
   const [connecting, setConnecting] = useState<'shopee' | 'mercado_livre' | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
+  const [perShopProfit, setPerShopProfit] = useState<
+    { shopId: string; shopName: string; provider: 'shopee' | 'mercado_livre'; profit: number }[]
+  >([]);
   const [forecast, setForecast] = useState<OrderForecast | null>(null);
   const [lifetimeProfit, setLifetimeProfit] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -163,21 +167,41 @@ export default function InicioScreen() {
   const loadSummary = useCallback(async () => {
     if (!token || (!viewingAll && !selectedShop)) {
       setSummary(null);
+      setPerShopProfit([]);
       setSummaryLoading(false);
       return;
     }
     setSummaryLoading(true);
     try {
-      const s = viewingAll
-        ? await getCombinedSummary(token, PERIOD_TO_API[period])
-        : await getSummary(token, selectedShop!.id, PERIOD_TO_API[period]);
-      setSummary(s);
+      if (viewingAll) {
+        const activeShops = shops.filter((s) => s.status === 'active');
+        const [combined, perShop] = await Promise.all([
+          getCombinedSummary(token, PERIOD_TO_API[period]),
+          Promise.all(
+            activeShops.map((shop) =>
+              getSummary(token, shop.id, PERIOD_TO_API[period]).then((s) => ({
+                shopId: shop.id,
+                shopName: shop.shopName,
+                provider: shop.provider,
+                profit: s.profit,
+              }))
+            )
+          ),
+        ]);
+        setSummary(combined);
+        setPerShopProfit(perShop);
+      } else {
+        const s = await getSummary(token, selectedShop!.id, PERIOD_TO_API[period]);
+        setSummary(s);
+        setPerShopProfit([]);
+      }
     } catch {
       setSummary(null);
+      setPerShopProfit([]);
     } finally {
       setSummaryLoading(false);
     }
-  }, [token, selectedShop, period, viewingAll]);
+  }, [token, selectedShop, period, viewingAll, shops]);
 
   useEffect(() => {
     setSummary(null);
@@ -497,6 +521,36 @@ export default function InicioScreen() {
                     {formatBRL(forecast.projectedProfit)}
                   </Text>
                 )}
+              </View>
+            )}
+
+            {/* Só faz sentido com "Todas as lojas" e 2+ lojas - com uma loja
+                só, o card acima já mostra o lucro dela, repetir aqui seria
+                redundante. */}
+            {!stillLoading && viewingAll && perShopProfit.length > 1 && (
+              <View className="mt-3 gap-2">
+                <Text className="text-sm font-medium text-lucrei-textMuted">Lucro por loja</Text>
+                {perShopProfit.map((shop) => (
+                  <View
+                    key={shop.shopId}
+                    className="flex-row items-center justify-between rounded-2xl border border-lucrei-border bg-lucrei-surface p-3.5">
+                    <View className="flex-row items-center gap-3">
+                      <MarketplaceBadge provider={shop.provider} />
+                      <Text className="text-sm text-lucrei-text" numberOfLines={1}>
+                        {shop.shopName}
+                      </Text>
+                    </View>
+                    {subscriptionAccess.isPastDue ? (
+                      <BlurredValue width={70} />
+                    ) : (
+                      <Text
+                        className="text-sm font-bold"
+                        style={{ color: shop.profit >= 0 ? Colors.gold : Colors.danger }}>
+                        {formatBRL(shop.profit)}
+                      </Text>
+                    )}
+                  </View>
+                ))}
               </View>
             )}
           </>
