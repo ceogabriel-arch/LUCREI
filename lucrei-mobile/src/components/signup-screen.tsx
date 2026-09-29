@@ -84,6 +84,7 @@ export function SignupScreen({ onNavigateToLogin }: SignupScreenProps) {
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               autoComplete="password-new"
+              onSubmitEditing={handleSubmit}
             />
             {confirmPassword.length > 0 && !passwordsMatch ? (
               <Text className="-mt-2 mb-4 text-xs text-lucrei-danger">As senhas não coincidem.</Text>

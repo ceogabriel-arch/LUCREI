@@ -200,6 +200,7 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
               value={password}
               onChangeText={setPassword}
               autoComplete="off"
+              onSubmitEditing={handleSubmit}
             />
 
             <View className="mb-2 flex-row items-center justify-between">
