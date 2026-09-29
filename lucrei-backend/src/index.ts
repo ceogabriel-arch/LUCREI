@@ -15,6 +15,7 @@ import { billingRoutes } from './modules/billing/routes';
 import { labelRoutes } from './modules/labels/routes';
 import { legalRoutes } from './modules/legal/routes';
 import { orderRoutes } from './modules/orders/routes';
+import { orderForecastRoutes } from './modules/order-forecast/routes';
 import { passwordResetRoutes } from './modules/password-reset/routes';
 import { plansRoutes } from './modules/plans/routes';
 import { productRoutes } from './modules/products/routes';
@@ -123,6 +124,7 @@ async function main() {
   await app.register(productRoutes);
   await app.register(summaryRoutes);
   await app.register(orderRoutes);
+  await app.register(orderForecastRoutes);
   await app.register(labelRoutes);
   await app.register(plansRoutes);
   await app.register(legalRoutes);

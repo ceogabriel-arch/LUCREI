@@ -5,6 +5,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { encrypt } from '../../lib/crypto';
 import { sendShopReconnectAttemptEmail } from '../../lib/email';
 import { prisma } from '../../lib/prisma';
+import { trackRecentOrderEvent } from '../../lib/recent-order-events';
 import { exchangeCodeForToken, getAuthorizationUrl, getShopInfo } from '../../shopee-client';
 import { runShopSync, syncOneOrder } from '../sync/service';
 
@@ -285,14 +286,22 @@ export async function shopRoutes(app: FastifyInstance) {
       const orderSn = data?.ordersn ?? data?.order_sn;
       const status = data?.status ?? data?.order_status;
 
-      if (orderSn && status === ORDER_COMPLETED_STATUS) {
+      if (orderSn && status) {
         const shop = await prisma.shop.findUnique({ where: { shopeeShopId: String(shopeeShopId) } });
         if (shop) {
-          // Não deixa a Shopee esperando o pedido inteiro ser processado e a
-          // notificação ser enviada — responde 200 e termina em segundo
-          // plano. syncOneOrder já manda a notificação sozinho (ver
-          // notifyOrderCompletedIfNeeded dentro de processOrder).
-          syncOneOrder(shop.id, orderSn, status).catch((err) => app.log.error(err));
+          // Alimenta a previsão de lucro do Início (contagem de pedidos
+          // recém-comprados) pra QUALQUER status, não só concluído - nunca
+          // deixa isso atrapalhar/atrasar a resposta pra Shopee nem o fluxo
+          // de sincronização de verdade abaixo.
+          trackRecentOrderEvent(shop.id, orderSn, status).catch((err) => app.log.error(err));
+
+          if (status === ORDER_COMPLETED_STATUS) {
+            // Não deixa a Shopee esperando o pedido inteiro ser processado e
+            // a notificação ser enviada — responde 200 e termina em segundo
+            // plano. syncOneOrder já manda a notificação sozinho (ver
+            // notifyOrderCompletedIfNeeded dentro de processOrder).
+            syncOneOrder(shop.id, orderSn, status).catch((err) => app.log.error(err));
+          }
         }
       }
     } else if (code !== undefined && code !== SHOP_AUTHORIZATION_CANCELED_PUSH_CODE) {

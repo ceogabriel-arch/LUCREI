@@ -166,6 +166,23 @@ export function getCombinedSummary(token: string, period: Period) {
   });
 }
 
+// Previsão de lucro (Início) - pedidos comprados na Shopee que ainda não
+// completaram, multiplicado pelo lucro médio dos pedidos concluídos
+// recentemente. Estimativa, não é o lucro real que "Você lucrou" mostra.
+export type OrderForecast = { pendingCount: number; projectedProfit: number };
+
+export function getOrderForecast(token: string, shopId: string) {
+  return request<OrderForecast>(`/shops/${shopId}/order-forecast`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function getCombinedOrderForecast(token: string) {
+  return request<OrderForecast>('/order-forecast', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 // from/to (ISO) pro relatório de ano/mês específico em Relatórios - period
 // só cobre os presets fixos (hoje/7d/30d/all), não um intervalo arbitrário.
 export function getSummaryRange(token: string, shopId: string, from: Date, to: Date) {

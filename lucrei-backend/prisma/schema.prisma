@@ -168,6 +168,7 @@ model Shop {
   products      Product[]
   orders        Order[]
   importBatches CostImportBatch[]
+  recentOrderEvents RecentOrderEvent[]
 
   @@index([userId])
 }
@@ -280,6 +281,29 @@ model OrderLineItem {
   @@index([orderId])
   @@index([productId])
   @@index([shopeeItemId])
+}
+
+// Rastro leve de "pedido comprado, ainda não sabemos o lucro" - alimenta só
+// a previsão de lucro do Início (contagem de pedidos pendentes x lucro médio
+// recente), nunca o faturamento/lucro real. Order continua existindo só pra
+// pedido COMPLETED (a Shopee manda o valor final só depois disso) - separar
+// em tabela própria evita qualquer chance de pedido ainda não confirmado
+// vazar pro cálculo de lucro que o usuário já confia hoje. Uma linha por
+// pedido, atualizada a cada push de status novo da Shopee pro mesmo pedido.
+model RecentOrderEvent {
+  id            String   @id @default(cuid())
+  shopId        String
+  shopeeOrderSn String   @unique
+  orderStatus   String
+  // Preenchido com o horário em que recebemos o PRIMEIRO push desse pedido
+  // (a Shopee não manda o horário de criação nesse tipo de push) - usado só
+  // pra descartar pedido "fantasma" há tempo demais sem resolução.
+  orderDate     DateTime
+  updatedAt     DateTime @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([shopId])
 }
 
 model CostImportBatch {

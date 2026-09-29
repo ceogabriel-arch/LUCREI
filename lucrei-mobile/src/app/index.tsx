@@ -12,7 +12,15 @@ import { Screen } from '@/components/screen';
 import { ShopPicker } from '@/components/shop-picker';
 import { Sparkline } from '@/components/sparkline';
 import { StatTile } from '@/components/stat-tile';
-import { ApiError, getCombinedSummary, getSummary, type Summary } from '@/lib/api';
+import {
+  ApiError,
+  getCombinedOrderForecast,
+  getCombinedSummary,
+  getOrderForecast,
+  getSummary,
+  type OrderForecast,
+  type Summary,
+} from '@/lib/api';
 import { showAlert } from '@/lib/alert';
 import { useAuth } from '@/lib/auth';
 import { useDataRefresh } from '@/lib/data-refresh';
@@ -47,6 +55,7 @@ export default function InicioScreen() {
   const [connecting, setConnecting] = useState<'shopee' | 'mercado_livre' | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
+  const [forecast, setForecast] = useState<OrderForecast | null>(null);
   const [lifetimeProfit, setLifetimeProfit] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -183,9 +192,34 @@ export default function InicioScreen() {
     if (refreshSignal > 0) loadSummary();
   }, [refreshSignal, loadSummary]);
 
+  // Previsão de lucro (pedidos recém-comprados na Shopee, ainda não
+  // concluídos) - estimativa separada do resumo real, não trava nem
+  // depende dele. Não é filtrada por período (Hoje/7 dias/30 dias): é
+  // sempre "quanto tem em aberto agora", igual o contador em si.
+  const loadForecast = useCallback(async () => {
+    if (!token || (!viewingAll && !selectedShop)) {
+      setForecast(null);
+      return;
+    }
+    try {
+      const f = viewingAll ? await getCombinedOrderForecast(token) : await getOrderForecast(token, selectedShop!.id);
+      setForecast(f);
+    } catch {
+      setForecast(null);
+    }
+  }, [token, selectedShop, viewingAll]);
+
+  useEffect(() => {
+    loadForecast();
+  }, [loadForecast]);
+
+  useEffect(() => {
+    if (refreshSignal > 0) loadForecast();
+  }, [refreshSignal, loadForecast]);
+
   async function handleRefresh() {
     setRefreshing(true);
-    await Promise.all([refreshShops(), loadSummary()]);
+    await Promise.all([refreshShops(), loadSummary(), loadForecast()]);
     setRefreshing(false);
   }
 
@@ -439,6 +473,31 @@ export default function InicioScreen() {
                     <StatTile key={kpi.label} {...kpi} blurred={subscriptionAccess.isPastDue} />
                   ))}
               </ScrollView>
+            )}
+
+            {/* Estimativa, separada do lucro real acima - pedido comprado na
+                Shopee mas ainda em processamento, taxa/frete exatos só saem
+                quando ele completa de verdade. Só aparece com algo pra
+                mostrar, pra não virar um card vazio "0 pedidos". */}
+            {!stillLoading && forecast !== null && forecast.pendingCount > 0 && (
+              <View
+                className="mt-3 flex-row items-center justify-between rounded-2xl border border-dashed p-4"
+                style={{ borderColor: Colors.goldDim, backgroundColor: Colors.surfaceAlt }}>
+                <View className="flex-1 pr-3">
+                  <Text className="text-sm font-medium text-lucrei-text">Previsão de lucro (estimado)</Text>
+                  <Text className="mt-0.5 text-xs text-lucrei-textMuted">
+                    {forecast.pendingCount} {forecast.pendingCount === 1 ? 'pedido comprado' : 'pedidos comprados'}{' '}
+                    ainda em processamento na Shopee.
+                  </Text>
+                </View>
+                {subscriptionAccess.isPastDue ? (
+                  <BlurredValue width={70} />
+                ) : (
+                  <Text className="text-lg font-bold" style={{ color: Colors.goldDim }}>
+                    {formatBRL(forecast.projectedProfit)}
+                  </Text>
+                )}
+              </View>
             )}
           </>
         ) : (

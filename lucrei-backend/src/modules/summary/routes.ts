@@ -28,7 +28,7 @@ type ShopSummary = {
 // quanto na combinada (soma de todas) - o cálculo em si (quais pedidos
 // entram, como o lucro é rateado) é idêntico nos dois casos, só muda se o
 // resultado de uma loja é devolvido puro ou somado com o das outras.
-async function computeShopSummary(shop: Shop, query: SummaryQuery): Promise<ShopSummary> {
+export async function computeShopSummary(shop: Shop, query: SummaryQuery): Promise<ShopSummary> {
   // from/to (usado pelo relatório por ano/mês) manda mais que period -
   // permite um intervalo arbitrário em vez dos presets fixos.
   const fromDate = query.from ? new Date(query.from) : null;
