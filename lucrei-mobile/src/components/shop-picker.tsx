@@ -23,10 +23,13 @@ export function ShopPicker() {
     <>
       <Pressable
         onPress={() => shops.length > 0 && setOpen(true)}
-        className="mt-1.5 flex-row items-center gap-1"
+        disabled={shops.length <= 1}
+        className="mt-2 flex-row items-center self-start gap-1.5 rounded-full border px-3 py-1.5"
+        style={{ borderColor: Colors.border, backgroundColor: Colors.surface }}
         hitSlop={8}>
-        <Text className="text-xs text-lucrei-textMuted">{displayName}</Text>
-        {shops.length > 1 && <Ionicons name="chevron-down" size={12} color={Colors.textMuted} />}
+        <Ionicons name="storefront-outline" size={13} color={Colors.textMuted} />
+        <Text className="text-xs font-medium text-lucrei-text">{displayName}</Text>
+        {shops.length > 1 && <Ionicons name="chevron-down" size={13} color={Colors.textMuted} />}
       </Pressable>
 
       <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
