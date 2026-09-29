@@ -6,7 +6,7 @@ import { encrypt } from '../../lib/crypto';
 import { sendShopReconnectAttemptEmail } from '../../lib/email';
 import { prisma } from '../../lib/prisma';
 import { exchangeCodeForToken, getAuthorizationUrl, getShopInfo } from '../../shopee-client';
-import { syncOneOrder } from '../sync/service';
+import { runShopSync, syncOneOrder } from '../sync/service';
 
 type AuthorizeUrlQuery = {
   returnUrl?: string;
@@ -185,6 +185,13 @@ export async function shopRoutes(app: FastifyInstance) {
           refreshTokenExpiresAt: new Date(now + 30 * 24 * 60 * 60 * 1000),
         },
       });
+
+      // Dispara a primeira sincronização sozinho, sem esperar o usuário
+      // achar e tocar em "Sincronizar agora" - ficava implícito demais que
+      // conectar a loja não trazia nenhum pedido sozinho. Não segura o
+      // redirect esperando terminar (uma loja com histórico grande demora);
+      // o app já mostra o status via GET /shops/:shopId/sync normalmente.
+      runShopSync(shop.id).catch((err) => app.log.error(err));
 
       return reply.redirect(`${returnUrl}?status=success`);
     } catch (err) {
