@@ -66,7 +66,7 @@ export function StatTile({
           </Pressable>
           {showTooltip && (
             <View
-              className="absolute w-40 rounded-xl border border-lucrei-border bg-lucrei-bg p-2.5"
+              className={`absolute rounded-xl border border-lucrei-border bg-lucrei-bg ${large ? 'w-64 p-3.5' : 'w-40 p-2.5'}`}
               // Acima do card inteiro, não por cima do valor - por cima
               // sobrepondo (top-7) dependia da dica cobrir o card sem sobrar
               // nada, e no web a caixa não ficava opaca o bastante: o texto
@@ -75,12 +75,13 @@ export function StatTile({
               // caixa cresce pra cima a partir daí sozinha, não depende de
               // saber a altura da dica (que varia com o texto) nem de
               // porcentagem, que quebrou o hover inteiro numa tentativa
-              // anterior. 100px garante que o "bottom" fique acima até da
-              // variante mais alta do card (com linha de delta).
+              // anterior. O card "large" é bem mais alto (texto 3xl + mais
+              // padding), por isso o "bottom" também cresce junto - senão a
+              // dica nascia por cima do próprio valor do card grande.
               style={{
-                bottom: 100,
+                bottom: large ? 150 : 100,
                 left: '50%',
-                marginLeft: -80,
+                marginLeft: large ? -128 : -80,
                 zIndex: 40,
                 shadowColor: '#000',
                 shadowOpacity: 0.35,
@@ -88,7 +89,9 @@ export function StatTile({
                 shadowOffset: { width: 0, height: 4 },
                 elevation: 12,
               }}>
-              <Text className="text-[11px] leading-4 text-lucrei-text">{helpText}</Text>
+              <Text className={large ? 'text-sm leading-5 text-lucrei-text' : 'text-[11px] leading-4 text-lucrei-text'}>
+                {helpText}
+              </Text>
             </View>
           )}
         </>

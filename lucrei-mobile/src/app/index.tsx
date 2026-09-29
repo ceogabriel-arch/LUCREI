@@ -299,6 +299,14 @@ export default function InicioScreen() {
       .catch(() => setBackendStatus('offline'));
   }, []);
 
+  // "Shopee" só faz sentido nesse texto quando a loja selecionada é
+  // realmente uma Shopee - com "Todas as lojas" (mistura de marketplaces)
+  // ou uma loja Mercado Livre selecionada, nomear a marketplace errada
+  // era confuso (reportado ao vivo: "que líquido da Shopee ele vai fazer
+  // se ele é Mercado Livre?").
+  const marketplaceLabel = viewingAll ? 'Marketplace' : selectedShop?.provider === 'mercado_livre' ? 'Mercado Livre' : 'Shopee';
+  const marketplaceLabelLower = viewingAll ? 'do marketplace' : selectedShop?.provider === 'mercado_livre' ? 'do Mercado Livre' : 'da Shopee';
+
   const kpiTiles = showingRealData
     ? [
         {
@@ -310,12 +318,12 @@ export default function InicioScreen() {
           label: 'Custos totais',
           value: formatBRL(summary!.cost),
           positiveIsGood: false,
-          helpText: 'Soma de tudo que sai do seu bolso no período: custo do produto, frete líquido e taxas da Shopee.',
+          helpText: `Soma de tudo que sai do seu bolso no período: custo do produto, frete líquido e taxas ${marketplaceLabelLower}.`,
         },
         {
-          label: 'Líquido Shopee',
+          label: `Líquido ${marketplaceLabel}`,
           value: formatBRL(summary!.revenue - summary!.shopeeFees),
-          helpText: 'Faturamento menos as taxas cobradas pela Shopee. Ainda não desconta o custo do produto nem o frete.',
+          helpText: `Faturamento menos as taxas cobradas ${marketplaceLabelLower}. Ainda não desconta o custo do produto nem o frete.`,
         },
         {
           label: 'Pedidos',
