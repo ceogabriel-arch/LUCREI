@@ -480,10 +480,18 @@ export default function InicioScreen() {
 
             <Text className="mt-6 text-sm font-medium text-lucrei-textMuted">Resumo do período</Text>
             {isDesktop ? (
-              <View className="mt-3 flex-row flex-wrap gap-3">
+              // Grid de 3 colunas de verdade (não flex-wrap com largura fixa)
+              // pra ocupar a largura do desktop de forma proporcional, em vez
+              // de ficar pequeno e encostado à esquerda.
+              <View
+                className="mt-3"
+                // display:'grid' só existe no RN Web (é sempre isDesktop, ou
+                // seja sempre web) - o tipo ViewStyle do RN não conhece essa
+                // propriedade, daí o "as any" só nesse objeto de estilo.
+                style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 } as any}>
                 {!stillLoading &&
                   kpiTiles.map((kpi) => (
-                    <StatTile key={kpi.label} {...kpi} blurred={subscriptionAccess.isPastDue} />
+                    <StatTile key={kpi.label} {...kpi} blurred={subscriptionAccess.isPastDue} large />
                   ))}
               </View>
             ) : (

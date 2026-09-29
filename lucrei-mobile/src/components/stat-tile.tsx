@@ -25,6 +25,10 @@ type StatTileProps = {
   blurred?: boolean;
   /** Quando preenchido, mostra um "?" no canto que explica de onde vem o valor. */
   helpText?: string;
+  /** Grid de 3 colunas do desktop largo - preenche a célula (sem largura
+   * fixa) e usa texto maior. No mobile/scroll horizontal continua com a
+   * largura fixa de sempre, que cabe melhor numa fileira que rola de lado. */
+  large?: boolean;
 };
 
 export function StatTile({
@@ -35,6 +39,7 @@ export function StatTile({
   positiveIsGood = true,
   blurred = false,
   helpText,
+  large = false,
 }: StatTileProps) {
   const Colors = useColors();
   const isGood = (deltaDirection === 'up') === positiveIsGood;
@@ -43,7 +48,7 @@ export function StatTile({
 
   return (
     <View
-      className="w-[152px] rounded-2xl border border-lucrei-border bg-lucrei-surface p-4"
+      className={`${large ? 'w-full p-6' : 'w-[152px] p-4'} rounded-2xl border border-lucrei-border bg-lucrei-surface`}
       // A dica escapa da caixa do card (é mais larga que ele) via overflow
       // visible - sem promover o z-index do card INTEIRO (não só do ícone),
       // o próximo card do grid (que vem depois no HTML) pinta por cima
@@ -57,7 +62,7 @@ export function StatTile({
             onHoverIn={supportsHover ? () => setShowTooltip(true) : undefined}
             onHoverOut={supportsHover ? () => setShowTooltip(false) : undefined}
             hitSlop={8}>
-            <Ionicons name="help-circle-outline" size={15} color={Colors.textMuted} />
+            <Ionicons name="help-circle-outline" size={large ? 18 : 15} color={Colors.textMuted} />
           </Pressable>
           {showTooltip && (
             <View
@@ -88,26 +93,28 @@ export function StatTile({
           )}
         </>
       )}
-      <Text className="pr-4 text-xs text-lucrei-textMuted" numberOfLines={1}>
+      <Text className={`pr-4 text-lucrei-textMuted ${large ? 'text-sm' : 'text-xs'}`} numberOfLines={1}>
         {label}
       </Text>
       {blurred ? (
-        <View className="mt-1.5">
-          <BlurredValue width={70} height={18} />
+        <View className={large ? 'mt-2.5' : 'mt-1.5'}>
+          <BlurredValue width={large ? 110 : 70} height={large ? 30 : 18} />
         </View>
       ) : (
-        <Text className="mt-1.5 text-lg font-semibold text-lucrei-text" numberOfLines={1}>
+        <Text
+          className={`font-semibold text-lucrei-text ${large ? 'mt-2.5 text-3xl' : 'mt-1.5 text-lg'}`}
+          numberOfLines={1}>
           {value}
         </Text>
       )}
       {deltaLabel && !blurred ? (
-        <View className="mt-1 flex-row items-center gap-1">
+        <View className={`flex-row items-center gap-1 ${large ? 'mt-2' : 'mt-1'}`}>
           <Ionicons
             name={deltaDirection === 'down' ? 'arrow-down' : 'arrow-up'}
-            size={11}
+            size={large ? 14 : 11}
             color={deltaColor}
           />
-          <Text className="text-xs" style={{ color: deltaColor }}>
+          <Text className={large ? 'text-sm' : 'text-xs'} style={{ color: deltaColor }}>
             {deltaLabel}
           </Text>
         </View>
