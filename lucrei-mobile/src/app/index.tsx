@@ -497,9 +497,21 @@ export default function InicioScreen() {
         {!stillLoading && (
           <Text className="mt-3 text-center text-xs text-lucrei-textMuted">
             {(() => {
-              const shopLabel = viewingAll ? 'Todas as lojas' : selectedShop!.shopName;
-              if (showingRealData) return `Loja conectada: ${shopLabel}.`;
-              if (hasShop) return `Loja conectada: ${shopLabel}. Ainda sem pedidos sincronizados nesse período.`;
+              // selectedShop só é lido DENTRO de showingRealData/hasShop -
+              // os dois só são true quando existe loja ativa de verdade
+              // (ver comentário acima de hasShop). Calcular shopLabel antes
+              // dessa checagem quebrava com "Cannot read properties of
+              // null" pra quem não tem nenhuma loja ativa (só uma
+              // desconectada, por exemplo) - selectedShop!.shopName rodava
+              // mesmo indo cair no fallback "conecte sua loja" logo depois.
+              if (showingRealData) {
+                const shopLabel = viewingAll ? 'Todas as lojas' : selectedShop!.shopName;
+                return `Loja conectada: ${shopLabel}.`;
+              }
+              if (hasShop) {
+                const shopLabel = viewingAll ? 'Todas as lojas' : selectedShop!.shopName;
+                return `Loja conectada: ${shopLabel}. Ainda sem pedidos sincronizados nesse período.`;
+              }
               return 'Os números acima são um exemplo. Conecte sua loja para ver o seu lucro real.';
             })()}
           </Text>
