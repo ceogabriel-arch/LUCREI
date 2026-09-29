@@ -7,9 +7,11 @@ import { BlurredValue } from '@/components/blurred-value';
 import { DailyProfitChart } from '@/components/daily-profit-chart';
 import { PastDueBanner } from '@/components/past-due-banner';
 import { Screen } from '@/components/screen';
+import { ShopPicker } from '@/components/shop-picker';
 import type { ThemeColors } from '@/constants/theme';
 import {
   ApiError,
+  getCombinedSummary,
   getShopeeProducts,
   getSummary,
   getSummaryRange,
@@ -450,7 +452,11 @@ export default function RelatoriosScreen() {
   // recarregava o relatório de novo sem necessidade.
   const token = state.status === 'authenticated' ? state.token : null;
   const Colors = useColors();
-  const { selectedShop, loaded: shopsLoaded } = useSelectedShop();
+  const { shops, selectedShop, viewingAll, loaded: shopsLoaded } = useSelectedShop();
+  const activeShops = useMemo(() => shops.filter((s) => s.status === 'active'), [shops]);
+  // Catálogo com custo/lucro só existe pra Shopee (ML ainda não sincroniza
+  // produto) - mesmo filtro já usado em produtos.tsx pro modo combinado.
+  const shopeeShops = useMemo(() => activeShops.filter((s) => s.provider !== 'mercado_livre'), [activeShops]);
   const { period, setPeriod } = usePeriod();
   const { refreshSignal } = useDataRefresh();
   const subscriptionAccess = useSubscriptionAccess();
@@ -465,7 +471,7 @@ export default function RelatoriosScreen() {
 
   const load = useCallback(async () => {
     if (!token || !shopsLoaded) return;
-    if (!selectedShop) {
+    if (viewingAll ? activeShops.length === 0 : !selectedShop) {
       setLoadState('no-shop');
       return;
     }
@@ -473,19 +479,34 @@ export default function RelatoriosScreen() {
     setReloading(true);
     try {
       const apiPeriod = PERIOD_TO_API[period];
-      const [summaryRes, productsRes] = await Promise.all([
-        getSummary(token, selectedShop.id, apiPeriod),
-        getShopeeProducts(token, selectedShop.id, apiPeriod),
-      ]);
-      setSummary(summaryRes);
-      setProducts(productsRes.products);
+      if (viewingAll) {
+        const [summaryRes, productsPerShop] = await Promise.all([
+          getCombinedSummary(token, apiPeriod),
+          Promise.all(
+            shopeeShops.map((shop) =>
+              getShopeeProducts(token, shop.id, apiPeriod).then((res) =>
+                res.products.map((p) => ({ ...p, shopName: shop.shopName, shopId: shop.id }))
+              )
+            )
+          ),
+        ]);
+        setSummary(summaryRes);
+        setProducts(productsPerShop.flat());
+      } else if (selectedShop) {
+        const [summaryRes, productsRes] = await Promise.all([
+          getSummary(token, selectedShop.id, apiPeriod),
+          getShopeeProducts(token, selectedShop.id, apiPeriod),
+        ]);
+        setSummary(summaryRes);
+        setProducts(productsRes.products);
+      }
       setLoadState('ready');
     } catch {
       setLoadState('error');
     } finally {
       setReloading(false);
     }
-  }, [token, shopsLoaded, selectedShop, period]);
+  }, [token, shopsLoaded, selectedShop, viewingAll, activeShops, shopeeShops, period]);
 
   useEffect(() => {
     load();
@@ -533,6 +554,7 @@ export default function RelatoriosScreen() {
     <Screen>
       <Text className="text-2xl font-bold text-lucrei-text">Relatórios</Text>
       <Text className="mt-1 text-sm text-lucrei-textMuted">Pra onde vai o seu lucro.</Text>
+      {activeShops.length > 1 && <ShopPicker />}
 
       <View className="mt-5 flex-row items-center gap-2">
         <View className="flex-row self-start rounded-full bg-lucrei-surface p-1">
@@ -562,7 +584,7 @@ export default function RelatoriosScreen() {
 
       {loadState === 'no-shop' && (
         <Text className="mt-8 text-sm text-lucrei-textMuted">
-          Conecte uma loja Shopee na tela Início pra ver seus relatórios aqui.
+          Conecte uma loja Shopee ou Mercado Livre na tela Início pra ver seus relatórios aqui.
         </Text>
       )}
 
@@ -582,7 +604,10 @@ export default function RelatoriosScreen() {
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.gold} />
           }>
-          {token && selectedShop && (
+          {/* Relatório por período (export CSV, sincronizar histórico) é uma
+              ação por loja - sem uma loja específica selecionada (modo
+              "Todas as lojas") não tem o que o card faria. */}
+          {token && selectedShop && !viewingAll && (
             <ReportRangeCard token={token} shopId={selectedShop.id} connectedAt={selectedShop.connectedAt} />
           )}
 
@@ -648,7 +673,7 @@ export default function RelatoriosScreen() {
 
                   <View className="gap-2">
                     {abcItems.map((item) => (
-                      <AbcRow key={item.product.shopeeItemId} item={item} />
+                      <AbcRow key={`${item.product.shopId ?? ''}-${item.product.shopeeItemId}`} item={item} />
                     ))}
                   </View>
                 </View>
@@ -659,7 +684,7 @@ export default function RelatoriosScreen() {
                   <Text className="mb-3 text-sm font-medium text-lucrei-text">Produtos mais lucrativos</Text>
                   <View className="gap-2">
                     {topProfitable.map((p) => (
-                      <ProductRankRow key={p.shopeeItemId} product={p} />
+                      <ProductRankRow key={`${p.shopId ?? ''}-${p.shopeeItemId}`} product={p} />
                     ))}
                   </View>
                 </View>
@@ -670,7 +695,7 @@ export default function RelatoriosScreen() {
                   <Text className="mb-3 text-sm font-medium text-lucrei-text">Produtos no prejuízo</Text>
                   <View className="gap-2">
                     {lossMakers.map((p) => (
-                      <ProductRankRow key={p.shopeeItemId} product={p} />
+                      <ProductRankRow key={`${p.shopId ?? ''}-${p.shopeeItemId}`} product={p} />
                     ))}
                   </View>
                 </View>
