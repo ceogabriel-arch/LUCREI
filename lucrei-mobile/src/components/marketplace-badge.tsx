@@ -1,18 +1,13 @@
 import { Image } from 'expo-image';
-import { View } from 'react-native';
 
-const SHOPEE_BADGE = require('../../assets/images/shopee-badge.png');
-const MERCADOLIVRE_BADGE = require('../../assets/images/mercadolivre-badge.png');
+const SHOPEE_ICON = require('../../assets/images/shopee-icon.png');
+const MERCADOLIVRE_ICON = require('../../assets/images/mercadolivre-icon.png');
 
-// Os dois PNGs já vêm prontos (pílula com logo + nome, fundo preto próprio)
-// desde o commit inicial do projeto, só nunca tinham sido usados em lugar
-// nenhum do app ainda. contentFit="contain" evita esticar mesmo que a
-// proporção real de cada um varie um pouco.
-export function MarketplaceBadge({ provider, height = 22 }: { provider: 'shopee' | 'mercado_livre'; height?: number }) {
-  const source = provider === 'mercado_livre' ? MERCADOLIVRE_BADGE : SHOPEE_BADGE;
-  return (
-    <View style={{ height, width: height * 2.2, borderRadius: height * 0.2, overflow: 'hidden' }}>
-      <Image source={source} style={{ width: '100%', height: '100%' }} contentFit="cover" />
-    </View>
-  );
+// Ícone isolado de cada marketplace (fundo transparente de verdade, não só
+// aparência de branco) - usado como badge pequeno ao lado do nome da loja
+// em qualquer lugar do app (seletor de loja, "Lojas conectadas", lucro por
+// loja no Início).
+export function MarketplaceBadge({ provider, size = 22 }: { provider: 'shopee' | 'mercado_livre'; size?: number }) {
+  const source = provider === 'mercado_livre' ? MERCADOLIVRE_ICON : SHOPEE_ICON;
+  return <Image source={source} style={{ width: size, height: size }} contentFit="contain" />;
 }

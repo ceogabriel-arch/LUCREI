@@ -15,6 +15,7 @@ import {
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { MarketplaceBadge } from '@/components/marketplace-badge';
 import { Screen } from '@/components/screen';
 import { ToastBanner, useToast } from '@/components/toast';
 import { API_URL, disconnectShop, type AuthUser, type Shop } from '@/lib/api';
@@ -414,13 +415,16 @@ function ShopRow({ shop, onDisconnected }: { shop: Shop; onDisconnected: () => v
   return (
     <View className="rounded-xl border border-lucrei-border bg-lucrei-surface p-3.5">
       <View className="flex-row items-center justify-between gap-3">
-        <View className="flex-1">
-          <Text className="text-sm text-lucrei-text" numberOfLines={1}>
-            {shop.shopName}
-          </Text>
-          <Text className="text-[11px] text-lucrei-textMuted">
-            {shop.provider === 'mercado_livre' ? 'Mercado Livre' : 'Shopee'}
-          </Text>
+        <View className="flex-1 flex-row items-center gap-2.5">
+          <MarketplaceBadge provider={shop.provider} size={24} />
+          <View className="flex-1">
+            <Text className="text-sm text-lucrei-text" numberOfLines={1}>
+              {shop.shopName}
+            </Text>
+            <Text className="text-[11px] text-lucrei-textMuted">
+              {shop.provider === 'mercado_livre' ? 'Mercado Livre' : 'Shopee'}
+            </Text>
+          </View>
         </View>
         <View className="flex-row items-center gap-3">
           <View
