@@ -100,14 +100,6 @@ async function main() {
 
   app.get('/health', async () => ({ status: 'ok' }));
 
-  // Temporário - só pra descobrir o IP de saída atual do Railway (precisa
-  // declarar no formulário de "Go Live" da Shopee). Remover depois de pegar
-  // o valor, não serve pra mais nada.
-  app.get('/internal/outbound-ip', async () => {
-    const res = await fetch('https://api.ipify.org?format=json');
-    return res.json();
-  });
-
   await app.register(staticFiles, {
     root: path.join(__dirname, '..', 'public'),
     cacheControl: true,
