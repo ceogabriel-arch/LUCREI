@@ -493,9 +493,15 @@ export default function RelatoriosScreen() {
         setSummary(summaryRes);
         setProducts(productsPerShop.flat());
       } else if (selectedShop) {
+        // Catálogo com custo/lucro só existe pra Shopee (ML ainda não
+        // sincroniza produto/pedido, Fase 2) - chamar o endpoint de
+        // produtos pra uma loja ML dava 502 garantido e travava a tela
+        // inteira em "carregando" pra sempre, mesmo o resumo (que existe
+        // pra qualquer loja, só que zerado) tendo carregado normal.
+        const isShopee = selectedShop.provider !== 'mercado_livre';
         const [summaryRes, productsRes] = await Promise.all([
           getSummary(token, selectedShop.id, apiPeriod),
-          getShopeeProducts(token, selectedShop.id, apiPeriod),
+          isShopee ? getShopeeProducts(token, selectedShop.id, apiPeriod) : Promise.resolve({ products: [] }),
         ]);
         setSummary(summaryRes);
         setProducts(productsRes.products);
