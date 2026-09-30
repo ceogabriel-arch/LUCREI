@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } 
 
 import { BlurredValue } from '@/components/blurred-value';
 import { DailyProfitChart } from '@/components/daily-profit-chart';
+import { HistoryBackfillCard } from '@/components/history-backfill-card';
 import { PastDueBanner } from '@/components/past-due-banner';
 import { Screen } from '@/components/screen';
 import { ShopPicker } from '@/components/shop-picker';
@@ -15,8 +16,6 @@ import {
   getShopeeProducts,
   getSummary,
   getSummaryRange,
-  getSyncHistoryStatus,
-  startSyncHistory,
   type ShopeeProduct,
   type Summary,
 } from '@/lib/api';
@@ -162,9 +161,6 @@ function ReportRangeCard({
   const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [backfilling, setBackfilling] = useState(false);
-  const [backfillSynced, setBackfillSynced] = useState(0);
-  const [backfillProgress, setBackfillProgress] = useState({ done: 0, total: 0 });
 
   const range = useMemo(() => {
     if (mode === 'lifetime') return { from: new Date(connectedAt), to: new Date() };
@@ -228,92 +224,6 @@ function ReportRangeCard({
     } finally {
       setExporting(false);
     }
-  }
-
-  const pollBackfillUntilDone = useCallback(async () => {
-    setBackfilling(true);
-    // O backfill roda solto no servidor por minutos - uma queda de internet
-    // passageira no meio do polling (comum em rede de celular/wifi instável)
-    // não pode derrubar o acompanhamento inteiro, já que o trabalho continua
-    // rodando do outro lado independente da conexão do navegador. Só desiste
-    // depois de várias falhas seguidas (~1min sem conseguir nem consultar).
-    const MAX_CONSECUTIVE_FAILURES = 15;
-    let consecutiveFailures = 0;
-    try {
-      // eslint-disable-next-line no-constant-condition
-      while (true) {
-        await new Promise((r) => setTimeout(r, 4000));
-        let status;
-        try {
-          status = await getSyncHistoryStatus(token, shopId);
-        } catch (err) {
-          consecutiveFailures++;
-          if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-            showAlert(
-              'Não foi possível acompanhar a sincronização',
-              err instanceof ApiError ? err.message : 'Verifique sua internet e tente de novo.'
-            );
-            break;
-          }
-          continue;
-        }
-        consecutiveFailures = 0;
-        setBackfillSynced(status.ordersSynced);
-        setBackfillProgress({ done: status.windowsDone, total: status.windowsTotal });
-        if (status.status === 'done') {
-          const base =
-            status.ordersSynced === 0
-              ? 'Nenhum pedido novo encontrado no último ano.'
-              : `${status.ordersSynced} pedido(s) do último ano foram trazidos pro Lucrei.`;
-          showAlert(
-            'Histórico sincronizado',
-            status.error ? `${base}\n\n${status.error}` : base
-          );
-          await load();
-          break;
-        }
-        if (status.status === 'error') {
-          showAlert('Não foi possível sincronizar o histórico', status.error ?? 'Tenta de novo em instantes.');
-          break;
-        }
-      }
-    } finally {
-      setBackfilling(false);
-    }
-  }, [token, shopId, load]);
-
-  // Se a tela recarregar (ou o usuário voltar pra Relatórios) no meio de um
-  // backfill que já estava rodando, volta a acompanhar em vez de deixar o
-  // botão parado sem refletir o que já está acontecendo no servidor.
-  useEffect(() => {
-    getSyncHistoryStatus(token, shopId)
-      .then((status) => {
-        if (status.status === 'running') {
-          setBackfillSynced(status.ordersSynced);
-          setBackfillProgress({ done: status.windowsDone, total: status.windowsTotal });
-          pollBackfillUntilDone();
-        }
-      })
-      .catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shopId]);
-
-  async function handleBackfill() {
-    // Trava o botão JÁ AQUI, antes do await - senão sobra uma janela (a
-    // duração da própria chamada de rede) em que o clique ainda não voltou
-    // e o botão continua parecendo destravado, dando pra clicar de novo.
-    setBackfilling(true);
-    let status;
-    try {
-      status = await startSyncHistory(token, shopId);
-    } catch (err) {
-      setBackfilling(false);
-      showAlert('Não foi possível sincronizar o histórico', err instanceof ApiError ? err.message : 'Tenta de novo em instantes.');
-      return;
-    }
-    setBackfillSynced(status.ordersSynced);
-    setBackfillProgress({ done: status.windowsDone, total: status.windowsTotal });
-    pollBackfillUntilDone();
   }
 
   const label =
@@ -401,46 +311,7 @@ function ReportRangeCard({
         <Text className="text-sm font-medium text-lucrei-gold">Exportar CSV</Text>
       </Pressable>
 
-      {backfilling ? (
-        <View className="mt-2 px-1 py-2">
-          <View className="flex-row items-center justify-between">
-            <Text className="text-xs text-lucrei-textMuted">Buscando histórico na Shopee...</Text>
-            <Text className="text-xs font-medium text-lucrei-text">
-              {backfillProgress.total > 0
-                ? `${Math.round((backfillProgress.done / backfillProgress.total) * 100)}%`
-                : ''}
-            </Text>
-          </View>
-          <View className="mt-1.5 h-2 overflow-hidden rounded-full bg-lucrei-surfaceAlt">
-            <View
-              style={{
-                width: `${backfillProgress.total > 0 ? (backfillProgress.done / backfillProgress.total) * 100 : 0}%`,
-                backgroundColor: Colors.gold,
-              }}
-              className="h-full rounded-full"
-            />
-          </View>
-          <Text className="mt-1.5 text-xs text-lucrei-textMuted">
-            {backfillSynced} {backfillSynced === 1 ? 'pedido encontrado' : 'pedidos encontrados'} até agora
-          </Text>
-          <Text className="mt-2 text-xs text-lucrei-textMuted">
-            Pode levar bastante tempo em lojas com muitas vendas — pode sair dessa tela e voltar depois, o
-            progresso continua no servidor.
-          </Text>
-        </View>
-      ) : (
-        <View className="mt-2">
-          <Pressable
-            onPress={handleBackfill}
-            className="flex-row items-center justify-center gap-2 rounded-xl px-4 py-3">
-            <Ionicons name="time-outline" size={16} color={Colors.textMuted} />
-            <Text className="text-xs text-lucrei-textMuted">Sincronizar histórico completo (último ano)</Text>
-          </Pressable>
-          <Text className="mt-1 text-center text-xs text-lucrei-textMuted">
-            Busca pedido por pedido na Shopee - em lojas com muitas vendas pode demorar vários minutos.
-          </Text>
-        </View>
-      )}
+      <HistoryBackfillCard token={token} shopId={shopId} onSynced={load} />
     </View>
   );
 }

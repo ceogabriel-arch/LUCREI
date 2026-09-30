@@ -218,7 +218,15 @@ export async function shopRoutes(app: FastifyInstance) {
   app.get('/shopee/shops', { onRequest: [app.authenticate] }, async (request) => {
     const shops = await prisma.shop.findMany({
       where: { userId: request.user.sub },
-      select: { id: true, shopName: true, status: true, connectedAt: true, disconnectedAt: true, provider: true },
+      select: {
+        id: true,
+        shopName: true,
+        status: true,
+        connectedAt: true,
+        disconnectedAt: true,
+        provider: true,
+        historyBackfillStatus: true,
+      },
     });
     return { shops };
   });

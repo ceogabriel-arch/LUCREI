@@ -7,6 +7,7 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, T
 
 import { AchievementsCard } from '@/components/achievements-card';
 import { BlurredValue } from '@/components/blurred-value';
+import { HistoryBackfillCard } from '@/components/history-backfill-card';
 import { MarketplaceBadge } from '@/components/marketplace-badge';
 import { PastDueBanner } from '@/components/past-due-banner';
 import { Screen } from '@/components/screen';
@@ -485,6 +486,27 @@ export default function InicioScreen() {
             </View>
 
             <PastDueBanner />
+
+            {/* Conectar a loja só traz pedido novo daqui pra frente - sem
+                isso, muita gente achava que o Lucrei "não estava puxando os
+                pedidos antigos" e não sabia que existia um botão pra isso
+                (reportado ao vivo, o botão só existia escondido lá em
+                Relatórios). Só pra loja selecionada de verdade (não "Todas
+                as lojas") e só Shopee (ML ainda não sincroniza pedido) -
+                some sozinho depois que o histórico já foi puxado uma vez. */}
+            {token && !viewingAll && selectedShop && selectedShop.provider !== 'mercado_livre' && selectedShop.historyBackfillStatus !== 'done' && (
+              <View className="mt-4">
+                <HistoryBackfillCard
+                  token={token}
+                  shopId={selectedShop.id}
+                  prominent
+                  onSynced={() => {
+                    refreshShops();
+                    loadSummary();
+                  }}
+                />
+              </View>
+            )}
 
             <Text className="mt-6 text-sm font-medium text-lucrei-textMuted">Resumo do período</Text>
             {isDesktop ? (

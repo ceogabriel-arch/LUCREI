@@ -121,6 +121,9 @@ export type Shop = {
   connectedAt: string;
   disconnectedAt: string | null;
   provider: 'shopee' | 'mercado_livre';
+  // null = nunca rodou. Usado pra saber se ainda vale a pena empurrar a
+  // pessoa pra sincronizar o histórico completo (ver history-backfill-card).
+  historyBackfillStatus: 'running' | 'done' | 'error' | null;
 };
 
 export function getShops(token: string) {
