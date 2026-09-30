@@ -75,7 +75,7 @@ export default function InicioScreen() {
         if (result.reason === 'shop_taken') {
           showAlert(
             'Loja já conectada em outra conta',
-            'Essa loja Shopee já está conectada em outra conta Lucrei. Peça para desconectá-la lá (em Configurações) antes de conectar aqui.'
+            'Essa loja Shopee já está conectada em outra conta Lucrei. Se você esperava logar em outra loja, confira se o navegador não está logado na Shopee com a conta errada (a tela de login costuma pular esse passo sozinha) - senão, peça para desconectá-la lá (em Configurações) antes de conectar aqui.'
           );
         } else if (result.reason === 'invalid_state') {
           // Token de autorização (válido por 30min) venceu antes da pessoa
@@ -126,7 +126,7 @@ export default function InicioScreen() {
         if (result.reason === 'shop_taken') {
           showAlert(
             'Loja já conectada em outra conta',
-            'Essa loja Mercado Livre já está conectada em outra conta Lucrei. Peça para desconectá-la lá (em Configurações) antes de conectar aqui.'
+            'Essa loja Mercado Livre já está conectada em outra conta Lucrei. Se você esperava logar em outra loja, confira se o navegador não está logado no Mercado Livre com a conta errada (a tela de autorização costuma pular esse passo sozinha) - senão, peça para desconectá-la lá (em Configurações) antes de conectar aqui.'
           );
         } else if (result.reason === 'invalid_state') {
           showAlert(

@@ -218,7 +218,14 @@ function SettingsModal({
 
   return (
     <View style={fullscreenOverlayStyle} className={`${modal.overlayClassName} ${modal.overlayBgClassName}`}>
-      <KeyboardAvoidingView behavior="padding">
+      {/* No desktop web, o overlay centraliza com "items-center justify-center" -
+          sem largura própria aqui, o KeyboardAvoidingView (um View comum na
+          web) encolhia pro conteúdo mínimo ANTES do SafeAreaView de dentro
+          conseguir aplicar "width: 100%" (100% de uma caixa já encolhida,
+          não da tela) - por isso os modais de formulário curto (nome, senha)
+          apareciam bem mais estreitos que os 480px esperados, com campo
+          cortado e scroll interno desnecessário. */}
+      <KeyboardAvoidingView behavior="padding" style={panelWidthStyle}>
         <SafeAreaView edges={['bottom']} style={{ maxHeight: '85%', ...panelWidthStyle }} className={`${modal.panelClassName} bg-lucrei-bg`}>
           <View className="flex-row items-center justify-between border-b border-lucrei-border px-5 py-4">
             <Text className="text-base font-semibold text-lucrei-text">{title}</Text>
