@@ -139,18 +139,29 @@ export async function shopRoutes(app: FastifyInstance) {
         },
       });
 
-      // Se a conta já está no meio de um teste grátis e essa loja ainda não
-      // tinha consumido teste em nenhuma outra conta, marca ela como "gasta"
-      // agora - impede reconectar essa mesma loja em outra conta pra ganhar
-      // um segundo teste, mesmo quando a loja é conectada depois de escolher o plano.
-      if (!shop.trialConsumedAt) {
+      // Só é abuso de verdade quando quem consumiu o teste nessa loja ANTES
+      // foi uma conta DIFERENTE da atual - reconectar a própria loja (ex:
+      // desconectou e reconectou, ou o callback disparou de novo) nunca
+      // deveria custar o teste de quem já era dono legítimo dela. Bug ao
+      // vivo: usar "shop.trialConsumedAt" (já depois do upsert, sempre
+      // preenchido a partir da 2ª conexão) revogava o teste em QUALQUER
+      // reconexão da mesma loja pela mesma pessoa - "existingShop" (estado
+      // ANTES do upsert) é o que permite comparar o dono de verdade.
+      const trialConsumedByAnotherAccount = Boolean(existingShop?.trialConsumedAt) && existingShop?.userId !== userId;
+
+      if (!existingShop?.trialConsumedAt) {
+        // Se a conta já está no meio de um teste grátis e essa loja ainda
+        // não tinha consumido teste em nenhuma outra conta, marca ela como
+        // "gasta" agora - impede reconectar essa mesma loja em outra conta
+        // pra ganhar um segundo teste, mesmo quando a loja é conectada
+        // depois de escolher o plano.
         const owner = await prisma.user.findUnique({ where: { id: userId } });
         if (owner?.subscriptionStatus === 'trialing' && owner.trialEndsAt && owner.trialEndsAt > new Date()) {
           await prisma.shop.update({ where: { id: shop.id }, data: { trialConsumedAt: new Date() } });
         }
-      } else {
-        // Essa loja já tinha consumido teste antes (em qualquer conta). A
-        // única forma da conta atual estar em teste agora é a loja ter sido
+      } else if (trialConsumedByAnotherAccount) {
+        // Essa loja já tinha consumido teste antes, em OUTRA conta. A única
+        // forma da conta atual estar em teste agora é a loja ter sido
         // conectada DEPOIS de escolher o plano - resolveTrial só enxerga as
         // lojas já conectadas na hora da escolha, então essa reconexão é
         // exatamente a brecha que a regra "1 teste por loja, pra sempre"

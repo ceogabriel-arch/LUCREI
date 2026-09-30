@@ -101,13 +101,19 @@ export async function mercadolivreRoutes(app: FastifyInstance) {
       });
 
       // Mesmo raciocínio anti-abuso de teste grátis que a Shopee já tem -
-      // "1 teste por loja, pra sempre", independente de marketplace.
-      if (!shop.trialConsumedAt) {
+      // "1 teste por loja, pra sempre", independente de marketplace. Usa
+      // "existingShop" (estado ANTES do upsert) pra comparar o dono de
+      // verdade - só é abuso quando quem consumiu o teste nessa loja antes
+      // foi uma conta DIFERENTE (ver comentário equivalente em
+      // shops/routes.ts, mesmo bug ao vivo corrigido nos dois ao mesmo tempo).
+      const trialConsumedByAnotherAccount = Boolean(existingShop?.trialConsumedAt) && existingShop?.userId !== userId;
+
+      if (!existingShop?.trialConsumedAt) {
         const owner = await prisma.user.findUnique({ where: { id: userId } });
         if (owner?.subscriptionStatus === 'trialing' && owner.trialEndsAt && owner.trialEndsAt > new Date()) {
           await prisma.shop.update({ where: { id: shop.id }, data: { trialConsumedAt: new Date() } });
         }
-      } else {
+      } else if (trialConsumedByAnotherAccount) {
         const owner = await prisma.user.findUnique({ where: { id: userId } });
         if (owner?.subscriptionStatus === 'trialing' && owner.trialEndsAt && owner.trialEndsAt > new Date()) {
           await prisma.user.update({

@@ -48,15 +48,30 @@ type ValidateCouponBody = { code: string };
 // o shopeeShopId é único e persiste ao trocar de dono) não libera um novo
 // período de teste, mesmo numa conta nova. Compartilhado pelos fluxos de
 // cartão e Pix.
-async function resolveTrial(user: User, plan: Plan) {
+export async function resolveTrial(user: User, plan: Plan) {
+  const now = new Date();
+
+  // Teste grátis já em andamento (trialEndsAt preenchido e no futuro) -
+  // trocar de plano ou de forma de pagamento (Pix/Cartão) NO MEIO do teste
+  // não pode encerrar nem reiniciar ele, só reservar o que vai cobrar
+  // quando o prazo ORIGINAL acabar. Bug reportado ao vivo: escolher
+  // Pix/Cartão durante o teste virava 'past_due' na hora, cortando o teste
+  // antes do prazo - porque trialEndsAt já preenchido também dispara
+  // "alreadyUsedTrial" abaixo, uma regra pensada só pra impedir REINICIAR
+  // um teste já encerrado, não pra isso.
+  if (user.subscriptionStatus === 'trialing' && user.trialEndsAt && user.trialEndsAt > now) {
+    const remainingDays = Math.max(1, Math.ceil((user.trialEndsAt.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)));
+    return { eligibleForTrial: true, trialEndsAt: user.trialEndsAt, trialDays: remainingDays };
+  }
+
   const alreadyUsedTrial = Boolean(user.trialEndsAt);
   const taintedShop =
     plan.trialEligible && !alreadyUsedTrial
       ? await prisma.shop.findFirst({ where: { userId: user.id, trialConsumedAt: { not: null } } })
       : null;
   const eligibleForTrial = plan.trialEligible && !alreadyUsedTrial && !taintedShop;
-  const trialEndsAt = eligibleForTrial ? addDays(new Date(), TRIAL_DAYS) : alreadyUsedTrial ? user.trialEndsAt : null;
-  return { eligibleForTrial, trialEndsAt };
+  const trialEndsAt = eligibleForTrial ? addDays(now, TRIAL_DAYS) : alreadyUsedTrial ? user.trialEndsAt : null;
+  return { eligibleForTrial, trialEndsAt, trialDays: eligibleForTrial ? TRIAL_DAYS : 0 };
 }
 
 async function markShopsTrialConsumed(userId: string) {
@@ -175,7 +190,7 @@ export async function plansRoutes(app: FastifyInstance) {
 
           const trial = await resolveTrial(user, plan);
           trialEndsAt = trial.trialEndsAt;
-          const trialDays = trial.eligibleForTrial ? TRIAL_DAYS : 0;
+          const trialDays = trial.trialDays;
           // Sem trial, a cobrança já sai imediata na criação - 'past_due' até
           // o webhook confirmar o pagamento, igual o fluxo de Pix já faz.
           nextStatus = trialDays > 0 ? 'trialing' : 'past_due';
