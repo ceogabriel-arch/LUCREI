@@ -233,7 +233,6 @@ function ReportRangeCard({
       : year > now.getFullYear() || (year === now.getFullYear() && month >= now.getMonth() + 1);
 
   async function handleExport() {
-    if (!shopId) return;
     setExporting(true);
     try {
       await exportOrdersCsv(token, shopId, range.from, range.to);
@@ -316,23 +315,21 @@ function ReportRangeCard({
         )}
       </View>
 
-      {/* CSV e backfill de histórico continuam sendo ação de uma loja só -
-          com "Todas as lojas" (shopId null) não tem pra qual loja apontar. */}
-      {shopId !== null && (
-        <Pressable
-          onPress={handleExport}
-          disabled={exporting}
-          className="mt-4 flex-row items-center justify-center gap-2 rounded-xl bg-lucrei-surfaceAlt px-4 py-3"
-          style={{ opacity: exporting ? 0.6 : 1 }}>
-          {exporting ? (
-            <ActivityIndicator size="small" color={Colors.gold} />
-          ) : (
-            <Ionicons name="download-outline" size={16} color={Colors.gold} />
-          )}
-          <Text className="text-sm font-medium text-lucrei-gold">Exportar CSV</Text>
-        </Pressable>
-      )}
+      <Pressable
+        onPress={handleExport}
+        disabled={exporting}
+        className="mt-4 flex-row items-center justify-center gap-2 rounded-xl bg-lucrei-surfaceAlt px-4 py-3"
+        style={{ opacity: exporting ? 0.6 : 1 }}>
+        {exporting ? (
+          <ActivityIndicator size="small" color={Colors.gold} />
+        ) : (
+          <Ionicons name="download-outline" size={16} color={Colors.gold} />
+        )}
+        <Text className="text-sm font-medium text-lucrei-gold">Exportar CSV</Text>
+      </Pressable>
 
+      {/* Backfill de histórico continua sendo ação de uma loja Shopee só -
+          com "Todas as lojas" (shopId null) não tem pra qual loja apontar. */}
       {shopId !== null && isShopee && <HistoryBackfillCard token={token} shopId={shopId} onSynced={load} />}
     </View>
   );

@@ -3,16 +3,18 @@ import { Platform, Share } from 'react-native';
 import { API_URL, ApiError } from '@/lib/api';
 
 // Endpoint devolve CSV puro (não JSON), então não dá pra usar o request()
-// genérico daqui - ele sempre espera um corpo JSON.
-export async function exportOrdersCsv(token: string, shopId: string, from: Date, to: Date) {
+// genérico daqui - ele sempre espera um corpo JSON. shopId null = "Todas as
+// lojas" (/orders/export, sem loja específica).
+export async function exportOrdersCsv(token: string, shopId: string | null, from: Date, to: Date) {
   if (!API_URL) {
     throw new ApiError('Servidor não configurado (EXPO_PUBLIC_API_URL ausente).');
   }
 
   const query = `from=${from.toISOString()}&to=${to.toISOString()}`;
+  const path = shopId ? `/shops/${shopId}/orders/export` : '/orders/export';
   let response: Response;
   try {
-    response = await fetch(`${API_URL}/shops/${shopId}/orders/export?${query}`, {
+    response = await fetch(`${API_URL}${path}?${query}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
   } catch {

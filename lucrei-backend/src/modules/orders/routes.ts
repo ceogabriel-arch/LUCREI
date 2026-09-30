@@ -153,4 +153,73 @@ export async function orderRoutes(app: FastifyInstance) {
       return reply.send(csv);
     }
   );
+
+  // Mesmo CSV de cima, só que somando todas as lojas ativas da conta -
+  // "Todas as lojas" no seletor. Ganha uma coluna "Loja" extra (faz falta
+  // aqui, já que mistura pedido de lojas/marketplaces diferentes) e o
+  // rótulo da taxa fica genérico "Taxa marketplace" em vez de nomear uma
+  // marketplace específica, que não seria verdade pra todo pedido do arquivo.
+  app.get<{ Querystring: { from: string; to: string } }>(
+    '/orders/export',
+    { onRequest: [app.authenticate] },
+    async (request, reply) => {
+      const { from, to } = request.query;
+      if (!from || !to) {
+        return reply.status(400).send({ message: 'from e to são obrigatórios.' });
+      }
+
+      const orders = await prisma.order.findMany({
+        where: {
+          shop: { userId: request.user.sub, status: 'active' },
+          completedAt: { gte: new Date(from), lt: new Date(to) },
+        },
+        include: { lineItems: { include: { product: true } }, shop: true },
+        orderBy: { orderDate: 'asc' },
+      });
+
+      const header = [
+        'Data do pedido',
+        'Loja',
+        'Nº do pedido',
+        'Status',
+        'Produto',
+        'Quantidade',
+        'Valor de venda (R$)',
+        'Frete alocado (R$)',
+        'Taxa marketplace (R$)',
+        'Custo do produto (R$)',
+        'Lucro (R$)',
+      ].join(';');
+
+      const rows: string[] = [header];
+      for (const order of orders) {
+        const dateStr = order.orderDate.toLocaleDateString('pt-BR');
+        const statusStr = STATUS_LABELS[order.orderStatus] ?? order.orderStatus;
+        for (const li of order.lineItems) {
+          const productName = li.product?.name ?? li.itemName ?? `Item ${li.shopeeItemId ?? '?'}`;
+          rows.push(
+            [
+              dateStr,
+              csvField(order.shop.shopName),
+              csvField(order.shopeeOrderSn ?? order.mercadoLivreOrderId ?? ''),
+              csvField(statusStr),
+              csvField(productName),
+              String(li.quantity),
+              csvNumber(Number(li.salePrice)),
+              csvNumber(Number(li.shippingFeeAllocated)),
+              csvNumber(Number(li.shopeeFeeAllocated)),
+              li.productCostSnapshot !== null ? csvNumber(Number(li.productCostSnapshot)) : '',
+              li.profit !== null ? csvNumber(Number(li.profit)) : '',
+            ].join(';')
+          );
+        }
+      }
+
+      const csv = '﻿' + rows.join('\r\n');
+
+      reply.header('Content-Type', 'text/csv; charset=utf-8');
+      reply.header('Content-Disposition', 'attachment; filename="pedidos-lucrei-todas-as-lojas.csv"');
+      return reply.send(csv);
+    }
+  );
 }
