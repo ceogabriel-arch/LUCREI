@@ -13,6 +13,7 @@ import type { ThemeColors } from '@/constants/theme';
 import {
   ApiError,
   getCombinedSummary,
+  getCombinedSummaryRange,
   getShopeeProducts,
   getSummary,
   getSummaryRange,
@@ -150,7 +151,9 @@ function ReportRangeCard({
   isShopee,
 }: {
   token: string;
-  shopId: string;
+  // null = "Todas as lojas" (resumo somado, sem CSV nem backfill - essas
+  // duas ações continuam sendo por loja só).
+  shopId: string | null;
   connectedAt: string;
   // Backfill de histórico só existe pra Shopee (ML ainda não sincroniza
   // pedido) - mostrar o botão pra uma loja ML garantia falha, com um texto
@@ -176,14 +179,23 @@ function ReportRangeCard({
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const s = await getSummaryRange(token, shopId, range.from, range.to);
+      const s =
+        shopId === null
+          ? mode === 'lifetime'
+            ? // "Desde que conectei" combinado usa a mesma lógica do lucro
+              // vitalício das conquistas - cada loja soma a partir da SUA
+              // própria data de conexão (period=all), não faz sentido um
+              // "from" único pra todas.
+              await getCombinedSummary(token, 'all')
+            : await getCombinedSummaryRange(token, range.from, range.to)
+          : await getSummaryRange(token, shopId, range.from, range.to);
       setSummary(s);
     } catch {
       setSummary(null);
     } finally {
       setLoading(false);
     }
-  }, [token, shopId, range]);
+  }, [token, shopId, range, mode]);
 
   useEffect(() => {
     load();
@@ -221,6 +233,7 @@ function ReportRangeCard({
       : year > now.getFullYear() || (year === now.getFullYear() && month >= now.getMonth() + 1);
 
   async function handleExport() {
+    if (!shopId) return;
     setExporting(true);
     try {
       await exportOrdersCsv(token, shopId, range.from, range.to);
@@ -303,20 +316,24 @@ function ReportRangeCard({
         )}
       </View>
 
-      <Pressable
-        onPress={handleExport}
-        disabled={exporting}
-        className="mt-4 flex-row items-center justify-center gap-2 rounded-xl bg-lucrei-surfaceAlt px-4 py-3"
-        style={{ opacity: exporting ? 0.6 : 1 }}>
-        {exporting ? (
-          <ActivityIndicator size="small" color={Colors.gold} />
-        ) : (
-          <Ionicons name="download-outline" size={16} color={Colors.gold} />
-        )}
-        <Text className="text-sm font-medium text-lucrei-gold">Exportar CSV</Text>
-      </Pressable>
+      {/* CSV e backfill de histórico continuam sendo ação de uma loja só -
+          com "Todas as lojas" (shopId null) não tem pra qual loja apontar. */}
+      {shopId !== null && (
+        <Pressable
+          onPress={handleExport}
+          disabled={exporting}
+          className="mt-4 flex-row items-center justify-center gap-2 rounded-xl bg-lucrei-surfaceAlt px-4 py-3"
+          style={{ opacity: exporting ? 0.6 : 1 }}>
+          {exporting ? (
+            <ActivityIndicator size="small" color={Colors.gold} />
+          ) : (
+            <Ionicons name="download-outline" size={16} color={Colors.gold} />
+          )}
+          <Text className="text-sm font-medium text-lucrei-gold">Exportar CSV</Text>
+        </Pressable>
+      )}
 
-      {isShopee && <HistoryBackfillCard token={token} shopId={shopId} onSynced={load} />}
+      {shopId !== null && isShopee && <HistoryBackfillCard token={token} shopId={shopId} onSynced={load} />}
     </View>
   );
 }
@@ -482,15 +499,16 @@ export default function RelatoriosScreen() {
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.gold} />
           }>
-          {/* Relatório por período (export CSV, sincronizar histórico) é uma
-              ação por loja - sem uma loja específica selecionada (modo
-              "Todas as lojas") não tem o que o card faria. */}
-          {token && selectedShop && !viewingAll && (
+          {/* Em "Todas as lojas", o resumo por mês/ano/desde que conectei
+              soma normalmente (o backend já aceita from/to pra todas as
+              lojas) - só Exportar CSV e Sincronizar histórico continuam
+              escondidos ali dentro, por serem ação de uma loja só. */}
+          {token && (viewingAll ? activeShops.length > 0 : selectedShop) && (
             <ReportRangeCard
               token={token}
-              shopId={selectedShop.id}
-              connectedAt={selectedShop.connectedAt}
-              isShopee={selectedShop.provider !== 'mercado_livre'}
+              shopId={viewingAll ? null : selectedShop!.id}
+              connectedAt={viewingAll ? (selectedShop?.connectedAt ?? new Date().toISOString()) : selectedShop!.connectedAt}
+              isShopee={viewingAll ? false : selectedShop!.provider !== 'mercado_livre'}
             />
           )}
 

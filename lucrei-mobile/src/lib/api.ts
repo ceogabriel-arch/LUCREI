@@ -195,6 +195,16 @@ export function getSummaryRange(token: string, shopId: string, from: Date, to: D
   });
 }
 
+// Mesma ideia de getSummaryRange, somado pra todas as lojas ativas - o
+// backend (/summary) já aceita from/to além de period, então não precisa de
+// rota nova.
+export function getCombinedSummaryRange(token: string, from: Date, to: Date) {
+  const query = `from=${from.toISOString()}&to=${to.toISOString()}`;
+  return request<Summary>(`/summary?${query}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 export type ShopeeProduct = {
   shopeeItemId: string;
   name: string;
