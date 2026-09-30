@@ -330,6 +330,11 @@ export default function RelatoriosScreen() {
   const Colors = useColors();
   const { shops, selectedShop, viewingAll, loaded: shopsLoaded } = useSelectedShop();
   const activeShops = useMemo(() => shops.filter((s) => s.status === 'active'), [shops]);
+  // Revertido temporariamente (Fase 2 do Mercado Livre) - o app do ML só
+  // tem escopo "Venda e envios" hoje, sem permissão de catálogo (403
+  // "PA_UNAUTHORIZED_RESULT_FROM_POLICIES" confirmado ao vivo). Volta a
+  // filtrar loja ML fora até a permissão certa ser adicionada.
+  const shopeeShops = useMemo(() => activeShops.filter((s) => s.provider !== 'mercado_livre'), [activeShops]);
   const { period, setPeriod } = usePeriod();
   const { refreshSignal } = useDataRefresh();
   const subscriptionAccess = useSubscriptionAccess();
@@ -356,7 +361,7 @@ export default function RelatoriosScreen() {
         const [summaryRes, productsPerShop] = await Promise.all([
           getCombinedSummary(token, apiPeriod),
           Promise.all(
-            activeShops.map((shop) =>
+            shopeeShops.map((shop) =>
               getShopeeProducts(token, shop.id, apiPeriod).then((res) =>
                 res.products.map((p) => ({ ...p, shopName: shop.shopName, shopId: shop.id }))
               )
@@ -366,9 +371,10 @@ export default function RelatoriosScreen() {
         setSummary(summaryRes);
         setProducts(productsPerShop.flat());
       } else if (selectedShop) {
+        const isShopeeCatalog = selectedShop.provider !== 'mercado_livre';
         const [summaryRes, productsRes] = await Promise.all([
           getSummary(token, selectedShop.id, apiPeriod),
-          getShopeeProducts(token, selectedShop.id, apiPeriod),
+          isShopeeCatalog ? getShopeeProducts(token, selectedShop.id, apiPeriod) : Promise.resolve({ products: [] }),
         ]);
         setSummary(summaryRes);
         setProducts(productsRes.products);
@@ -379,7 +385,7 @@ export default function RelatoriosScreen() {
     } finally {
       setReloading(false);
     }
-  }, [token, shopsLoaded, selectedShop, viewingAll, activeShops, period]);
+  }, [token, shopsLoaded, selectedShop, viewingAll, activeShops, shopeeShops, period]);
 
   useEffect(() => {
     load();

@@ -355,19 +355,24 @@ export default function ProdutosScreen() {
       setLoadState((prev) => (prev === 'ready' ? prev : 'loading'));
       setReloading(true);
       try {
-        // Combinado: busca o catálogo de cada loja ativa em paralelo e marca
-        // cada produto com o nome da loja de origem (mesmo padrão de
-        // pedidos.tsx) - a mesma rota já funciona pra Shopee e Mercado Livre
-        // (Fase 2), não precisa mais filtrar por marketplace aqui.
+        // Revertido temporariamente (Fase 2 do Mercado Livre) - o app do ML
+        // só tem escopo "Venda e envios" hoje, sem permissão de catálogo
+        // (confirmado ao vivo: a API devolve 403
+        // "PA_UNAUTHORIZED_RESULT_FROM_POLICIES"). Volta a filtrar loja ML
+        // fora até a permissão certa ser adicionada no painel do Mercado
+        // Livre e a loja ser reconectada.
+        const shopeeShops = activeShops.filter((s) => s.provider !== 'mercado_livre');
         const products = viewingAll
           ? await Promise.all(
-              activeShops.map((shop) => getShopeeProducts(token, shop.id, PERIOD_TO_API[period], force))
+              shopeeShops.map((shop) => getShopeeProducts(token, shop.id, PERIOD_TO_API[period], force))
             ).then((results) =>
               results.flatMap((r, i) =>
-                r.products.map((p) => ({ ...p, shopName: activeShops[i].shopName, shopId: activeShops[i].id }))
+                r.products.map((p) => ({ ...p, shopName: shopeeShops[i].shopName, shopId: shopeeShops[i].id }))
               )
             )
-          : await getShopeeProducts(token, selectedShop!.id, PERIOD_TO_API[period], force).then((r) => r.products);
+          : selectedShop!.provider === 'mercado_livre'
+            ? []
+            : await getShopeeProducts(token, selectedShop!.id, PERIOD_TO_API[period], force).then((r) => r.products);
         setProducts(products);
         setEdits({});
         setSelected(new Set());
@@ -690,7 +695,12 @@ export default function ProdutosScreen() {
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.gold} />
             }>
-            {products.length === 0 ? (
+            {products.length === 0 && !viewingAll && selectedShop?.provider === 'mercado_livre' ? (
+              <Text className="text-sm text-lucrei-textMuted">
+                Catálogo de produtos do Mercado Livre ainda não é sincronizado pelo Lucrei - isso não significa que
+                a loja está sem produto.
+              </Text>
+            ) : products.length === 0 ? (
               <Text className="text-sm text-lucrei-textMuted">Nenhum produto ativo encontrado na sua loja.</Text>
             ) : filteredProducts.length === 0 ? (
               <Text className="text-sm text-lucrei-textMuted">Nenhum produto encontrado pra "{search}".</Text>
