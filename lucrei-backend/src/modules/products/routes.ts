@@ -5,7 +5,9 @@ import { mapLimit } from '../../lib/concurrency';
 import { prisma } from '../../lib/prisma';
 import { rangeStart, type Period } from '../../lib/period';
 import { getValidAccessToken } from '../../lib/shopee-token';
+import { getValidAccessToken as getValidMercadoLivreAccessToken } from '../../lib/mercadolivre-token';
 import { getItemBaseInfo, getItemList, getModelList } from '../../shopee-client';
+import { getItems, searchItems } from '../../mercadolivre-client';
 
 type UpsertProductBody = {
   shopeeItemId: string;
@@ -138,6 +140,54 @@ async function getShopeeCatalog(
   return items;
 }
 
+// Espelha getShopeeCatalog acima (mesmo cache por shopDbId, mesmo formato de
+// saída CatalogItem - "shopeeItemId" carrega o item id do Mercado Livre
+// quando a loja é ML, decisão da Fase 2 pra reaproveitar o mesmo formato que
+// o app já consome sem precisar de rota nova).
+async function getMercadoLivreCatalog(
+  shopDbId: string,
+  accessToken: string,
+  sellerId: string,
+  forceRefresh = false
+): Promise<CatalogItem[]> {
+  const cached = catalogCache.get(shopDbId);
+  if (!forceRefresh && cached && cached.expiresAt > Date.now()) return cached.items;
+
+  const maxItems = 200;
+  const ids: string[] = [];
+  let scrollId: string | undefined;
+  // search_type=scan (ver mercadolivre-client) - segue paginando enquanto
+  // vier scrollId e ainda não bateu o teto de itens.
+  while (ids.length < maxItems) {
+    const page = await searchItems(accessToken, sellerId, { scrollId });
+    if (page.results.length === 0) break;
+    ids.push(...page.results);
+    scrollId = page.scrollId;
+    if (!scrollId) break;
+  }
+  const limitedIds = ids.slice(0, maxItems);
+
+  // Multiget documentado com teto de 20 ids por chamada (diferente do
+  // limite de 50 da Shopee) - lotes independentes, rodam em paralelo.
+  const batches: string[][] = [];
+  for (let i = 0; i < limitedIds.length; i += 20) batches.push(limitedIds.slice(i, i + 20));
+  const itemBatches = await Promise.all(batches.map((batch) => getItems(accessToken, batch)));
+  const itemDetails = itemBatches.flat();
+
+  const items: CatalogItem[] = itemDetails.map((item) => ({
+    shopeeItemId: item.id,
+    name: item.title,
+    image: item.thumbnail ?? null,
+    price:
+      item.variations && item.variations.length > 0
+        ? Math.min(...item.variations.map((v) => v.price))
+        : item.price,
+  }));
+
+  catalogCache.set(shopDbId, { expiresAt: Date.now() + CATALOG_TTL_MS, items });
+  return items;
+}
+
 export async function productRoutes(app: FastifyInstance) {
   // Itens que aparecem em pedidos mas não batem com nenhum Product cadastrado
   // - normalmente porque o produto foi excluído do catálogo da Shopee depois
@@ -201,25 +251,34 @@ export async function productRoutes(app: FastifyInstance) {
 
       const period = request.query.period ?? '30d';
       const forceRefresh = request.query.force === 'true';
+      const isMercadoLivre = shop.provider === 'mercado_livre';
 
       try {
-        const { accessToken, shopeeShopId } = await getValidAccessToken(shop.id);
-        const catalog = await getShopeeCatalog(shop.id, accessToken, shopeeShopId, forceRefresh);
+        const catalog = isMercadoLivre
+          ? await (async () => {
+              const { accessToken, mercadoLivreUserId } = await getValidMercadoLivreAccessToken(shop.id);
+              return getMercadoLivreCatalog(shop.id, accessToken, String(mercadoLivreUserId), forceRefresh);
+            })()
+          : await (async () => {
+              const { accessToken, shopeeShopId } = await getValidAccessToken(shop.id);
+              return getShopeeCatalog(shop.id, accessToken, shopeeShopId, forceRefresh);
+            })();
 
         const costs = await prisma.product.findMany({ where: { shopId: shop.id } });
-        const costByItemId = new Map(costs.map((c) => [c.shopeeItemId, c]));
+        const costByItemId = new Map(costs.map((c) => [isMercadoLivre ? c.mercadoLivreItemId : c.shopeeItemId, c]));
 
         const lineItems = await prisma.orderLineItem.findMany({
           where: { order: { shopId: shop.id, completedAt: { gte: rangeStart(period) } } },
         });
         const statsByItemId = new Map<string, { profit: number; revenue: number; orders: number }>();
         for (const li of lineItems) {
-          if (!li.shopeeItemId) continue;
-          const stat = statsByItemId.get(li.shopeeItemId) ?? { profit: 0, revenue: 0, orders: 0 };
+          const itemId = isMercadoLivre ? li.mercadoLivreItemId : li.shopeeItemId;
+          if (!itemId) continue;
+          const stat = statsByItemId.get(itemId) ?? { profit: 0, revenue: 0, orders: 0 };
           stat.revenue += Number(li.salePrice);
           stat.orders += 1;
           if (li.profit !== null) stat.profit += Number(li.profit);
-          statsByItemId.set(li.shopeeItemId, stat);
+          statsByItemId.set(itemId, stat);
         }
 
         const products = catalog.map((item) => {
@@ -241,7 +300,9 @@ export async function productRoutes(app: FastifyInstance) {
         return { products };
       } catch (err) {
         app.log.error(err);
-        return reply.status(502).send({ message: 'Falha ao buscar catálogo na Shopee.' });
+        return reply
+          .status(502)
+          .send({ message: `Falha ao buscar catálogo ${isMercadoLivre ? 'no Mercado Livre' : 'na Shopee'}.` });
       }
     }
   );
@@ -258,7 +319,13 @@ export async function productRoutes(app: FastifyInstance) {
         return reply.status(400).send({ message: 'shopeeItemId, name e costPrice são obrigatórios.' });
       }
 
-      const existing = await prisma.product.findFirst({ where: { shopId: shop.id, shopeeItemId } });
+      // O campo na requisição continua se chamando "shopeeItemId" pros dois
+      // marketplaces (decisão da Fase 2 do Mercado Livre - evita mexer no
+      // app pra renomear), mas o valor é gravado na coluna certa conforme o
+      // provider da loja, pra nunca confundir os dois espaços de ID.
+      const itemIdFilter = shop.provider === 'mercado_livre' ? { mercadoLivreItemId: shopeeItemId } : { shopeeItemId };
+
+      const existing = await prisma.product.findFirst({ where: { shopId: shop.id, ...itemIdFilter } });
 
       const product = existing
         ? await prisma.product.update({
@@ -266,11 +333,11 @@ export async function productRoutes(app: FastifyInstance) {
             data: { name, costPrice, costSource: 'manual' },
           })
         : await prisma.product.create({
-            data: { shopId: shop.id, shopeeItemId, name, costPrice, costSource: 'manual' },
+            data: { shopId: shop.id, name, costPrice, costSource: 'manual', ...itemIdFilter },
           });
 
       const affectedLineItems = await prisma.orderLineItem.findMany({
-        where: { shopeeItemId, order: { shopId: shop.id } },
+        where: { order: { shopId: shop.id }, ...itemIdFilter },
       });
 
       await bulkRecalcLineItems(prisma, product.id, costPrice, affectedLineItems);
@@ -297,21 +364,31 @@ export async function productRoutes(app: FastifyInstance) {
       }
 
       const shopeeItemIds = items.map((i) => i.shopeeItemId);
+      const isMercadoLivre = shop.provider === 'mercado_livre';
 
       const existingProducts = await prisma.product.findMany({
-        where: { shopId: shop.id, shopeeItemId: { in: shopeeItemIds } },
+        where: {
+          shopId: shop.id,
+          ...(isMercadoLivre ? { mercadoLivreItemId: { in: shopeeItemIds } } : { shopeeItemId: { in: shopeeItemIds } }),
+        },
       });
-      const existingByItemId = new Map(existingProducts.map((p) => [p.shopeeItemId, p]));
+      const existingByItemId = new Map(
+        existingProducts.map((p) => [isMercadoLivre ? p.mercadoLivreItemId : p.shopeeItemId, p])
+      );
 
       const affectedLineItems = await prisma.orderLineItem.findMany({
-        where: { shopeeItemId: { in: shopeeItemIds }, order: { shopId: shop.id } },
+        where: {
+          order: { shopId: shop.id },
+          ...(isMercadoLivre ? { mercadoLivreItemId: { in: shopeeItemIds } } : { shopeeItemId: { in: shopeeItemIds } }),
+        },
       });
       const lineItemsByShopeeId = new Map<string, typeof affectedLineItems>();
       for (const li of affectedLineItems) {
-        if (!li.shopeeItemId) continue;
-        const list = lineItemsByShopeeId.get(li.shopeeItemId) ?? [];
+        const itemId = isMercadoLivre ? li.mercadoLivreItemId : li.shopeeItemId;
+        if (!itemId) continue;
+        const list = lineItemsByShopeeId.get(itemId) ?? [];
         list.push(li);
-        lineItemsByShopeeId.set(li.shopeeItemId, list);
+        lineItemsByShopeeId.set(itemId, list);
       }
 
       const products = await prisma.$transaction(
@@ -327,10 +404,10 @@ export async function productRoutes(app: FastifyInstance) {
               : await tx.product.create({
                   data: {
                     shopId: shop.id,
-                    shopeeItemId: item.shopeeItemId,
                     name: item.name,
                     costPrice: item.costPrice,
                     costSource: 'manual',
+                    ...(isMercadoLivre ? { mercadoLivreItemId: item.shopeeItemId } : { shopeeItemId: item.shopeeItemId }),
                   },
                 });
             results.push(product);

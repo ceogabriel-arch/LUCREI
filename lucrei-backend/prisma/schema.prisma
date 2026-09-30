@@ -204,6 +204,8 @@ model Product {
   shopId         String
   shopeeItemId   String?
   shopeeModelId  String?
+  // Item id do Mercado Livre (ex: "MLB1234567890") - loja Shopee não tem.
+  mercadoLivreItemId String?
   sku            String?
   name           String
   costPrice      Decimal           @db.Decimal(12, 2)
@@ -216,12 +218,16 @@ model Product {
 
   @@index([shopId])
   @@index([shopeeItemId])
+  @@index([mercadoLivreItemId])
 }
 
 model Order {
   id                    String    @id @default(cuid())
   shopId                String
-  shopeeOrderSn         String    @unique
+  // Nullable porque um pedido Mercado Livre não tem shopeeOrderSn (e
+  // vice-versa com mercadoLivreOrderId) - mesmo padrão do Shop na Fase 1.
+  shopeeOrderSn         String?   @unique
+  mercadoLivreOrderId   String?   @unique
   orderStatus           String
   orderDate             DateTime
   // Quando o pedido entrou em COMPLETED na Shopee (update_time do
@@ -262,6 +268,7 @@ model OrderLineItem {
   orderId               String
   productId             String?
   shopeeItemId          String?
+  mercadoLivreItemId    String?
   // Nome do item no momento do pedido (vem do get_escrow_detail) - a Shopee
   // não devolve mais isso se o produto for excluído do catálogo depois. Sem
   // guardar aqui, um item descontinuado vira um "custo não informado" sem
@@ -281,6 +288,7 @@ model OrderLineItem {
   @@index([orderId])
   @@index([productId])
   @@index([shopeeItemId])
+  @@index([mercadoLivreItemId])
 }
 
 // Rastro leve de "pedido comprado, ainda não sabemos o lucro" - alimenta só

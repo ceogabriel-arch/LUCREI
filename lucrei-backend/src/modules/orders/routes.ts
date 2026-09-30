@@ -106,6 +106,7 @@ export async function orderRoutes(app: FastifyInstance) {
         orderBy: { orderDate: 'asc' },
       });
 
+      const marketplaceLabel = shop.provider === 'mercado_livre' ? 'Mercado Livre' : 'Shopee';
       const header = [
         'Data do pedido',
         'Nº do pedido',
@@ -114,7 +115,7 @@ export async function orderRoutes(app: FastifyInstance) {
         'Quantidade',
         'Valor de venda (R$)',
         'Frete alocado (R$)',
-        'Taxa Shopee (R$)',
+        `Taxa ${marketplaceLabel} (R$)`,
         'Custo do produto (R$)',
         'Lucro (R$)',
       ].join(';');
@@ -128,7 +129,8 @@ export async function orderRoutes(app: FastifyInstance) {
           rows.push(
             [
               dateStr,
-              csvField(order.shopeeOrderSn),
+              // Um dos dois é sempre preenchido, dependendo do marketplace da loja.
+              csvField(order.shopeeOrderSn ?? order.mercadoLivreOrderId ?? ''),
               csvField(statusStr),
               csvField(productName),
               String(li.quantity),

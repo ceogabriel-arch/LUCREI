@@ -37,7 +37,10 @@ async function lookupProductLabels(userId: string, orderSns: string[]): Promise<
       .map((li) => ({ quantity: li.quantity, name: li.product?.name ?? li.itemName }))
       .filter((li): li is { quantity: number; name: string } => !!li.name);
     const label = formatOrderProductLabel(items);
-    if (label) labelBySn.set(order.shopeeOrderSn, label);
+    // Sempre não-nulo aqui - a query acima já filtrou por shopeeOrderSn IN
+    // orderSns (uma lista de strings), então nenhum resultado pode ter vindo
+    // com esse campo nulo.
+    if (label) labelBySn.set(order.shopeeOrderSn!, label);
   }
 
   const remaining = orderSns.filter((sn) => !labelBySn.has(sn));

@@ -121,3 +121,135 @@ export async function getUser(accessToken: string) {
   }
   return body;
 }
+
+// Confirmado contra uma chamada real (Fase 2, Passo 0): devolve 200 com
+// "results: []" pra loja sem pedido, formato bate com a documentação.
+type OrderSearchResponse = {
+  results?: { id: number; status: string; date_created: string; date_closed: string | null }[];
+  paging?: { total: number; offset: number; limit: number };
+  error?: string;
+  message?: string;
+};
+
+export async function searchOrders(
+  accessToken: string,
+  sellerId: string,
+  opts: { dateFrom?: string; dateTo?: string; offset?: number; limit?: number } = {}
+) {
+  const params = new URLSearchParams({
+    seller: sellerId,
+    sort: 'date_desc',
+    offset: String(opts.offset ?? 0),
+    limit: String(opts.limit ?? 50),
+  });
+  if (opts.dateFrom) params.set('order.date_created.from', opts.dateFrom);
+  if (opts.dateTo) params.set('order.date_created.to', opts.dateTo);
+
+  const { ok, body } = await fetchJson<OrderSearchResponse>(`${API_HOST}/orders/search?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!ok || body.error) {
+    throw new Error(body.message || body.error || 'Falha ao buscar pedidos no Mercado Livre.');
+  }
+  return { results: body.results ?? [], paging: body.paging };
+}
+
+// Campos de taxa/repasse (sale_fee em order_items, ou billing) ainda não
+// confirmados contra um pedido real com venda de verdade (Passo 0 do plano
+// de Fase 2 ainda pendente disso) - o tipo abaixo cobre só o que já foi
+// confirmado como estrutura (status, itens, envio), NÃO assumir profit a
+// partir daqui sem validar sale_fee primeiro.
+type OrderDetailResponse = {
+  id?: number;
+  status?: string;
+  date_created?: string;
+  date_closed?: string | null;
+  total_amount?: number;
+  order_items?: {
+    item: { id: string; title: string; variation_id?: number | null };
+    quantity: number;
+    unit_price: number;
+    sale_fee?: number;
+  }[];
+  shipping?: { id: number | null };
+  error?: string;
+  message?: string;
+};
+
+export async function getOrder(accessToken: string, orderId: number) {
+  const { ok, body } = await fetchJson<OrderDetailResponse>(`${API_HOST}/orders/${orderId}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!ok || body.error) {
+    throw new Error(body.message || body.error || 'Falha ao buscar detalhe do pedido no Mercado Livre.');
+  }
+  return body;
+}
+
+// Frete que sai do bolso do vendedor - GET /shipments/{id}/costs, "senders"
+// é um array (normalmente 1 item) com o custo do lado do vendedor.
+type ShipmentCostsResponse = {
+  receiver?: { cost: number };
+  senders?: { user_id: number; cost: number }[];
+  error?: string;
+  message?: string;
+};
+
+export async function getShipmentCosts(accessToken: string, shipmentId: number) {
+  const { ok, body } = await fetchJson<ShipmentCostsResponse>(`${API_HOST}/shipments/${shipmentId}/costs`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!ok || body.error) {
+    throw new Error(body.message || body.error || 'Falha ao buscar custo de envio no Mercado Livre.');
+  }
+  return body;
+}
+
+type ItemSearchResponse = {
+  results?: string[];
+  paging?: { total: number; offset: number; limit: number };
+  scroll_id?: string;
+  error?: string;
+  message?: string;
+};
+
+// search_type=scan é obrigatório pra vendedor com mais de 1000 itens
+// (offset comum trava nesse teto) - scroll_id precisa ser reenviado a cada
+// página, expira em 5min. Sem scrollId na primeira chamada.
+export async function searchItems(accessToken: string, sellerId: string, opts: { scrollId?: string } = {}) {
+  const params = new URLSearchParams({ search_type: 'scan' });
+  if (opts.scrollId) params.set('scroll_id', opts.scrollId);
+
+  const { ok, body } = await fetchJson<ItemSearchResponse>(
+    `${API_HOST}/users/${sellerId}/items/search?${params.toString()}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  if (!ok || body.error) {
+    throw new Error(body.message || body.error || 'Falha ao buscar itens no Mercado Livre.');
+  }
+  return { results: body.results ?? [], scrollId: body.scroll_id };
+}
+
+type ItemMultigetEntry = {
+  code: number;
+  body: {
+    id: string;
+    title: string;
+    price: number;
+    status: string;
+    thumbnail?: string;
+    variations?: { id: number; price: number; attribute_combinations?: { name: string; value_name: string }[] }[];
+  };
+};
+
+// Multiget - GET /items?ids=ID1,ID2,... (limite documentado de 20 ids por
+// chamada, diferente do multiget da Shopee).
+export async function getItems(accessToken: string, ids: string[]) {
+  const { ok, body } = await fetchJson<ItemMultigetEntry[]>(`${API_HOST}/items?ids=${ids.join(',')}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!ok) {
+    throw new Error('Falha ao buscar detalhe de itens no Mercado Livre.');
+  }
+  return body.filter((entry) => entry.code === 200).map((entry) => entry.body);
+}

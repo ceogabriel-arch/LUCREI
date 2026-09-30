@@ -330,9 +330,6 @@ export default function RelatoriosScreen() {
   const Colors = useColors();
   const { shops, selectedShop, viewingAll, loaded: shopsLoaded } = useSelectedShop();
   const activeShops = useMemo(() => shops.filter((s) => s.status === 'active'), [shops]);
-  // Catálogo com custo/lucro só existe pra Shopee (ML ainda não sincroniza
-  // produto) - mesmo filtro já usado em produtos.tsx pro modo combinado.
-  const shopeeShops = useMemo(() => activeShops.filter((s) => s.provider !== 'mercado_livre'), [activeShops]);
   const { period, setPeriod } = usePeriod();
   const { refreshSignal } = useDataRefresh();
   const subscriptionAccess = useSubscriptionAccess();
@@ -359,7 +356,7 @@ export default function RelatoriosScreen() {
         const [summaryRes, productsPerShop] = await Promise.all([
           getCombinedSummary(token, apiPeriod),
           Promise.all(
-            shopeeShops.map((shop) =>
+            activeShops.map((shop) =>
               getShopeeProducts(token, shop.id, apiPeriod).then((res) =>
                 res.products.map((p) => ({ ...p, shopName: shop.shopName, shopId: shop.id }))
               )
@@ -369,15 +366,9 @@ export default function RelatoriosScreen() {
         setSummary(summaryRes);
         setProducts(productsPerShop.flat());
       } else if (selectedShop) {
-        // Catálogo com custo/lucro só existe pra Shopee (ML ainda não
-        // sincroniza produto/pedido, Fase 2) - chamar o endpoint de
-        // produtos pra uma loja ML dava 502 garantido e travava a tela
-        // inteira em "carregando" pra sempre, mesmo o resumo (que existe
-        // pra qualquer loja, só que zerado) tendo carregado normal.
-        const isShopee = selectedShop.provider !== 'mercado_livre';
         const [summaryRes, productsRes] = await Promise.all([
           getSummary(token, selectedShop.id, apiPeriod),
-          isShopee ? getShopeeProducts(token, selectedShop.id, apiPeriod) : Promise.resolve({ products: [] }),
+          getShopeeProducts(token, selectedShop.id, apiPeriod),
         ]);
         setSummary(summaryRes);
         setProducts(productsRes.products);
@@ -388,7 +379,7 @@ export default function RelatoriosScreen() {
     } finally {
       setReloading(false);
     }
-  }, [token, shopsLoaded, selectedShop, viewingAll, activeShops, shopeeShops, period]);
+  }, [token, shopsLoaded, selectedShop, viewingAll, activeShops, period]);
 
   useEffect(() => {
     load();
