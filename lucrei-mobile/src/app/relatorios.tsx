@@ -147,10 +147,15 @@ function ReportRangeCard({
   token,
   shopId,
   connectedAt,
+  isShopee,
 }: {
   token: string;
   shopId: string;
   connectedAt: string;
+  // Backfill de histórico só existe pra Shopee (ML ainda não sincroniza
+  // pedido) - mostrar o botão pra uma loja ML garantia falha, com um texto
+  // que ainda por cima dizia "na Shopee" pra loja errada.
+  isShopee: boolean;
 }) {
   const Colors = useColors();
   const subscriptionAccess = useSubscriptionAccess();
@@ -311,7 +316,7 @@ function ReportRangeCard({
         <Text className="text-sm font-medium text-lucrei-gold">Exportar CSV</Text>
       </Pressable>
 
-      <HistoryBackfillCard token={token} shopId={shopId} onSynced={load} />
+      {isShopee && <HistoryBackfillCard token={token} shopId={shopId} onSynced={load} />}
     </View>
   );
 }
@@ -427,6 +432,11 @@ export default function RelatoriosScreen() {
     count: abcItems.filter((i) => i.cls === cls).length,
   }));
 
+  // "Shopee" só faz sentido nesse texto quando a loja selecionada é
+  // realmente uma Shopee - mesmo problema já corrigido na Início ("Líquido
+  // Shopee" aparecendo pra loja Mercado Livre).
+  const marketplaceLabelLower = viewingAll ? 'do marketplace' : selectedShop?.provider === 'mercado_livre' ? 'do Mercado Livre' : 'da Shopee';
+
   return (
     <Screen>
       <Text className="text-2xl font-bold text-lucrei-text">Relatórios</Text>
@@ -485,7 +495,12 @@ export default function RelatoriosScreen() {
               ação por loja - sem uma loja específica selecionada (modo
               "Todas as lojas") não tem o que o card faria. */}
           {token && selectedShop && !viewingAll && (
-            <ReportRangeCard token={token} shopId={selectedShop.id} connectedAt={selectedShop.connectedAt} />
+            <ReportRangeCard
+              token={token}
+              shopId={selectedShop.id}
+              connectedAt={selectedShop.connectedAt}
+              isShopee={selectedShop.provider !== 'mercado_livre'}
+            />
           )}
 
           <PastDueBanner />
@@ -507,7 +522,7 @@ export default function RelatoriosScreen() {
               <View className="rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
                 <Text className="mb-3 text-sm font-medium text-lucrei-text">Pra onde foi o dinheiro</Text>
                 <CostBar label="Custo do produto" value={summary.productCost} total={summary.revenue} color={Colors.goldDim} />
-                <CostBar label="Taxas da Shopee" value={summary.shopeeFees} total={summary.revenue} color={Colors.danger} />
+                <CostBar label={`Taxas ${marketplaceLabelLower}`} value={summary.shopeeFees} total={summary.revenue} color={Colors.danger} />
                 <CostBar label="Frete" value={summary.shippingCost} total={summary.revenue} color={Colors.textMuted} />
                 <CostBar label="Lucro" value={summary.profit} total={summary.revenue} color={Colors.gold} />
                 {summary.itemsMissingCost > 0 && (

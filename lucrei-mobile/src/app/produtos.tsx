@@ -363,6 +363,9 @@ export default function ProdutosScreen() {
         // Shopee") - filtra fora em vez de derrubar a lista combinada
         // inteira por causa de UMA loja sem suporte ainda.
         const shopeeShops = activeShops.filter((s) => s.provider !== 'mercado_livre');
+        // Mesmo raciocínio pro modo de loja única - selecionar uma loja ML
+        // sozinha caía na mesma falha 502 garantida (reportado ao vivo em
+        // Relatórios, mesma causa aqui).
         const products = viewingAll
           ? await Promise.all(
               shopeeShops.map((shop) => getShopeeProducts(token, shop.id, PERIOD_TO_API[period], force))
@@ -371,7 +374,9 @@ export default function ProdutosScreen() {
                 r.products.map((p) => ({ ...p, shopName: shopeeShops[i].shopName, shopId: shopeeShops[i].id }))
               )
             )
-          : await getShopeeProducts(token, selectedShop!.id, PERIOD_TO_API[period], force).then((r) => r.products);
+          : selectedShop!.provider === 'mercado_livre'
+            ? []
+            : await getShopeeProducts(token, selectedShop!.id, PERIOD_TO_API[period], force).then((r) => r.products);
         setProducts(products);
         setEdits({});
         setSelected(new Set());
@@ -694,7 +699,12 @@ export default function ProdutosScreen() {
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.gold} />
             }>
-            {products.length === 0 ? (
+            {products.length === 0 && !viewingAll && selectedShop?.provider === 'mercado_livre' ? (
+              <Text className="text-sm text-lucrei-textMuted">
+                Catálogo de produtos do Mercado Livre ainda não é sincronizado pelo Lucrei - isso não significa que
+                a loja está sem produto.
+              </Text>
+            ) : products.length === 0 ? (
               <Text className="text-sm text-lucrei-textMuted">Nenhum produto ativo encontrado na sua loja.</Text>
             ) : filteredProducts.length === 0 ? (
               <Text className="text-sm text-lucrei-textMuted">Nenhum produto encontrado pra "{search}".</Text>
