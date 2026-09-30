@@ -15,14 +15,14 @@ import { DesktopShell } from '@/components/desktop-shell';
 import { LoginScreen } from '@/components/login-screen';
 import { SignupScreen } from '@/components/signup-screen';
 import { WhatsNewModal } from '@/components/whats-new-modal';
-import { DarkCssVars, LightCssVars } from '@/constants/theme';
+import { DarkColors, DarkCssVars, LightCssVars } from '@/constants/theme';
 import { savePushToken } from '@/lib/api';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { DataRefreshProvider, useDataRefresh } from '@/lib/data-refresh';
 import { PeriodProvider } from '@/lib/period';
 import { registerForPushNotifications } from '@/lib/push-notifications';
 import { SelectedShopProvider } from '@/lib/selected-shop';
-import { AppThemeProvider, useAppTheme } from '@/lib/theme';
+import { AppThemeProvider, ThemeContext, useAppTheme } from '@/lib/theme';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -83,10 +83,25 @@ function RootNavigator() {
     );
   }
 
-  return screen === 'login' ? (
-    <LoginScreen onNavigateToSignup={() => setScreen('signup')} />
-  ) : (
-    <SignupScreen onNavigateToLogin={() => setScreen('login')} />
+  // Login/cadastro são sempre no visual escuro da marca (painel + sparkline
+  // dourada), de propósito - não seguem a preferência clara/escura da conta
+  // (essa só existe depois de logado, em Configurações). Sem isso, quem
+  // tinha escolhido "Claro" via a última sessão via o cartão do formulário
+  // virar branco em cima do painel de marca, que fica escuro fixo - relatado
+  // ao vivo como a tela de login "bugando". Duas camadas de override: os
+  // vars CSS (classes bg-lucrei-*/text-lucrei-*) e o próprio ThemeContext
+  // (cobre o que usa Colors.xxx direto, tipo a logo clara/escura e ícones).
+  return (
+    <View style={[{ flex: 1 }, vars(DarkCssVars)]}>
+      <ThemeContext.Provider
+        value={{ preference: 'dark', setPreference: () => {}, scheme: 'dark', colors: DarkColors }}>
+        {screen === 'login' ? (
+          <LoginScreen onNavigateToSignup={() => setScreen('signup')} />
+        ) : (
+          <SignupScreen onNavigateToLogin={() => setScreen('login')} />
+        )}
+      </ThemeContext.Provider>
+    </View>
   );
 }
 

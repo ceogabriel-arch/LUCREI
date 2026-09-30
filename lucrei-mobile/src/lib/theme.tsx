@@ -14,7 +14,11 @@ type ThemeContextValue = {
   colors: ThemeColors;
 };
 
-const ThemeContext = createContext<ThemeContextValue | null>(null);
+// Exportado só pra permitir um override local forçado (ver LoginScreen/
+// SignupScreen em _layout.tsx - essas telas são sempre no visual escuro da
+// marca, não seguem a preferência clara/escura da conta, que só existe
+// depois de logado).
+export const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function AppThemeProvider({ children }: PropsWithChildren) {
   const [preference, setPreferenceState] = useState<ThemePreference>('dark');
