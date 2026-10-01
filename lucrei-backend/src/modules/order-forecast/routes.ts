@@ -1,3 +1,4 @@
+import type { Shop } from '@prisma/client';
 import type { FastifyInstance } from 'fastify';
 
 import { formatOrderProductLabel } from '../../lib/order-product-label';
@@ -20,6 +21,15 @@ const PENDING_WINDOW_START = () => rangeStart('30d');
 
 type ShopForecast = { pendingCount: number; projectedProfit: number };
 
+// Lucro médio por pedido concluído recentemente - a taxa/frete exatos de um
+// pedido ainda em processamento só existem depois que ele completa de
+// verdade, então isso é sempre uma estimativa (a mesma média aplicada em
+// cada pedido pendente da loja), nunca um valor garantido por pedido.
+async function computeAvgProfitPerOrder(shop: Shop): Promise<number> {
+  const recentSummary = await computeShopSummary(shop, { period: '30d' });
+  return recentSummary.ordersCount > 0 ? recentSummary.profit / recentSummary.ordersCount : 0;
+}
+
 async function computeShopForecast(shopId: string): Promise<ShopForecast> {
   const pendingCount = await prisma.recentOrderEvent.count({
     where: {
@@ -31,15 +41,10 @@ async function computeShopForecast(shopId: string): Promise<ShopForecast> {
 
   if (pendingCount === 0) return { pendingCount: 0, projectedProfit: 0 };
 
-  // Lucro médio por pedido concluído recentemente - a taxa/frete exatos de
-  // um pedido ainda em processamento só existem depois que ele completa de
-  // verdade, então isso é sempre uma estimativa, nunca um valor garantido.
   const shop = await prisma.shop.findUnique({ where: { id: shopId } });
   if (!shop) return { pendingCount, projectedProfit: 0 };
 
-  const recentSummary = await computeShopSummary(shop, { period: '30d' });
-  const avgProfitPerOrder = recentSummary.ordersCount > 0 ? recentSummary.profit / recentSummary.ordersCount : 0;
-
+  const avgProfitPerOrder = await computeAvgProfitPerOrder(shop);
   return { pendingCount, projectedProfit: pendingCount * avgProfitPerOrder };
 }
 
@@ -118,12 +123,16 @@ export async function orderForecastRoutes(app: FastifyInstance) {
       if (!shop) return reply.status(404).send({ message: 'Loja não encontrada.' });
 
       const events = await listPendingOrders([shop.id]);
-      const labelBySn = await fetchProductLabels(events);
+      const [labelBySn, avgProfitPerOrder] = await Promise.all([
+        fetchProductLabels(events),
+        computeAvgProfitPerOrder(shop),
+      ]);
       return events.map((e) => ({
         orderSn: e.shopeeOrderSn,
         status: e.orderStatus,
         orderDate: e.orderDate,
         product: labelBySn.get(e.shopeeOrderSn) ?? null,
+        estimatedProfit: avgProfitPerOrder,
       }));
     }
   );
@@ -147,13 +156,18 @@ export async function orderForecastRoutes(app: FastifyInstance) {
 
     const events = await listPendingOrders(shops.map((s) => s.id));
     const shopNameById = new Map(shops.map((s) => [s.id, s.shopName]));
-    const labelBySn = await fetchProductLabels(events);
+    const [labelBySn, avgProfitEntries] = await Promise.all([
+      fetchProductLabels(events),
+      Promise.all(shops.map(async (shop) => [shop.id, await computeAvgProfitPerOrder(shop)] as const)),
+    ]);
+    const avgProfitByShop = new Map(avgProfitEntries);
     return events.map((e) => ({
       orderSn: e.shopeeOrderSn,
       status: e.orderStatus,
       orderDate: e.orderDate,
       shopName: shopNameById.get(e.shopId) ?? '',
       product: labelBySn.get(e.shopeeOrderSn) ?? null,
+      estimatedProfit: avgProfitByShop.get(e.shopId) ?? 0,
     }));
   });
 }

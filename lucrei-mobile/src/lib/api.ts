@@ -195,6 +195,7 @@ export type PendingOrder = {
   orderDate: string;
   shopName?: string;
   product: string | null;
+  estimatedProfit: number;
 };
 
 export function getPendingOrders(token: string, shopId: string) {

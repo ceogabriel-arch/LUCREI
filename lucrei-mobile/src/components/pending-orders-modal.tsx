@@ -4,7 +4,7 @@ import { ActivityIndicator, Dimensions, Modal, Pressable, ScrollView, Text, View
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { getCombinedPendingOrders, getPendingOrders, type PendingOrder } from '@/lib/api';
-import { formatElapsed } from '@/lib/format';
+import { formatBRL, formatElapsed } from '@/lib/format';
 import { ORDER_STATUS_LABELS } from '@/lib/order-status-labels';
 import { useModalPresentation } from '@/lib/responsive';
 import { useColors } from '@/lib/theme';
@@ -96,6 +96,12 @@ export function PendingOrdersModal({
                         </Text>
                       </View>
                     )}
+                    <View className="flex-1" />
+                    <Text
+                      className="text-sm font-semibold"
+                      style={{ color: order.estimatedProfit >= 0 ? Colors.success : Colors.danger }}>
+                      ~{formatBRL(order.estimatedProfit)}
+                    </Text>
                   </View>
                 </View>
               ))}
