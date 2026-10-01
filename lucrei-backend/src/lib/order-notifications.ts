@@ -17,23 +17,29 @@ const FALLBACK_WINDOW_MS = 24 * 60 * 60 * 1000;
 // relance, e é o que só o Lucrei mostra - a Shopee só expõe o faturamento
 // bruto) - "Você lucrou -R$ 5,00 nesse pedido" não fazia sentido nenhum num
 // pedido que deu prejuízo, então trata os três casos separados. O
-// faturamento entra no corpo como contexto do tamanho do pedido.
-function buildNotificationMessage(totalProfit: number | null, totalRevenue: number): { title: string; body: string } {
+// faturamento entra no corpo como contexto do tamanho do pedido. O
+// marketplace abreviado vai no título pra quem tem loja Shopee e Mercado
+// Livre ao mesmo tempo saber de onde veio sem abrir o app.
+function buildNotificationMessage(
+  totalProfit: number | null,
+  totalRevenue: number,
+  marketplaceLabel: string,
+): { title: string; body: string } {
   const revenueText = formatBRL(totalRevenue);
   if (totalProfit === null) {
     return {
-      title: 'Pedido concluído',
+      title: `Pedido concluído (${marketplaceLabel})`,
       body: `Pedido de ${revenueText} - cadastre o custo do produto pra saber quanto você lucrou nele.`,
     };
   }
   if (totalProfit < 0) {
     return {
-      title: `⚠️ Prejuízo de ${formatBRL(Math.abs(totalProfit))}`,
+      title: `Prejuízo de ${formatBRL(Math.abs(totalProfit))} (${marketplaceLabel})`,
       body: `Pedido de ${revenueText} - esse aqui fechou no prejuízo, vale dar uma olhada.`,
     };
   }
   return {
-    title: `💰 Lucro de ${formatBRL(totalProfit)}`,
+    title: `Lucro de ${formatBRL(totalProfit)} (${marketplaceLabel})`,
     body: `Pedido de ${revenueText} - lucro líquido já calculado, na hora.`,
   };
 }
@@ -96,7 +102,8 @@ export async function notifyOrderCompletedIfNeeded(params: {
   });
   if (claimed.count === 0) return;
 
-  const { title, body } = buildNotificationMessage(params.totalProfit, params.totalRevenue);
+  const marketplaceLabel = shop.provider === 'mercado_livre' ? 'ML' : 'Shopee';
+  const { title, body } = buildNotificationMessage(params.totalProfit, params.totalRevenue, marketplaceLabel);
 
   try {
     await sendPushNotification(owner.pushToken, title, body, { orderSn: params.orderSn });

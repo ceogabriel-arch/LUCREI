@@ -194,6 +194,34 @@ describe('notifyOrderCompletedIfNeeded', () => {
     );
   });
 
+  it('includes "(Shopee)" in the title for a Shopee shop and "(ML)" for a Mercado Livre shop', async () => {
+    prismaMock.order.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.user.findUnique.mockResolvedValue({ id: 'u1', pushToken: 'ExponentPushToken[abc]' });
+
+    prismaMock.shop.findUnique.mockResolvedValue({ id: 's1', userId: 'u1', provider: 'shopee' });
+    await notifyOrderCompletedIfNeeded({
+      orderId: 'o1',
+      orderSn: 'SN1',
+      shopDbId: 's1',
+      completedAt: new Date(),
+      totalProfit: 10,
+      totalRevenue: 150,
+    });
+    expect(sendPushNotificationMock).toHaveBeenNthCalledWith(1, expect.anything(), expect.stringContaining('(Shopee)'), expect.any(String), expect.anything());
+
+    prismaMock.order.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.shop.findUnique.mockResolvedValue({ id: 's2', userId: 'u1', provider: 'mercado_livre' });
+    await notifyOrderCompletedIfNeeded({
+      orderId: 'o2',
+      orderSn: 'SN2',
+      shopDbId: 's2',
+      completedAt: new Date(),
+      totalProfit: 10,
+      totalRevenue: 150,
+    });
+    expect(sendPushNotificationMock).toHaveBeenNthCalledWith(2, expect.anything(), expect.stringContaining('(ML)'), expect.any(String), expect.anything());
+  });
+
   it('does not send when the owner has no push token registered', async () => {
     prismaMock.order.updateMany.mockResolvedValue({ count: 1 });
     prismaMock.shop.findUnique.mockResolvedValue({ id: 's1', userId: 'u1' });
