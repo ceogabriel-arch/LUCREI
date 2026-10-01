@@ -1,7 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 
+import { formatOrderProductLabel } from '../../lib/order-product-label';
 import { rangeStart } from '../../lib/period';
 import { prisma } from '../../lib/prisma';
+import { getValidAccessToken } from '../../lib/shopee-token';
+import { getOrderDetail } from '../../shopee-client';
 import { computeShopSummary } from '../summary/routes';
 
 // Pedido nesses status não vai virar lucro (já concluiu por outro caminho,
@@ -55,6 +58,42 @@ async function listPendingOrders(shopIds: string[]) {
   });
 }
 
+// Pedido ainda em processamento nunca está na tabela Order (só sincroniza
+// COMPLETED) - então o nome do produto só existe buscando ao vivo na Shopee
+// via get_order_detail com item_list, que (diferente do get_escrow_detail)
+// vem preenchido em qualquer status. Uma chamada por loja (não por pedido) -
+// agrupa antes de buscar. Loja com token expirado/erro não derruba as outras.
+async function fetchProductLabels(
+  events: { shopeeOrderSn: string; shopId: string }[]
+): Promise<Map<string, string>> {
+  const labelBySn = new Map<string, string>();
+  const snsByShop = new Map<string, string[]>();
+  for (const e of events) {
+    snsByShop.set(e.shopId, [...(snsByShop.get(e.shopId) ?? []), e.shopeeOrderSn]);
+  }
+
+  await Promise.all(
+    [...snsByShop.entries()].map(async ([shopId, sns]) => {
+      try {
+        const { accessToken, shopeeShopId } = await getValidAccessToken(shopId);
+        const orderList = await getOrderDetail(accessToken, shopeeShopId, sns, ['item_list']);
+        for (const order of orderList) {
+          const items = (order.item_list ?? [])
+            .map((it) => ({ quantity: it.model_quantity_purchased ?? it.quantity_purchased ?? 1, name: it.item_name }))
+            .filter((it): it is { quantity: number; name: string } => !!it.name);
+          const label = formatOrderProductLabel(items);
+          if (label) labelBySn.set(order.order_sn, label);
+        }
+      } catch {
+        // Loja sem token válido ou API fora do ar - o pedido ainda aparece na
+        // lista, só sem o nome do produto.
+      }
+    })
+  );
+
+  return labelBySn;
+}
+
 export async function orderForecastRoutes(app: FastifyInstance) {
   app.get<{ Params: { shopId: string } }>(
     '/shops/:shopId/order-forecast',
@@ -79,7 +118,13 @@ export async function orderForecastRoutes(app: FastifyInstance) {
       if (!shop) return reply.status(404).send({ message: 'Loja não encontrada.' });
 
       const events = await listPendingOrders([shop.id]);
-      return events.map((e) => ({ orderSn: e.shopeeOrderSn, status: e.orderStatus, orderDate: e.orderDate }));
+      const labelBySn = await fetchProductLabels(events);
+      return events.map((e) => ({
+        orderSn: e.shopeeOrderSn,
+        status: e.orderStatus,
+        orderDate: e.orderDate,
+        product: labelBySn.get(e.shopeeOrderSn) ?? null,
+      }));
     }
   );
 
@@ -102,11 +147,13 @@ export async function orderForecastRoutes(app: FastifyInstance) {
 
     const events = await listPendingOrders(shops.map((s) => s.id));
     const shopNameById = new Map(shops.map((s) => [s.id, s.shopName]));
+    const labelBySn = await fetchProductLabels(events);
     return events.map((e) => ({
       orderSn: e.shopeeOrderSn,
       status: e.orderStatus,
       orderDate: e.orderDate,
       shopName: shopNameById.get(e.shopId) ?? '',
+      product: labelBySn.get(e.shopeeOrderSn) ?? null,
     }));
   });
 }

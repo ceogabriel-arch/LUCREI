@@ -546,8 +546,11 @@ export default function InicioScreen() {
             {!stillLoading && forecast !== null && forecast.pendingCount > 0 && (
               <Pressable
                 onPress={() => setPendingOrdersOpen(true)}
-                className="mt-3 flex-row items-center justify-between rounded-2xl border border-dashed p-4"
-                style={{ borderColor: Colors.goldDim, backgroundColor: Colors.surfaceAlt }}>
+                hitSlop={4}
+                style={({ pressed }) => [
+                  { borderColor: Colors.goldDim, backgroundColor: Colors.surfaceAlt, opacity: pressed ? 0.7 : 1 },
+                ]}
+                className="mt-3 flex-row items-center justify-between rounded-2xl border border-dashed p-4">
                 <View className="flex-1 pr-3">
                   <Text className="text-sm font-medium text-lucrei-text">Previsão de lucro (estimado)</Text>
                   <Text className="mt-0.5 text-xs text-lucrei-textMuted">
@@ -562,6 +565,7 @@ export default function InicioScreen() {
                     {formatBRL(forecast.projectedProfit)}
                   </Text>
                 )}
+                <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} style={{ marginLeft: 6 }} />
               </Pressable>
             )}
 

@@ -189,7 +189,13 @@ export function getCombinedOrderForecast(token: string) {
 // Detalhe dos pedidos por trás da previsão acima - abre ao tocar no card.
 // shopName só vem preenchido na versão combinada (uma loja só não precisa
 // dizer o nome dela de novo).
-export type PendingOrder = { orderSn: string; status: string; orderDate: string; shopName?: string };
+export type PendingOrder = {
+  orderSn: string;
+  status: string;
+  orderDate: string;
+  shopName?: string;
+  product: string | null;
+};
 
 export function getPendingOrders(token: string, shopId: string) {
   return request<PendingOrder[]>(`/shops/${shopId}/order-forecast/pending`, {

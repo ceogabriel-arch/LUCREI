@@ -75,9 +75,14 @@ export function PendingOrdersModal({
               orders.map((order) => (
                 <View key={order.orderSn} className="rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
                   <View className="flex-row items-center justify-between">
-                    <Text className="text-sm font-medium text-lucrei-text">{order.orderSn}</Text>
+                    <Text className="text-sm font-medium text-lucrei-text" numberOfLines={1} style={{ flexShrink: 1 }}>
+                      {order.product ?? order.orderSn}
+                    </Text>
                     <Text className="text-xs text-lucrei-textMuted">{formatElapsed(order.orderDate)}</Text>
                   </View>
+                  {order.product && (
+                    <Text className="mt-0.5 text-xs text-lucrei-textMuted">{order.orderSn}</Text>
+                  )}
                   <View className="mt-2 flex-row flex-wrap items-center gap-1.5">
                     <View className="rounded-full bg-lucrei-surfaceAlt px-2.5 py-1">
                       <Text className="text-xs text-lucrei-textMuted">
