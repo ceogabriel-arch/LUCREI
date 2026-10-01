@@ -10,6 +10,7 @@ import { BlurredValue } from '@/components/blurred-value';
 import { HistoryBackfillCard } from '@/components/history-backfill-card';
 import { MarketplaceBadge } from '@/components/marketplace-badge';
 import { PastDueBanner } from '@/components/past-due-banner';
+import { PendingOrdersModal } from '@/components/pending-orders-modal';
 import { Screen } from '@/components/screen';
 import { ShopPicker } from '@/components/shop-picker';
 import { Sparkline } from '@/components/sparkline';
@@ -63,6 +64,7 @@ export default function InicioScreen() {
   const [forecast, setForecast] = useState<OrderForecast | null>(null);
   const [lifetimeProfit, setLifetimeProfit] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [pendingOrdersOpen, setPendingOrdersOpen] = useState(false);
 
   async function handleConnectShopee() {
     if (state.status !== 'authenticated') return;
@@ -542,14 +544,15 @@ export default function InicioScreen() {
                 quando ele completa de verdade. Só aparece com algo pra
                 mostrar, pra não virar um card vazio "0 pedidos". */}
             {!stillLoading && forecast !== null && forecast.pendingCount > 0 && (
-              <View
+              <Pressable
+                onPress={() => setPendingOrdersOpen(true)}
                 className="mt-3 flex-row items-center justify-between rounded-2xl border border-dashed p-4"
                 style={{ borderColor: Colors.goldDim, backgroundColor: Colors.surfaceAlt }}>
                 <View className="flex-1 pr-3">
                   <Text className="text-sm font-medium text-lucrei-text">Previsão de lucro (estimado)</Text>
                   <Text className="mt-0.5 text-xs text-lucrei-textMuted">
                     {forecast.pendingCount} {forecast.pendingCount === 1 ? 'pedido comprado' : 'pedidos comprados'}{' '}
-                    ainda em processamento na Shopee.
+                    ainda em processamento na Shopee. Toque pra ver.
                   </Text>
                 </View>
                 {subscriptionAccess.isPastDue ? (
@@ -559,8 +562,15 @@ export default function InicioScreen() {
                     {formatBRL(forecast.projectedProfit)}
                   </Text>
                 )}
-              </View>
+              </Pressable>
             )}
+
+            <PendingOrdersModal
+              visible={pendingOrdersOpen}
+              onClose={() => setPendingOrdersOpen(false)}
+              token={token}
+              shopId={viewingAll ? null : (selectedShop?.id ?? null)}
+            />
 
             {/* Só faz sentido com "Todas as lojas" e 2+ lojas - com uma loja
                 só, o card acima já mostra o lucro dela, repetir aqui seria

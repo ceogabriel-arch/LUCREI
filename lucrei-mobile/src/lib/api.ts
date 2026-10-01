@@ -186,6 +186,23 @@ export function getCombinedOrderForecast(token: string) {
   });
 }
 
+// Detalhe dos pedidos por trás da previsão acima - abre ao tocar no card.
+// shopName só vem preenchido na versão combinada (uma loja só não precisa
+// dizer o nome dela de novo).
+export type PendingOrder = { orderSn: string; status: string; orderDate: string; shopName?: string };
+
+export function getPendingOrders(token: string, shopId: string) {
+  return request<PendingOrder[]>(`/shops/${shopId}/order-forecast/pending`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function getCombinedPendingOrders(token: string) {
+  return request<PendingOrder[]>('/order-forecast/pending', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 // from/to (ISO) pro relatório de ano/mês específico em Relatórios - period
 // só cobre os presets fixos (hoje/7d/30d/all), não um intervalo arbitrário.
 export function getSummaryRange(token: string, shopId: string, from: Date, to: Date) {

@@ -22,6 +22,7 @@ import {
 import { useAuth } from '@/lib/auth';
 import { useDataRefresh } from '@/lib/data-refresh';
 import { formatBRL } from '@/lib/format';
+import { ORDER_STATUS_LABELS as STATUS_LABELS } from '@/lib/order-status-labels';
 import { PERIOD_TO_API, PERIODS, usePeriod } from '@/lib/period';
 import { useModalPresentation } from '@/lib/responsive';
 import { useSelectedShop } from '@/lib/selected-shop';
@@ -29,17 +30,6 @@ import { useSubscriptionAccess } from '@/lib/subscription-access';
 import { useColors } from '@/lib/theme';
 
 type LoadState = 'loading' | 'no-shop' | 'ready' | 'error';
-
-const STATUS_LABELS: Record<string, string> = {
-  UNPAID: 'Aguardando pagamento',
-  READY_TO_SHIP: 'Pronto pra envio',
-  PROCESSED: 'Em processamento',
-  SHIPPED: 'Enviado',
-  COMPLETED: 'Concluído',
-  IN_CANCEL: 'Cancelando',
-  CANCELLED: 'Cancelado',
-  TO_RETURN: 'Em devolução',
-};
 
 const dateFormatter = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
