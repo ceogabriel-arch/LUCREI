@@ -3,11 +3,17 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Dimensions, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { MarketplaceBadge } from '@/components/marketplace-badge';
 import { getCombinedPendingOrders, getPendingOrders, type PendingOrder } from '@/lib/api';
 import { formatBRL, formatElapsed } from '@/lib/format';
-import { ORDER_STATUS_LABELS } from '@/lib/order-status-labels';
+import { MERCADO_LIVRE_ORDER_STATUS_LABELS, ORDER_STATUS_LABELS } from '@/lib/order-status-labels';
 import { useModalPresentation } from '@/lib/responsive';
 import { useColors } from '@/lib/theme';
+
+function statusLabel(order: PendingOrder) {
+  const map = order.provider === 'mercado_livre' ? MERCADO_LIVRE_ORDER_STATUS_LABELS : ORDER_STATUS_LABELS;
+  return map[order.status] ?? order.status;
+}
 
 // Detalhe por trás do card "Previsão de lucro" no Início - mostra cada
 // pedido comprado (Shopee ou Mercado Livre) que ainda não completou, e há
@@ -74,10 +80,13 @@ export function PendingOrdersModal({
             {!loading &&
               orders.map((order) => (
                 <View key={order.orderSn} className="rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
-                  <View className="flex-row items-center justify-between">
-                    <Text className="text-sm font-medium text-lucrei-text" numberOfLines={1} style={{ flexShrink: 1 }}>
-                      {order.product ?? order.orderSn}
-                    </Text>
+                  <View className="flex-row items-center justify-between gap-2">
+                    <View className="flex-1 flex-row items-center gap-1.5">
+                      <MarketplaceBadge provider={order.provider} size={14} />
+                      <Text className="flex-1 text-sm font-medium text-lucrei-text" numberOfLines={1}>
+                        {order.product ?? order.orderSn}
+                      </Text>
+                    </View>
                     <Text className="text-xs text-lucrei-textMuted">{formatElapsed(order.orderDate)}</Text>
                   </View>
                   {order.product && (
@@ -85,9 +94,7 @@ export function PendingOrdersModal({
                   )}
                   <View className="mt-2 flex-row flex-wrap items-center gap-1.5">
                     <View className="rounded-full bg-lucrei-surfaceAlt px-2.5 py-1">
-                      <Text className="text-xs text-lucrei-textMuted">
-                        {ORDER_STATUS_LABELS[order.status] ?? order.status}
-                      </Text>
+                      <Text className="text-xs text-lucrei-textMuted">{statusLabel(order)}</Text>
                     </View>
                     {order.shopName && (
                       <View className="rounded-full bg-lucrei-surfaceAlt px-2.5 py-1">

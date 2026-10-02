@@ -161,6 +161,7 @@ export async function orderForecastRoutes(app: FastifyInstance) {
         orderSn: orderKey(e),
         status: e.orderStatus,
         orderDate: e.orderDate,
+        provider: shop.provider,
         product: labelByKey.get(orderKey(e)) ?? null,
         estimatedProfit: avgProfitPerOrder,
       }));
@@ -185,7 +186,7 @@ export async function orderForecastRoutes(app: FastifyInstance) {
     if (shops.length === 0) return [];
 
     const events = await listPendingOrders(shops);
-    const shopNameById = new Map(shops.map((s) => [s.id, s.shopName]));
+    const shopById = new Map(shops.map((s) => [s.id, s]));
     const [labelByKey, avgProfitEntries] = await Promise.all([
       fetchProductLabels(events, shops),
       Promise.all(shops.map(async (shop) => [shop.id, await computeAvgProfitPerOrder(shop)] as const)),
@@ -195,7 +196,8 @@ export async function orderForecastRoutes(app: FastifyInstance) {
       orderSn: orderKey(e),
       status: e.orderStatus,
       orderDate: e.orderDate,
-      shopName: shopNameById.get(e.shopId) ?? '',
+      shopName: shopById.get(e.shopId)?.shopName ?? '',
+      provider: shopById.get(e.shopId)?.provider ?? 'shopee',
       product: labelByKey.get(orderKey(e)) ?? null,
       estimatedProfit: avgProfitByShop.get(e.shopId) ?? 0,
     }));

@@ -229,6 +229,7 @@ export type PendingOrder = {
   status: string;
   orderDate: string;
   shopName?: string;
+  provider: 'shopee' | 'mercado_livre';
   product: string | null;
   estimatedProfit: number;
 };
