@@ -8,6 +8,7 @@ import { BlurredValue } from '@/components/blurred-value';
 import { PastDueBanner } from '@/components/past-due-banner';
 import { Screen } from '@/components/screen';
 import { ShopPicker } from '@/components/shop-picker';
+import { ShopTaxRateField } from '@/components/shop-tax-rate-field';
 import {
   ApiError,
   getOrphanProducts,
@@ -545,6 +546,15 @@ export default function ProdutosScreen() {
       </Text>
       {activeShops.length > 1 && (
         <ShopPicker />
+      )}
+
+      {/* Pedido ao vivo: a % de imposto só existia em Configurações, mas
+          quem está mexendo em custo de produto espera achar ela aqui do
+          lado - mesmo campo, mesma loja, só a versão compacta. */}
+      {!viewingAll && selectedShop && (
+        <View className="mt-5">
+          <ShopTaxRateField shop={selectedShop} compact />
+        </View>
       )}
 
       <View className="mt-5 flex-row self-start rounded-full bg-lucrei-surface p-1">
