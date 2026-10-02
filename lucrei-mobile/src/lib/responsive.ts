@@ -81,7 +81,12 @@ export const fullscreenOverlayStyle = {
   ...(Platform.OS === 'web' ? { zIndex: 1000 } : null),
 };
 
-const MODAL_DESKTOP_WIDTH = 480;
+// 480 (valor antigo) ficava pequeno demais numa tela de desktop de verdade -
+// reclamado ao vivo em vários modais diferentes (Meta diária, Alterar nome
+// etc.), não só um caso isolado. 560 ainda é bem mais estreito que a tela
+// toda (modal continua com cara de diálogo, não de página), só não fica tão
+// apertado quanto antes.
+const MODAL_DESKTOP_WIDTH = 560;
 
 /**
  * Todos os modais do app são "bottom sheets" (colados embaixo, só cantos de
