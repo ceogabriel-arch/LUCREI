@@ -530,6 +530,9 @@ export default function RelatoriosScreen() {
                 <CostBar label="Custo do produto" value={summary.productCost} total={summary.revenue} color={Colors.goldDim} />
                 <CostBar label={`Taxas ${marketplaceLabelLower}`} value={summary.shopeeFees} total={summary.revenue} color={Colors.danger} />
                 <CostBar label="Frete" value={summary.shippingCost} total={summary.revenue} color={Colors.textMuted} />
+                {summary.taxCost > 0 && (
+                  <CostBar label="Imposto" value={summary.taxCost} total={summary.revenue} color={Colors.danger} />
+                )}
                 <CostBar label="Lucro" value={summary.profit} total={summary.revenue} color={Colors.gold} />
                 {summary.itemsMissingCost > 0 && (
                   <Text className="mt-1 text-xs text-lucrei-textMuted">

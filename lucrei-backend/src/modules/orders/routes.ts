@@ -77,6 +77,7 @@ export async function orderRoutes(app: FastifyInstance) {
               salePrice: Number(li.salePrice),
               shippingFeeAllocated: Number(li.shippingFeeAllocated),
               shopeeFeeAllocated: Number(li.shopeeFeeAllocated),
+              taxAllocated: Number(li.taxAllocated),
               productCostSnapshot: li.productCostSnapshot !== null ? Number(li.productCostSnapshot) : null,
               profit: li.profit !== null ? Number(li.profit) : null,
             })),
@@ -116,6 +117,7 @@ export async function orderRoutes(app: FastifyInstance) {
         'Valor de venda (R$)',
         'Frete alocado (R$)',
         `Taxa ${marketplaceLabel} (R$)`,
+        'Imposto (R$)',
         'Custo do produto (R$)',
         'Lucro (R$)',
       ].join(';');
@@ -137,6 +139,7 @@ export async function orderRoutes(app: FastifyInstance) {
               csvNumber(Number(li.salePrice)),
               csvNumber(Number(li.shippingFeeAllocated)),
               csvNumber(Number(li.shopeeFeeAllocated)),
+              csvNumber(Number(li.taxAllocated)),
               li.productCostSnapshot !== null ? csvNumber(Number(li.productCostSnapshot)) : '',
               li.profit !== null ? csvNumber(Number(li.profit)) : '',
             ].join(';')
@@ -187,6 +190,7 @@ export async function orderRoutes(app: FastifyInstance) {
         'Valor de venda (R$)',
         'Frete alocado (R$)',
         'Taxa marketplace (R$)',
+        'Imposto (R$)',
         'Custo do produto (R$)',
         'Lucro (R$)',
       ].join(';');
@@ -208,6 +212,7 @@ export async function orderRoutes(app: FastifyInstance) {
               csvNumber(Number(li.salePrice)),
               csvNumber(Number(li.shippingFeeAllocated)),
               csvNumber(Number(li.shopeeFeeAllocated)),
+              csvNumber(Number(li.taxAllocated)),
               li.productCostSnapshot !== null ? csvNumber(Number(li.productCostSnapshot)) : '',
               li.profit !== null ? csvNumber(Number(li.profit)) : '',
             ].join(';')

@@ -4,14 +4,20 @@ import { notifyOrderCompletedIfNeeded } from '../../lib/order-notifications';
 import { prisma } from '../../lib/prisma';
 import { getValidAccessToken } from '../../lib/shopee-token';
 import { getEscrowDetail, getOrderDetail, getOrderList } from '../../shopee-client';
-import { allocateLineItem, computeLineProfit, computeOrderTotals } from './order-math';
+import { allocateLineItem, computeLineProfit, computeOrderTotals, computeTaxAllocated } from './order-math';
 
 const ELIGIBLE_STATUSES = new Set(['COMPLETED']);
+
+async function getShopTaxRate(shopId: string): Promise<number> {
+  const shop = await prisma.shop.findUnique({ where: { id: shopId }, select: { taxRatePercent: true } });
+  return shop?.taxRatePercent != null ? Number(shop.taxRatePercent) : 0;
+}
 
 async function processOrder(
   shopDbId: string,
   shopeeShopId: number,
   accessToken: string,
+  taxRatePercent: number,
   orderSn: string,
   orderStatus: string,
   createTime?: number,
@@ -75,7 +81,8 @@ async function processOrder(
     const product = productByItemId.get(String(li.item_id));
 
     const productCostSnapshot = product ? Number(product.costPrice) * li.quantity_purchased : null;
-    const profit = computeLineProfit(lineValue, shippingFeeAllocated, shopeeFeeAllocated, productCostSnapshot);
+    const taxAllocated = computeTaxAllocated(lineValue, taxRatePercent);
+    const profit = computeLineProfit(lineValue, shippingFeeAllocated, shopeeFeeAllocated, productCostSnapshot, taxAllocated);
 
     if (profit === null) itemsMissingCost++;
     else profitSum += profit;
@@ -89,6 +96,7 @@ async function processOrder(
       salePrice: lineValue,
       shippingFeeAllocated,
       shopeeFeeAllocated,
+      taxAllocated,
       productCostSnapshot: productCostSnapshot ?? undefined,
       profit: profit ?? undefined,
     };
@@ -134,9 +142,21 @@ async function processOrder(
 }
 
 export async function syncOneOrder(shopId: string, orderSn: string, orderStatus: string) {
-  const { accessToken, shopeeShopId } = await getValidAccessToken(shopId);
+  const [{ accessToken, shopeeShopId }, taxRatePercent] = await Promise.all([
+    getValidAccessToken(shopId),
+    getShopTaxRate(shopId),
+  ]);
   const [detail] = await getOrderDetail(accessToken, shopeeShopId, [orderSn]);
-  return processOrder(shopId, shopeeShopId, accessToken, orderSn, orderStatus, detail?.create_time, detail?.update_time);
+  return processOrder(
+    shopId,
+    shopeeShopId,
+    accessToken,
+    taxRatePercent,
+    orderSn,
+    orderStatus,
+    detail?.create_time,
+    detail?.update_time
+  );
 }
 
 // get_order_list da Shopee só aceita um intervalo de até 15 dias por
@@ -181,6 +201,7 @@ async function syncWindowUnbounded(
   shopId: string,
   shopeeShopId: number,
   accessToken: string,
+  taxRatePercent: number,
   timeFrom: number,
   timeTo: number
 ) {
@@ -221,6 +242,7 @@ async function syncWindowUnbounded(
           shopId,
           shopeeShopId,
           accessToken,
+          taxRatePercent,
           detail.order_sn,
           detail.order_status,
           detail.create_time,
@@ -237,21 +259,31 @@ async function syncWindowUnbounded(
   return { ordersSeen, ordersSynced };
 }
 
-async function syncWindow(shopId: string, shopeeShopId: number, accessToken: string, timeFrom: number, timeTo: number) {
+async function syncWindow(
+  shopId: string,
+  shopeeShopId: number,
+  accessToken: string,
+  taxRatePercent: number,
+  timeFrom: number,
+  timeTo: number
+) {
   return withTimeout(
-    syncWindowUnbounded(shopId, shopeeShopId, accessToken, timeFrom, timeTo),
+    syncWindowUnbounded(shopId, shopeeShopId, accessToken, taxRatePercent, timeFrom, timeTo),
     WINDOW_TIMEOUT_MS,
     `Bloco de pedidos demorou mais de ${WINDOW_TIMEOUT_MS / 60000} minuto(s) pra responder.`
   );
 }
 
 export async function syncShopOrders(shopId: string) {
-  const { accessToken, shopeeShopId } = await getValidAccessToken(shopId);
+  const [{ accessToken, shopeeShopId }, taxRatePercent] = await Promise.all([
+    getValidAccessToken(shopId),
+    getShopTaxRate(shopId),
+  ]);
 
   const timeTo = Math.floor(Date.now() / 1000);
   const timeFrom = timeTo - WINDOW_SECONDS;
 
-  const result = await syncWindow(shopId, shopeeShopId, accessToken, timeFrom, timeTo);
+  const result = await syncWindow(shopId, shopeeShopId, accessToken, taxRatePercent, timeFrom, timeTo);
 
   await prisma.shop.update({ where: { id: shopId }, data: { lastSyncedAt: new Date() } });
 
@@ -303,7 +335,10 @@ export async function runHistoryBackfill(shopId: string, sinceDate: Date) {
   });
 
   try {
-    const { accessToken, shopeeShopId } = await getValidAccessToken(shopId);
+    const [{ accessToken, shopeeShopId }, taxRatePercent] = await Promise.all([
+      getValidAccessToken(shopId),
+      getShopTaxRate(shopId),
+    ]);
 
     const sinceSec = Math.floor(sinceDate.getTime() / 1000);
     let windowEnd = Math.floor(Date.now() / 1000);
@@ -315,7 +350,7 @@ export async function runHistoryBackfill(shopId: string, sinceDate: Date) {
     while (windowEnd > sinceSec) {
       const windowStart = Math.max(sinceSec, windowEnd - WINDOW_SECONDS);
       try {
-        const result = await syncWindow(shopId, shopeeShopId, accessToken, windowStart, windowEnd);
+        const result = await syncWindow(shopId, shopeeShopId, accessToken, taxRatePercent, windowStart, windowEnd);
         ordersSynced += result.ordersSynced;
       } catch (err) {
         // Um bloco de 15 dias falhar (ex: janela antiga demais pra Shopee

@@ -143,6 +143,9 @@ export type Shop = {
   // null = nunca rodou. Usado pra saber se ainda vale a pena empurrar a
   // pessoa pra sincronizar o histórico completo (ver history-backfill-card).
   historyBackfillStatus: 'running' | 'done' | 'error' | null;
+  // null enquanto a loja não tem alíquota de imposto configurada - hoje só o
+  // cálculo de lucro da Shopee usa isso de verdade.
+  taxRatePercent: number | null;
 };
 
 export function getShops(token: string) {
@@ -159,12 +162,21 @@ export function disconnectShop(token: string, shopId: string) {
   });
 }
 
+export function updateShopTaxRate(token: string, shopId: string, taxRatePercent: number | null) {
+  return request<{ id: string; taxRatePercent: number | null }>(`/shops/${shopId}/tax-rate`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ taxRatePercent }),
+  });
+}
+
 export type Summary = {
   revenue: number;
   cost: number;
   shippingCost: number;
   shopeeFees: number;
   productCost: number;
+  taxCost: number;
   profit: number;
   ordersCount: number;
   avgTicket: number;
@@ -308,6 +320,7 @@ export type OrderLineItem = {
   salePrice: number;
   shippingFeeAllocated: number;
   shopeeFeeAllocated: number;
+  taxAllocated: number;
   productCostSnapshot: number | null;
   profit: number | null;
 };

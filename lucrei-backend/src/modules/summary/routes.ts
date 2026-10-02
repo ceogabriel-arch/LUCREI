@@ -16,6 +16,7 @@ type ShopSummary = {
   shippingCost: number;
   shopeeFees: number;
   productCost: number;
+  taxCost: number;
   profit: number;
   ordersCount: number;
   avgTicket: number;
@@ -67,6 +68,7 @@ export async function computeShopSummary(shop: Shop, query: SummaryQuery): Promi
   let shippingCost = 0;
   let shopeeFees = 0;
   let productCost = 0;
+  let taxCost = 0;
   let itemsMissingCost = 0;
   const profitByDay = new Map<string, number>();
 
@@ -82,6 +84,7 @@ export async function computeShopSummary(shop: Shop, query: SummaryQuery): Promi
         shippingCost += Number(li.shippingFeeAllocated);
         shopeeFees += Number(li.shopeeFeeAllocated);
         productCost += Number(li.productCostSnapshot ?? 0);
+        taxCost += Number(li.taxAllocated);
         profitByDay.set(day, (profitByDay.get(day) ?? 0) + Number(li.profit));
       } else {
         itemsMissingCost++;
@@ -89,7 +92,7 @@ export async function computeShopSummary(shop: Shop, query: SummaryQuery): Promi
     }
   }
 
-  const cost = shippingCost + shopeeFees + productCost;
+  const cost = shippingCost + shopeeFees + productCost + taxCost;
   const ordersCount = orders.length;
   const avgTicket = ordersCount > 0 ? revenue / ordersCount : 0;
   const profitMargin = revenueWithKnownCost > 0 ? (profit / revenueWithKnownCost) * 100 : 0;
@@ -97,7 +100,7 @@ export async function computeShopSummary(shop: Shop, query: SummaryQuery): Promi
     .sort(([a], [b]) => (a < b ? -1 : 1))
     .map(([date, profit]) => ({ date, profit }));
 
-  return { revenue, revenueWithKnownCost, cost, shippingCost, shopeeFees, productCost, profit, ordersCount, avgTicket, profitMargin, itemsMissingCost, trend };
+  return { revenue, revenueWithKnownCost, cost, shippingCost, shopeeFees, productCost, taxCost, profit, ordersCount, avgTicket, profitMargin, itemsMissingCost, trend };
 }
 
 function combineSummaries(summaries: ShopSummary[]): ShopSummary {
@@ -106,6 +109,7 @@ function combineSummaries(summaries: ShopSummary[]): ShopSummary {
   const shippingCost = summaries.reduce((sum, s) => sum + s.shippingCost, 0);
   const shopeeFees = summaries.reduce((sum, s) => sum + s.shopeeFees, 0);
   const productCost = summaries.reduce((sum, s) => sum + s.productCost, 0);
+  const taxCost = summaries.reduce((sum, s) => sum + s.taxCost, 0);
   const profit = summaries.reduce((sum, s) => sum + s.profit, 0);
   const ordersCount = summaries.reduce((sum, s) => sum + s.ordersCount, 0);
   const itemsMissingCost = summaries.reduce((sum, s) => sum + s.itemsMissingCost, 0);
@@ -126,7 +130,7 @@ function combineSummaries(summaries: ShopSummary[]): ShopSummary {
     .sort(([a], [b]) => (a < b ? -1 : 1))
     .map(([date, profit]) => ({ date, profit }));
 
-  return { revenue, revenueWithKnownCost, cost, shippingCost, shopeeFees, productCost, profit, ordersCount, avgTicket, profitMargin, itemsMissingCost, trend };
+  return { revenue, revenueWithKnownCost, cost, shippingCost, shopeeFees, productCost, taxCost, profit, ordersCount, avgTicket, profitMargin, itemsMissingCost, trend };
 }
 
 export async function summaryRoutes(app: FastifyInstance) {

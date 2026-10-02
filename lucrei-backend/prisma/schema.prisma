@@ -150,6 +150,13 @@ model Shop {
   // reconectar em outra conta Lucrei, pra impedir teste infinito trocando de conta.
   trialConsumedAt DateTime?
 
+  // Alíquota de imposto (%) configurada pelo vendedor pra essa loja - null
+  // enquanto não configurado (nenhum desconto de imposto é aplicado). Por
+  // loja (não por conta) porque cada loja pode ter CNPJ/regime tributário
+  // diferente. Hoje só a sincronização da Shopee usa isso no cálculo de
+  // lucro - ver nota em order-math.ts.
+  taxRatePercent  Decimal?   @db.Decimal(5, 2)
+
   // Backfill de histórico (botão em Relatórios) roda em segundo plano porque
   // pode levar minutos - esses campos são o estado que o app faz polling pra
   // mostrar progresso, em vez de segurar a requisição HTTP aberta o tempo todo.
@@ -287,6 +294,11 @@ model OrderLineItem {
   shopeeFeeAllocated    Decimal  @db.Decimal(12, 2)
   productCostSnapshot   Decimal? @db.Decimal(12, 2)
   refundAmount          Decimal? @db.Decimal(12, 2)
+  // Valor de imposto descontado desse item (salePrice × Shop.taxRatePercent
+  // no momento da sincronização) - 0 pra loja sem alíquota configurada ou
+  // pedido sincronizado antes dessa coluna existir, nunca null (mesmo
+  // critério de shippingFeeAllocated/shopeeFeeAllocated ao lado).
+  taxAllocated          Decimal  @default(0) @db.Decimal(12, 2)
   profit                Decimal? @db.Decimal(12, 2)
 
   order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)

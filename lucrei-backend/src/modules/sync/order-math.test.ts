@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { allocateLineItem, computeLineProfit, computeOrderTotals } from './order-math';
+import { allocateLineItem, computeLineProfit, computeOrderTotals, computeTaxAllocated } from './order-math';
 
 describe('computeOrderTotals', () => {
   it('sums item value, clamps net shipping at zero, and adds up Shopee fees', () => {
@@ -65,6 +65,16 @@ describe('allocateLineItem', () => {
   });
 });
 
+describe('computeTaxAllocated', () => {
+  it('applies the percentage to the line value', () => {
+    expect(computeTaxAllocated(200, 6)).toBe(12);
+  });
+
+  it('returns 0 for a shop with no tax rate configured', () => {
+    expect(computeTaxAllocated(200, 0)).toBe(0);
+  });
+});
+
 describe('computeLineProfit', () => {
   it('subtracts shipping, fees, and product cost from the line value', () => {
     expect(computeLineProfit(100, 10, 5, 40)).toBe(45);
@@ -72,5 +82,13 @@ describe('computeLineProfit', () => {
 
   it('returns null when there is no product cost snapshot (cost not registered yet)', () => {
     expect(computeLineProfit(100, 10, 5, null)).toBeNull();
+  });
+
+  it('also subtracts tax when a rate is provided', () => {
+    expect(computeLineProfit(100, 10, 5, 40, 6)).toBe(39);
+  });
+
+  it('defaults tax to 0 (same result as before the parameter existed) when omitted', () => {
+    expect(computeLineProfit(100, 10, 5, 40)).toBe(computeLineProfit(100, 10, 5, 40, 0));
   });
 });

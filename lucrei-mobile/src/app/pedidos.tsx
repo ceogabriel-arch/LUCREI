@@ -59,6 +59,7 @@ function ItemBreakdown({ item }: { item: OrderLineItem }) {
         <BreakdownRow label="Venda" value={formatBRL(item.salePrice)} />
         <BreakdownRow label="− Frete alocado" value={formatBRL(item.shippingFeeAllocated)} />
         <BreakdownRow label="− Taxa Shopee" value={formatBRL(item.shopeeFeeAllocated)} />
+        {item.taxAllocated > 0 && <BreakdownRow label="− Imposto" value={formatBRL(item.taxAllocated)} />}
         <BreakdownRow
           label="− Custo do produto"
           value={item.productCostSnapshot != null ? formatBRL(item.productCostSnapshot) : 'não informado'}

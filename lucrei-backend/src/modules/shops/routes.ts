@@ -226,9 +226,12 @@ export async function shopRoutes(app: FastifyInstance) {
         disconnectedAt: true,
         provider: true,
         historyBackfillStatus: true,
+        taxRatePercent: true,
       },
     });
-    return { shops };
+    return {
+      shops: shops.map((s) => ({ ...s, taxRatePercent: s.taxRatePercent != null ? Number(s.taxRatePercent) : null })),
+    };
   });
 
   app.post<{ Params: { shopId: string } }>(
@@ -251,6 +254,33 @@ export async function shopRoutes(app: FastifyInstance) {
       });
 
       return { id: updated.id, status: updated.status, disconnectedAt: updated.disconnectedAt };
+    }
+  );
+
+  app.patch<{ Params: { shopId: string }; Body: { taxRatePercent: number | null } }>(
+    '/shops/:shopId/tax-rate',
+    {
+      onRequest: [app.authenticate],
+      schema: {
+        body: {
+          type: 'object',
+          required: ['taxRatePercent'],
+          properties: { taxRatePercent: { type: ['number', 'null'], minimum: 0, maximum: 100 } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const shop = await prisma.shop.findFirst({
+        where: { id: request.params.shopId, userId: request.user.sub },
+      });
+      if (!shop) return reply.status(404).send({ message: 'Loja não encontrada.' });
+
+      const updated = await prisma.shop.update({
+        where: { id: shop.id },
+        data: { taxRatePercent: request.body.taxRatePercent },
+      });
+
+      return { id: updated.id, taxRatePercent: updated.taxRatePercent != null ? Number(updated.taxRatePercent) : null };
     }
   );
 
