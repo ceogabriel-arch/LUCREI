@@ -35,7 +35,15 @@ async function main() {
     throw new Error('JWT_SECRET não configurado no .env');
   }
 
-  await app.register(cors, { origin: true });
+  // O default do @fastify/cors (v11) pra "methods" é só 'GET,HEAD,POST' -
+  // qualquer PATCH/PUT/DELETE chamado da web (não do app nativo, que não faz
+  // preflight) falhava no preflight OPTIONS com "Method X is not allowed by
+  // Access-Control-Allow-Methods", sem nenhum log do lado do servidor (o
+  // navegador bloqueia antes da requisição de verdade sair). Encontrado ao
+  // vivo testando "Meta diária de lucro" (PATCH) pela web - mas o mesmo bug
+  // já afetava "Alterar nome" (PATCH /auth/me) antes disso, só não tinha
+  // sido notado.
+  await app.register(cors, { origin: true, methods: ['GET', 'HEAD', 'POST', 'PATCH', 'PUT', 'DELETE'] });
   // Achado depois de trocar o zstd por br/gzip/deflate: o problema não era
   // zstd - QUALQUER compressão (br OU gzip) devolve Content-Encoding e
   // Content-Length corretos só que corpo vazio, especificamente nas rotas
