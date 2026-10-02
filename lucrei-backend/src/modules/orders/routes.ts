@@ -64,7 +64,14 @@ export async function orderRoutes(app: FastifyInstance) {
 
           return {
             id: order.id,
-            shopeeOrderSn: order.shopeeOrderSn,
+            // Decisão de arquitetura da Fase 2 do Mercado Livre: o campo da
+            // API continua se chamando "shopeeOrderSn" mesmo pra pedido ML
+            // (carrega o mercadoLivreOrderId por baixo) - o app mobile já lê
+            // esse nome em 3 lugares (pedidos.tsx) e não precisa saber a
+            // diferença. Sem esse fallback, pedido ML mandava null aqui e
+            // quebrava a busca por texto no app (Cannot read 'toLowerCase'
+            // of null) - mesmo fallback que o /orders/export já tinha.
+            shopeeOrderSn: order.shopeeOrderSn ?? order.mercadoLivreOrderId,
             orderStatus: order.orderStatus,
             orderDate: order.orderDate,
             revenue,
