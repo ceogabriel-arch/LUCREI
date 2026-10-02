@@ -143,6 +143,10 @@ export type Shop = {
   // null = nunca rodou. Usado pra saber se ainda vale a pena empurrar a
   // pessoa pra sincronizar o histórico completo (ver history-backfill-card).
   historyBackfillStatus: 'running' | 'done' | 'error' | null;
+  // null = nenhuma sincronização do dia a dia rodou ainda (loja recém-
+  // conectada) - usado pra não mostrar "R$ 0,00" cru antes da primeira
+  // sincronização terminar (ver Início).
+  syncStatus: 'running' | 'done' | 'error' | null;
   // null enquanto a loja não tem alíquota de imposto configurada - hoje só o
   // cálculo de lucro da Shopee usa isso de verdade.
   taxRatePercent: number | null;

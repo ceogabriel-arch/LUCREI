@@ -273,6 +273,14 @@ export default function InicioScreen() {
   const showingRealData = hasShop && summary !== null;
   const stillLoading = !shopsLoaded || (hasShop && summaryLoading && summary === null);
 
+  // A sincronização automática (dispara sozinha ao conectar) pode ainda
+  // estar rodando quando o resumo já veio zerado do banco - sem isso, loja
+  // recém-conectada mostra "Você lucrou R$ 0,00" cru, parecendo que deu
+  // errado, quando na real só falta terminar de puxar os pedidos.
+  const syncingNow = viewingAll
+    ? shops.some((s) => s.status === 'active' && s.syncStatus === 'running')
+    : selectedShop?.syncStatus === 'running';
+
   const salesLimit = state.status === 'authenticated' ? state.user.plan?.salesLimit ?? null : null;
   const salesUsed = state.status === 'authenticated' ? state.user.salesUsedThisMonth ?? null : null;
   const salesUsageRatio = salesLimit && salesUsed !== null ? salesUsed / salesLimit : null;
@@ -462,6 +470,11 @@ export default function InicioScreen() {
                   ) : subscriptionAccess.isPastDue ? (
                     <View className="mt-3">
                       <BlurredValue width={180} height={isDesktop ? 52 : 44} />
+                    </View>
+                  ) : syncingNow && summary!.ordersCount === 0 ? (
+                    <View className="mt-3 flex-row items-center gap-2">
+                      <ActivityIndicator size="small" color={Colors.gold} />
+                      <Text className="text-base font-medium text-lucrei-textMuted">Buscando seus pedidos recentes...</Text>
                     </View>
                   ) : (
                     <Text className={isDesktop ? 'mt-1 text-6xl font-bold text-lucrei-gold' : 'mt-1 text-5xl font-bold text-lucrei-gold'}>

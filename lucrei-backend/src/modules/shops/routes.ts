@@ -227,6 +227,7 @@ export async function shopRoutes(app: FastifyInstance) {
         provider: true,
         historyBackfillStatus: true,
         taxRatePercent: true,
+        syncStatus: true,
       },
     });
     return {
