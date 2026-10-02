@@ -27,6 +27,8 @@ import { useSelectedShop } from '@/lib/selected-shop';
 import { useAppTheme, useColors, type ThemePreference } from '@/lib/theme';
 
 const SUPPORT_EMAIL = 'suporte@lucreiapp.com';
+// Formato wa.me: código do país (55) + DDD + número, só dígitos.
+const SUPPORT_WHATSAPP = '5511968575255';
 
 const FAQ_ITEMS: { question: string; answer: string }[] = [
   {
@@ -56,7 +58,17 @@ const FAQ_ITEMS: { question: string; answer: string }[] = [
 
 function HelpSection() {
   const Colors = useColors();
+  const { state } = useAuth();
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+
+  function openWhatsApp() {
+    const email = state.status === 'authenticated' ? state.user.email : '';
+    // E-mail da conta já vai na mensagem pra identificar quem é na hora, sem
+    // precisar perguntar - mesma ideia que já valeu pra pergunta sobre o
+    // link de WhatsApp lá atrás.
+    const text = `Olá! Preciso de ajuda no Lucrei.${email ? ` Minha conta: ${email}` : ''}`;
+    Linking.openURL(`https://wa.me/${SUPPORT_WHATSAPP}?text=${encodeURIComponent(text)}`);
+  }
 
   return (
     <View>
@@ -81,10 +93,16 @@ function HelpSection() {
         })}
       </View>
       <Pressable
-        onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}`)}
+        onPress={openWhatsApp}
         className="mt-5 flex-row items-center justify-center gap-2 rounded-xl bg-lucrei-gold py-3">
-        <Ionicons name="mail-outline" size={16} color={Colors.onGold} />
-        <Text className="text-sm font-semibold text-lucrei-onGold">Falar com o suporte</Text>
+        <Ionicons name="logo-whatsapp" size={16} color={Colors.onGold} />
+        <Text className="text-sm font-semibold text-lucrei-onGold">Falar no WhatsApp</Text>
+      </Pressable>
+      <Pressable
+        onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}`)}
+        className="mt-2.5 flex-row items-center justify-center gap-2 rounded-xl border border-lucrei-border py-3">
+        <Ionicons name="mail-outline" size={16} color={Colors.textMuted} />
+        <Text className="text-sm font-medium text-lucrei-textMuted">Ou por e-mail</Text>
       </Pressable>
     </View>
   );
