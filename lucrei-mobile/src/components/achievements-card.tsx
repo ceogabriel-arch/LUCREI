@@ -27,7 +27,11 @@ const TIERS: Tier[] = [
   { threshold: 50_000, reward: 'Caneca + boné Lucrei', icon: 'cafe' },
   { threshold: 100_000, reward: 'Placa Lucrei', icon: 'ribbon' },
   { threshold: 500_000, reward: 'Placa + podcast Lucrei + garrafa', icon: 'mic' },
-  { threshold: 1_000_000, reward: 'Placa + viagem + moletom Lucrei', icon: 'airplane' },
+  {
+    threshold: 1_000_000,
+    reward: 'Placa + viagem + moletom Lucrei (edição exclusiva "Faturamento ≠ Lucro")',
+    icon: 'airplane',
+  },
 ];
 
 const MS_PER_MONTH = 1000 * 60 * 60 * 24 * 30;
@@ -382,7 +386,7 @@ export function AchievementsCard({
                 <Ionicons name="information-circle" size={16} color={Colors.textMuted} />
                 <Text className="flex-1 text-xs leading-5 text-lucrei-textMuted">
                   Só contam pedidos feitos depois que você conectou a loja no Lucrei, e só depois que o pedido fica
-                  "Concluído" na Shopee (é quando o lucro fica confirmado de verdade).
+                  "Concluído" no marketplace (é quando o lucro fica confirmado de verdade).
                 </Text>
               </View>
               <View className="mb-1 flex-row items-start gap-2 rounded-xl p-3" style={{ backgroundColor: Colors.surfaceAlt }}>

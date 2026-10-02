@@ -12,7 +12,7 @@ const TIERS: Record<number, string> = {
   50_000: 'Caneca + boné Lucrei',
   100_000: 'Placa Lucrei',
   500_000: 'Placa + podcast Lucrei + garrafa',
-  1_000_000: 'Placa + viagem + moletom Lucrei',
+  1_000_000: 'Placa + viagem + moletom Lucrei (edição exclusiva "Faturamento ≠ Lucro")',
 };
 
 const FIRST_TIER_THRESHOLD = 1_000;
