@@ -510,3 +510,75 @@ export function claimReward(token: string, input: ClaimRewardInput) {
     body: JSON.stringify(input),
   });
 }
+
+// ---- Admin (só pra conta configurada em ADMIN_EMAILS no backend) ----
+
+export type AdminUser = {
+  id: string;
+  email: string;
+  name: string | null;
+  subscriptionStatus: SubscriptionStatus;
+  planName: string | null;
+  shopsCount: number;
+  createdAt: string;
+  trialEndsAt: string | null;
+};
+
+export function getAdminUsers(token: string) {
+  return request<AdminUser[]>('/admin/users', { headers: { Authorization: `Bearer ${token}` } });
+}
+
+export type AdminRewardClaim = {
+  id: string;
+  userEmail: string;
+  tierThreshold: number;
+  fullName: string;
+  phone: string | null;
+  addressLine: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  createdAt: string;
+  fulfilledAt: string | null;
+};
+
+export function getAdminRewardClaims(token: string) {
+  return request<AdminRewardClaim[]>('/admin/reward-claims', { headers: { Authorization: `Bearer ${token}` } });
+}
+
+export function setAdminRewardClaimFulfilled(token: string, id: string, fulfilled: boolean) {
+  return request<{ id: string; fulfilledAt: string | null }>(`/admin/reward-claims/${id}`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ fulfilled }),
+  });
+}
+
+export type AdminSyncIssue = {
+  shopId: string;
+  shopName: string;
+  provider: 'shopee' | 'mercado_livre';
+  userEmail: string;
+  syncStatus: string | null;
+  syncError: string | null;
+  syncStartedAt: string | null;
+  historyBackfillStatus: string | null;
+  historyBackfillError: string | null;
+  historyBackfillStartedAt: string | null;
+};
+
+export function getAdminSyncIssues(token: string) {
+  return request<AdminSyncIssue[]>('/admin/sync-issues', { headers: { Authorization: `Bearer ${token}` } });
+}
+
+export type AdminMetrics = {
+  totalUsers: number;
+  usersByStatus: { status: SubscriptionStatus; count: number }[];
+  activeSubscriptions: number;
+  mrrEstimate: number;
+  shopsByProvider: { provider: 'shopee' | 'mercado_livre'; count: number }[];
+};
+
+export function getAdminMetrics(token: string) {
+  return request<AdminMetrics>('/admin/metrics', { headers: { Authorization: `Bearer ${token}` } });
+}

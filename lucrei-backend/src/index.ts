@@ -10,6 +10,7 @@ import staticFiles from '@fastify/static';
 import Fastify, { type FastifyError } from 'fastify';
 
 import { prisma } from './lib/prisma';
+import { adminRoutes } from './modules/admin/routes';
 import { authRoutes } from './modules/auth/routes';
 import { billingRoutes } from './modules/billing/routes';
 import { labelRoutes } from './modules/labels/routes';
@@ -121,7 +122,7 @@ async function main() {
     },
   });
 
-  for (const route of ['pedidos', 'produtos', 'relatorios', 'etiquetas', 'configuracoes', 'shopee-connected', 'mercadolivre-connected', 'planos']) {
+  for (const route of ['pedidos', 'produtos', 'relatorios', 'etiquetas', 'configuracoes', 'shopee-connected', 'mercadolivre-connected', 'planos', 'admin']) {
     app.get(`/${route}`, (_req, reply) => reply.sendFile(`${route}.html`));
   }
 
@@ -139,6 +140,7 @@ async function main() {
   await app.register(passwordResetRoutes);
   await app.register(billingRoutes);
   await app.register(rewardsRoutes);
+  await app.register(adminRoutes);
 
   const port = Number(process.env.PORT ?? 3000);
   await app.listen({ port, host: '0.0.0.0' });

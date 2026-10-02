@@ -83,6 +83,7 @@ export default function AppTabs() {
       <Tabs.Screen name="configuracoes" options={{ title: 'Config.' }} />
       <Tabs.Screen name="shopee-connected" options={{ href: null }} />
       <Tabs.Screen name="planos" options={{ href: null }} />
+      <Tabs.Screen name="admin" options={{ href: null }} />
     </Tabs>
   );
 }

@@ -124,6 +124,9 @@ model RewardClaim {
   state         String
   zipCode       String
   createdAt     DateTime @default(now())
+  // Marcado manualmente na tela de admin quando o prêmio já foi enviado -
+  // null = ainda pendente. Só controle interno, não afeta o usuário.
+  fulfilledAt   DateTime?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
