@@ -17,6 +17,13 @@ const ELIGIBLE_STATUSES = new Set(['paid']);
 // RESOLVED_STATUSES cumpre pro lado Shopee em order-forecast/routes.ts.
 export const ML_RESOLVED_STATUSES = new Set(['paid', 'cancelled', 'invalid']);
 
+// Usado pelo webhook (Fase 2 em tempo real) - mesmo papel do syncOneOrder da
+// Shopee: sincroniza UM pedido específico sem varrer a loja inteira.
+export async function syncOneMercadoLivreOrder(shopId: string, orderId: number) {
+  const { accessToken } = await getValidAccessToken(shopId);
+  return processOrder(shopId, accessToken, orderId);
+}
+
 async function processOrder(shopDbId: string, accessToken: string, orderId: number) {
   const order = await getOrder(accessToken, orderId);
   const items = order.order_items ?? [];

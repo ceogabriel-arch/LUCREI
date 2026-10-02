@@ -2,9 +2,11 @@ import type { FastifyInstance } from 'fastify';
 
 import { encrypt } from '../../lib/crypto';
 import { sendShopReconnectAttemptEmail } from '../../lib/email';
+import { getValidAccessToken as getValidMercadoLivreAccessToken } from '../../lib/mercadolivre-token';
 import { prisma } from '../../lib/prisma';
-import { exchangeCodeForToken, getAuthorizationUrl, getUser } from '../../mercadolivre-client';
-import { runShopSync } from '../sync/mercadolivre-service';
+import { trackRecentMercadoLivreOrderEvent } from '../../lib/recent-order-events';
+import { exchangeCodeForToken, getAuthorizationUrl, getOrder, getUser } from '../../mercadolivre-client';
+import { runShopSync, syncOneMercadoLivreOrder } from '../sync/mercadolivre-service';
 
 type AuthorizeUrlQuery = {
   returnUrl?: string;
@@ -16,6 +18,16 @@ type CallbackQuery = {
   // OAuth2 padrão: ausência de "code" com "error" presente é o usuário
   // recusando a autorização na tela do Mercado Livre, não uma falha nossa.
   error?: string;
+};
+
+type WebhookBody = {
+  resource?: string;
+  topic?: string;
+  user_id?: number | string;
+  application_id?: number | string;
+  attempts?: number;
+  sent?: string;
+  received?: string;
 };
 
 const DEFAULT_RETURN_URL = `${process.env.APP_SCHEME || 'lucreimobile'}://mercadolivre-connected`;
@@ -154,9 +166,46 @@ export async function mercadolivreRoutes(app: FastifyInstance) {
     }
   });
 
-  // Handler do webhook de notificações do Mercado Livre (topics: orders_v2,
-  // shipments, payments, post_purchase/claims - já cadastrados no app) ainda
-  // não existe - a sincronização por polling (sync/mercadolivre-service.ts)
-  // cobre o essencial por enquanto. Qualquer notificação que a ML mandar pra
-  // essa URL recebe 404, sem problema.
+  app.post<{ Body: WebhookBody }>('/mercadolivre/webhook', async (request, reply) => {
+    const { resource, topic, user_id: userId } = request.body ?? {};
+
+    // A ML exige resposta rápida (reenvia se não confirmar) e manda só um
+    // ponteiro, não dado - então dispara o processamento de verdade sem
+    // esperar por ele, e responde 200 na hora. Qualquer notificação de
+    // topic que não seja orders_v2 (items, questions, etc.) é ignorada por
+    // enquanto - só pedido interessa pra Fase 2.
+    if (topic === 'orders_v2' && resource && userId) {
+      const match = /^\/orders\/(\d+)/.exec(resource);
+      if (match) {
+        handleOrderNotification(String(userId), Number(match[1])).catch((err) => app.log.error(err));
+      }
+    }
+
+    return reply.send({ received: true });
+  });
+
+  // Nunca confia no CONTEÚDO da notificação (não é assinada - não achamos
+  // confirmação de um esquema tipo HMAC pra esse produto específico da ML,
+  // diferente da Mercado Pago - ver nota no plano) - só usa pra saber qual
+  // pedido buscar. A autorização de verdade acontece aqui: só processa se o
+  // user_id bater com uma loja NOSSA de verdade, e a busca do pedido sempre
+  // usa o token dessa loja (nunca confia em dado vindo de fora).
+  async function handleOrderNotification(mercadoLivreShopId: string, orderId: number) {
+    const shop = await prisma.shop.findFirst({
+      where: { mercadoLivreShopId, provider: 'mercado_livre', status: 'active' },
+    });
+    if (!shop) return;
+
+    const { accessToken } = await getValidMercadoLivreAccessToken(shop.id);
+    const order = await getOrder(accessToken, orderId);
+
+    // Alimenta a previsão de lucro na hora, pra QUALQUER status - mesmo
+    // papel do push da Shopee, só que vindo de notificação real agora, não
+    // só do sync periódico.
+    await trackRecentMercadoLivreOrderEvent(shop.id, String(orderId), order.status ?? 'unknown');
+
+    if (order.status === 'paid') {
+      await syncOneMercadoLivreOrder(shop.id, orderId);
+    }
+  }
 }
