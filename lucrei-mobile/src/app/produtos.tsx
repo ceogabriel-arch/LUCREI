@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { useFocusEffect } from 'expo-router';
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { BlurredValue } from '@/components/blurred-value';
@@ -318,8 +318,12 @@ export default function ProdutosScreen() {
   }, [viewingAll]);
   // Trocar de período com a tela já pronta mantém loadState em 'ready' (de
   // propósito, pra não piscar a tela inteira de loading) - sem isso, nada
-  // avisa que a lista está recalculando enquanto o pedido não volta.
+  // avisa que a lista está recalculando enquanto o pedido não volta. Mas
+  // trocar de LOJA precisa continuar mostrando loading - senão o produto da
+  // loja anterior fica na tela com cara de que nada mudou, enquanto na real
+  // já está buscando a lista certa (reportado ao vivo, parecia "travado").
   const [reloading, setReloading] = useState(false);
+  const prevShopKeyRef = useRef<string | null>(null);
 
   const filteredProducts = useMemo(
     () =>
@@ -353,7 +357,12 @@ export default function ProdutosScreen() {
         setLoadState('no-shop');
         return;
       }
-      setLoadState((prev) => (prev === 'ready' ? prev : 'loading'));
+      const shopKey = viewingAll ? 'all' : (selectedShop?.id ?? null);
+      const shopChanged = prevShopKeyRef.current !== shopKey;
+      prevShopKeyRef.current = shopKey;
+
+      setLoadState((prev) => (prev === 'ready' && !shopChanged ? prev : 'loading'));
+      if (shopChanged) setProducts([]);
       setReloading(true);
       try {
         // Combinado: busca o catálogo de cada loja ativa em paralelo e marca

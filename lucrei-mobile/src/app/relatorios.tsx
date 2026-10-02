@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 
 import { BlurredValue } from '@/components/blurred-value';
@@ -169,6 +169,7 @@ function ReportRangeCard({
   const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const prevShopIdRef = useRef<string | null>(shopId);
 
   const range = useMemo(() => {
     if (mode === 'lifetime') return { from: new Date(connectedAt), to: new Date() };
@@ -177,6 +178,10 @@ function ReportRangeCard({
   }, [mode, year, month, connectedAt]);
 
   const load = useCallback(async () => {
+    if (prevShopIdRef.current !== shopId) {
+      prevShopIdRef.current = shopId;
+      setSummary(null);
+    }
     setLoading(true);
     try {
       const s =
@@ -353,8 +358,12 @@ export default function RelatoriosScreen() {
   const [refreshing, setRefreshing] = useState(false);
   // Trocar de período com a tela já pronta mantém loadState em 'ready' (de
   // propósito, pra não piscar a tela inteira de loading) - sem isso, nada
-  // avisa que os números estão recalculando enquanto o pedido não volta.
+  // avisa que os números estão recalculando enquanto o pedido não volta. Mas
+  // trocar de LOJA precisa continuar mostrando loading - senão o número da
+  // loja anterior fica na tela com cara de travado, enquanto na real já
+  // está buscando o resumo certo (reportado ao vivo).
   const [reloading, setReloading] = useState(false);
+  const prevShopKeyRef = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     if (!token || !shopsLoaded) return;
@@ -362,7 +371,15 @@ export default function RelatoriosScreen() {
       setLoadState('no-shop');
       return;
     }
-    setLoadState((prev) => (prev === 'ready' ? prev : 'loading'));
+    const shopKey = viewingAll ? 'all' : (selectedShop?.id ?? null);
+    const shopChanged = prevShopKeyRef.current !== shopKey;
+    prevShopKeyRef.current = shopKey;
+
+    setLoadState((prev) => (prev === 'ready' && !shopChanged ? prev : 'loading'));
+    if (shopChanged) {
+      setSummary(null);
+      setProducts([]);
+    }
     setReloading(true);
     try {
       const apiPeriod = PERIOD_TO_API[period];

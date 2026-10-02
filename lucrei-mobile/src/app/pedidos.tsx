@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Dimensions, Modal, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -234,8 +234,11 @@ export default function PedidosScreen() {
   const isOverLimit = (usage?.overLimit ?? false) || subscriptionAccess.isPastDue;
   // Trocar de período com a tela já pronta mantém loadState em 'ready' (de
   // propósito, pra não piscar a tela inteira de loading) - sem isso, nada
-  // avisa que a lista está recalculando enquanto o pedido não volta.
+  // avisa que a lista está recalculando enquanto o pedido não volta. Mas
+  // trocar de LOJA precisa continuar mostrando loading - senão o pedido da
+  // loja anterior fica na tela com cara de travado (reportado ao vivo).
   const [reloading, setReloading] = useState(false);
+  const prevShopKeyRef = useRef<string | null>(null);
 
   const filteredOrders = orders.filter((o) =>
     o.shopeeOrderSn.toLowerCase().includes(search.trim().toLowerCase())
@@ -247,7 +250,12 @@ export default function PedidosScreen() {
       setLoadState('no-shop');
       return;
     }
-    setLoadState((prev) => (prev === 'ready' ? prev : 'loading'));
+    const shopKey = viewingAll ? 'all' : (selectedShop?.id ?? null);
+    const shopChanged = prevShopKeyRef.current !== shopKey;
+    prevShopKeyRef.current = shopKey;
+
+    setLoadState((prev) => (prev === 'ready' && !shopChanged ? prev : 'loading'));
+    if (shopChanged) setOrders([]);
     setReloading(true);
     try {
       // Combinado: busca cada loja em paralelo, marca cada pedido com o nome
