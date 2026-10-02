@@ -24,6 +24,8 @@ function buildUser(overrides: Partial<UserWithPlan> = {}): UserWithPlan {
     salesLimitWarnedAt: null,
     salesLimitReachedAt: null,
     trialEndingWarnedAt: null,
+    dailyProfitGoal: null,
+    dailyGoalNotifiedAt: null,
     createdAt: new Date('2026-01-01'),
     updatedAt: new Date('2026-01-01'),
     plan: null,

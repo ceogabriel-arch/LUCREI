@@ -89,6 +89,13 @@ model User {
   // dispara uma vez só por trial (não reseta, porque cada Shopee shop só
   // ganha um teste grátis na vida, ver Shop.trialConsumedAt).
   trialEndingWarnedAt          DateTime?
+  // Meta de lucro do dia (soma de todas as lojas) - null enquanto a pessoa
+  // nunca configurou uma em Configurações. dailyGoalNotifiedAt marca quando
+  // a notificação "Meta batida" foi enviada, comparado contra o início do
+  // dia atual (mesmo corte de "Hoje" usado no resto do app) pra não repetir
+  // a cada novo pedido que completa no mesmo dia.
+  dailyProfitGoal              Decimal?            @db.Decimal(12, 2)
+  dailyGoalNotifiedAt          DateTime?
   createdAt                    DateTime            @default(now())
   updatedAt                    DateTime            @updatedAt
 

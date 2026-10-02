@@ -19,6 +19,8 @@ export type AuthUser = {
   subscriptionBlocked: boolean;
   subscriptionGraceDaysLeft: number | null;
   plan: UserPlan | null;
+  // null enquanto a pessoa nunca configurou uma meta diária em Configurações.
+  dailyProfitGoal: number | null;
   // Só vem preenchido na resposta de /auth/me (não em login/signup/planos).
   salesUsedThisMonth?: number | null;
 };
@@ -87,6 +89,23 @@ export function updateName(token: string, name: string) {
     method: 'PATCH',
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify({ name }),
+  });
+}
+
+// Sugestão pra pré-preencher o campo em Configurações - média do lucro
+// diário dos últimos 30 dias.
+export function getDailyGoalSuggestion(token: string) {
+  return request<{ suggestion: number }>('/auth/daily-goal-suggestion', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+// null limpa a meta (desliga a notificação de "Meta batida").
+export function updateDailyGoal(token: string, dailyProfitGoal: number | null) {
+  return request<AuthUser>('/auth/daily-goal', {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ dailyProfitGoal }),
   });
 }
 

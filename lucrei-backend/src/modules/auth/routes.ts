@@ -11,6 +11,7 @@ import { reconcileMercadoPagoSubscription } from '../../lib/subscription-sync';
 import { warnIfTrialEndingSoon } from '../../lib/trial-warning';
 import * as mercadopago from '../../mercadopago-client';
 import { serializeUser, userWithPlan } from '../plans/serialize-user';
+import { computeShopSummary } from '../summary/routes';
 
 const deleteAccountSchema = {
   type: 'object',
@@ -65,6 +66,18 @@ const updateNameSchema = {
     name: { type: 'string', minLength: 1 },
   },
 } as const;
+
+// null limpa a meta (desativa a notificação de "Meta batida") - por isso o
+// campo aceita number OU null, não dá pra só validar como number.
+const updateDailyGoalSchema = {
+  type: 'object',
+  required: ['dailyProfitGoal'],
+  properties: {
+    dailyProfitGoal: { type: ['number', 'null'], minimum: 0 },
+  },
+} as const;
+
+type UpdateDailyGoalBody = { dailyProfitGoal: number | null };
 
 const changePasswordSchema = {
   type: 'object',
@@ -220,6 +233,32 @@ export async function authRoutes(app: FastifyInstance) {
       const user = await prisma.user.update({
         where: { id: request.user.sub },
         data: { name: request.body.name },
+        include: userWithPlan,
+      });
+      return reply.send(await serializeUser(user));
+    }
+  );
+
+  // Sugestão pra pré-preencher o campo de meta diária em Configurações -
+  // média do lucro diário dos últimos 30 dias (soma de todas as lojas
+  // ativas). 0 pra conta nova/sem venda ainda - o campo fica editável do
+  // mesmo jeito, só não teria um palpite melhor que esse pra sugerir.
+  app.get('/auth/daily-goal-suggestion', { onRequest: [app.authenticate] }, async (request, reply) => {
+    const shops = await prisma.shop.findMany({ where: { userId: request.user.sub, status: 'active' } });
+    if (shops.length === 0) return reply.send({ suggestion: 0 });
+
+    const summaries = await Promise.all(shops.map((shop) => computeShopSummary(shop, { period: '30d' })));
+    const totalProfit30d = summaries.reduce((sum, s) => sum + s.profit, 0);
+    return reply.send({ suggestion: Math.max(0, Math.round((totalProfit30d / 30) * 100) / 100) });
+  });
+
+  app.patch<{ Body: UpdateDailyGoalBody }>(
+    '/auth/daily-goal',
+    { onRequest: [app.authenticate], schema: { body: updateDailyGoalSchema } },
+    async (request, reply) => {
+      const user = await prisma.user.update({
+        where: { id: request.user.sub },
+        data: { dailyProfitGoal: request.body.dailyProfitGoal },
         include: userWithPlan,
       });
       return reply.send(await serializeUser(user));

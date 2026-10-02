@@ -14,6 +14,7 @@ import {
   selectPlan as apiSelectPlan,
   selectPlanPix as apiSelectPlanPix,
   signup as apiSignup,
+  updateDailyGoal as apiUpdateDailyGoal,
   updateName as apiUpdateName,
 } from '@/lib/api';
 import { clearToken, getToken, setToken } from '@/lib/token-storage';
@@ -38,6 +39,7 @@ type AuthContextValue = {
   signup: (name: string, email: string, password: string) => Promise<AuthResult>;
   logout: () => Promise<void>;
   updateName: (name: string) => Promise<AuthResult>;
+  updateDailyGoal: (dailyProfitGoal: number | null) => Promise<AuthResult>;
   changePassword: (currentPassword: string | undefined, newPassword: string) => Promise<AuthResult>;
   deleteAccount: (password?: string) => Promise<AuthResult>;
   selectPlan: (key: string) => Promise<SelectPlanResult>;
@@ -124,6 +126,20 @@ export function AuthProvider({ children }: PropsWithChildren) {
       if (!token) return { ok: false, message: 'Não autenticado.' };
       try {
         const user = await apiUpdateName(token, name);
+        setState({ status: 'authenticated', token, user });
+        return { ok: true };
+      } catch (err) {
+        return { ok: false, message: err instanceof ApiError ? err.message : 'Algo deu errado.' };
+      }
+    },
+    [token]
+  );
+
+  const updateDailyGoal = useCallback(
+    async (dailyProfitGoal: number | null): Promise<AuthResult> => {
+      if (!token) return { ok: false, message: 'Não autenticado.' };
+      try {
+        const user = await apiUpdateDailyGoal(token, dailyProfitGoal);
         setState({ status: 'authenticated', token, user });
         return { ok: true };
       } catch (err) {
@@ -234,6 +250,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       signup,
       logout,
       updateName,
+      updateDailyGoal,
       changePassword,
       deleteAccount,
       selectPlan,
@@ -248,6 +265,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       signup,
       logout,
       updateName,
+      updateDailyGoal,
       changePassword,
       deleteAccount,
       selectPlan,

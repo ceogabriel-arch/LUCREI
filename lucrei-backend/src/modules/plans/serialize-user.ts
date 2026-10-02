@@ -20,6 +20,7 @@ export async function serializeUser(user: UserWithPlan) {
     createdAt: user.createdAt,
     subscriptionStatus: user.subscriptionStatus,
     trialEndsAt: user.trialEndsAt,
+    dailyProfitGoal: user.dailyProfitGoal != null ? Number(user.dailyProfitGoal) : null,
     // Espelha getSalesLimitStatus: "blocked" trava sync de verdade,
     // "graceDaysLeft" é só informativo pro app mostrar contagem regressiva.
     subscriptionBlocked: access.blocked,

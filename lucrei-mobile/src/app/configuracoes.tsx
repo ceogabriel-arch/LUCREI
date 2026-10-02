@@ -18,7 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MarketplaceBadge } from '@/components/marketplace-badge';
 import { Screen } from '@/components/screen';
 import { ToastBanner, useToast } from '@/components/toast';
-import { API_URL, disconnectShop, type AuthUser, type Shop } from '@/lib/api';
+import { API_URL, disconnectShop, getDailyGoalSuggestion, type AuthUser, type Shop } from '@/lib/api';
 import { showAlert } from '@/lib/alert';
 import { useAuth } from '@/lib/auth';
 import { fullscreenOverlayStyle, useIsDesktopWeb, useModalPresentation, webCapWidth } from '@/lib/responsive';
@@ -98,7 +98,7 @@ const STATUS_LABEL: Record<AuthUser['subscriptionStatus'], string> = {
   canceled: 'Cancelado',
 };
 
-type MenuKey = 'name' | 'password' | 'shops' | 'help' | 'deleteAccount' | null;
+type MenuKey = 'name' | 'password' | 'shops' | 'dailyGoal' | 'help' | 'deleteAccount' | null;
 
 function PlanSection({ user }: { user: AuthUser }) {
   const router = useRouter();
@@ -303,6 +303,90 @@ function NameField() {
       {state.status === 'authenticated' && (
         <Text className="mt-3 text-xs text-lucrei-textMuted">{state.user.email}</Text>
       )}
+    </View>
+  );
+}
+
+// Formata com vírgula (padrão BR) só pra exibir/editar - a comparação e o
+// envio pro backend usam Number com ponto (ver handleSave).
+function formatGoalInput(value: number) {
+  return value.toFixed(2).replace('.', ',');
+}
+
+function DailyGoalField() {
+  const { state, updateDailyGoal } = useAuth();
+  const Colors = useColors();
+  const currentGoal = state.status === 'authenticated' ? state.user.dailyProfitGoal : null;
+  const [goal, setGoal] = useState(currentGoal != null ? formatGoalInput(currentGoal) : '');
+  const [saving, setSaving] = useState(false);
+  const [loadingSuggestion, setLoadingSuggestion] = useState(currentGoal == null);
+  const { toast, opacity, show } = useToast();
+
+  // Só busca sugestão se a pessoa nunca configurou uma meta - uma meta já
+  // definida não deve ser sobrescrita por um palpite calculado.
+  useEffect(() => {
+    if (currentGoal != null || state.status !== 'authenticated') return;
+    let cancelled = false;
+    getDailyGoalSuggestion(state.token)
+      .then(({ suggestion }) => {
+        if (!cancelled && suggestion > 0) setGoal(formatGoalInput(suggestion));
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoadingSuggestion(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const parsed = goal.trim() === '' ? null : Number(goal.replace(',', '.'));
+  const invalid = parsed !== null && (Number.isNaN(parsed) || parsed < 0);
+  const dirty = !invalid && parsed !== currentGoal;
+
+  async function handleSave() {
+    setSaving(true);
+    const result = await updateDailyGoal(parsed);
+    setSaving(false);
+    if (result.ok) {
+      show({ title: 'Meta salva', message: 'Sua meta diária de lucro foi atualizada.', tone: 'success' });
+    } else {
+      show({ title: 'Não foi possível salvar', message: result.message, tone: 'error' });
+    }
+  }
+
+  return (
+    <View>
+      <ToastBanner toast={toast} opacity={opacity} />
+      <Text className="mb-3 text-sm leading-5 text-lucrei-textMuted">
+        Quando o lucro do dia (somando todas as suas lojas) bater esse valor, você recebe uma notificação. Deixe em
+        branco pra desligar.
+      </Text>
+      <Text className="mb-1.5 text-xs text-lucrei-textMuted">Meta diária de lucro (R$)</Text>
+      <View className="flex-row items-center gap-2">
+        <TextInput
+          value={goal}
+          onChangeText={setGoal}
+          placeholder={loadingSuggestion ? 'Calculando sugestão...' : '0,00'}
+          placeholderTextColor={Colors.textMuted}
+          keyboardType="decimal-pad"
+          editable={!loadingSuggestion}
+          className="flex-1 rounded-xl border border-lucrei-border bg-lucrei-surface px-4 py-3 text-sm text-lucrei-text"
+        />
+        <Pressable
+          onPress={handleSave}
+          disabled={!dirty || saving || loadingSuggestion}
+          className="h-11 w-11 items-center justify-center rounded-xl bg-lucrei-gold"
+          style={{ opacity: !dirty || saving || loadingSuggestion ? 0.4 : 1 }}>
+          {saving ? (
+            <ActivityIndicator size="small" color={Colors.onGold} />
+          ) : (
+            <Ionicons name="checkmark" size={18} color={Colors.onGold} />
+          )}
+        </Pressable>
+      </View>
+      {invalid && <Text className="mt-2 text-xs text-lucrei-danger">Digite um valor válido ou deixe em branco.</Text>}
     </View>
   );
 }
@@ -605,6 +689,7 @@ export default function ConfiguracoesScreen() {
         <MenuRow icon="person-outline" label="Alterar nome" onPress={() => setOpenMenu('name')} />
         <MenuRow icon="lock-closed-outline" label="Alterar senha" onPress={() => setOpenMenu('password')} />
         <MenuRow icon="storefront-outline" label="Lojas conectadas" onPress={() => setOpenMenu('shops')} />
+        <MenuRow icon="trophy-outline" label="Meta diária de lucro" onPress={() => setOpenMenu('dailyGoal')} />
         <MenuRow icon="help-circle-outline" label="Ajuda" onPress={() => setOpenMenu('help')} />
         <MenuRow icon="document-text-outline" label="Termos de uso" onPress={() => Linking.openURL(`${API_URL}/termos`)} />
         <MenuRow icon="shield-checkmark-outline" label="Política de privacidade" onPress={() => Linking.openURL(`${API_URL}/privacidade`)} />
@@ -639,6 +724,10 @@ export default function ConfiguracoesScreen() {
         onClose={() => setOpenMenu(null)}
         desktopMaxWidth={640}>
         <ShopsList />
+      </SettingsModal>
+
+      <SettingsModal title="Meta diária de lucro" visible={openMenu === 'dailyGoal'} onClose={() => setOpenMenu(null)}>
+        <DailyGoalField />
       </SettingsModal>
 
       <SettingsModal title="Ajuda" visible={openMenu === 'help'} onClose={() => setOpenMenu(null)}>

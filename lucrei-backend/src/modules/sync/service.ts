@@ -1,4 +1,5 @@
 import { mapLimit } from '../../lib/concurrency';
+import { checkDailyGoalReached } from '../../lib/daily-goal-notifications';
 import { notifyOrderCompletedIfNeeded } from '../../lib/order-notifications';
 import { prisma } from '../../lib/prisma';
 import { getValidAccessToken } from '../../lib/shopee-token';
@@ -124,6 +125,10 @@ async function processOrder(
     totalProfit,
     totalRevenue,
   }).catch(() => {});
+
+  // Independente da notificação de pedido acima - checa se esse pedido
+  // (somado ao resto do dia) bateu a meta diária configurada pela conta.
+  checkDailyGoalReached(shopDbId).catch(() => {});
 
   return { orderId: order.id, totalProfit };
 }

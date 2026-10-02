@@ -1,9 +1,6 @@
-import type { Plan, User } from '@prisma/client';
-
+import { isAccountNotifiable } from './notification-access';
 import { prisma } from './prisma';
 import { formatBRL, sendPushNotification } from './push-notifications';
-import { getSalesLimitStatus } from './sales-usage';
-import { getSubscriptionAccessStatus } from './subscription-access';
 
 // O push de status de pedido da Shopee não tem entrega garantida - a
 // sincronização normal (roda de qualquer forma, a cada poucos minutos)
@@ -56,28 +53,6 @@ function buildNotificationMessage(
     body: `Pedido de ${revenueText} - lucro líquido de ${marginText} já calculado, na hora.`,
     sound: SOUND_PROFIT,
   };
-}
-
-// Conta sem acesso (pagamento atrasado além da carência, limite de vendas
-// estourado além da carência, ou teste grátis vencido) não devia continuar
-// recebendo "você lucrou R$X" - a pessoa nem consegue ver os dados reais (
-// ficam borrados no app), a notificação só confunde. O teste grátis é o caso
-// mais sutil: subscriptionStatus só vira 'past_due' de fato na próxima vez
-// que o app abre a tela de fatura (ver ensureCurrentPixCharge) - sem checar
-// trialEndsAt aqui direto, quem nunca abre aquela tela depois do teste
-// acabar continuaria "trialing" pro resto da vida e recebendo notificação.
-async function isAccountNotifiable(owner: User & { plan: Plan | null }): Promise<boolean> {
-  if (owner.subscriptionStatus === 'trialing' && owner.trialEndsAt && owner.trialEndsAt <= new Date()) {
-    return false;
-  }
-
-  const subscriptionAccess = await getSubscriptionAccessStatus(owner);
-  if (subscriptionAccess.blocked) return false;
-
-  const salesLimit = await getSalesLimitStatus(owner);
-  if (salesLimit.blocked) return false;
-
-  return true;
 }
 
 export async function notifyOrderCompletedIfNeeded(params: {

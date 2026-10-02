@@ -1,3 +1,4 @@
+import { checkDailyGoalReached } from '../../lib/daily-goal-notifications';
 import { notifyOrderCompletedIfNeeded } from '../../lib/order-notifications';
 import { getValidAccessToken } from '../../lib/mercadolivre-token';
 import { prisma } from '../../lib/prisma';
@@ -114,6 +115,8 @@ async function processOrder(shopDbId: string, accessToken: string, orderId: numb
     totalProfit,
     totalRevenue,
   }).catch(() => {});
+
+  checkDailyGoalReached(shopDbId).catch(() => {});
 
   return { orderId: dbOrder.id, totalProfit };
 }
