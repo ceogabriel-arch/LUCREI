@@ -4,6 +4,7 @@ import { encrypt } from '../../lib/crypto';
 import { sendShopReconnectAttemptEmail } from '../../lib/email';
 import { prisma } from '../../lib/prisma';
 import { exchangeCodeForToken, getAuthorizationUrl, getUser } from '../../mercadolivre-client';
+import { runShopSync } from '../sync/mercadolivre-service';
 
 type AuthorizeUrlQuery = {
   returnUrl?: string;
@@ -142,6 +143,10 @@ export async function mercadolivreRoutes(app: FastifyInstance) {
         },
       });
 
+      // Mesmo motivo da Shopee: dispara a primeira sincronização sozinho,
+      // sem esperar o usuário achar o botão manual.
+      runShopSync(shop.id).catch((err) => app.log.error(err));
+
       return reply.redirect(`${returnUrl}?status=success`);
     } catch (err) {
       app.log.error(err);
@@ -150,8 +155,8 @@ export async function mercadolivreRoutes(app: FastifyInstance) {
   });
 
   // Handler do webhook de notificações do Mercado Livre (topics: orders_v2,
-  // shipments, payments, post_purchase/claims - já cadastrados no app) fica
-  // pra quando a sincronização de pedido for construída (Fase 2). Até lá,
-  // qualquer notificação que a ML mandar pra essa URL recebe 404 - sem
-  // problema, nenhum pedido real passa por essa loja ainda.
+  // shipments, payments, post_purchase/claims - já cadastrados no app) ainda
+  // não existe - a sincronização por polling (sync/mercadolivre-service.ts)
+  // cobre o essencial por enquanto. Qualquer notificação que a ML mandar pra
+  // essa URL recebe 404, sem problema.
 }

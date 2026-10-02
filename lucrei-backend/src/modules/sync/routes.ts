@@ -5,6 +5,7 @@ import { checkSubscriptionAccessBlock } from '../../lib/subscription-access';
 import { startOfCurrentMonth } from '../../lib/period';
 import { prisma } from '../../lib/prisma';
 import { sendPushNotification } from '../../lib/push-notifications';
+import { runHistoryBackfill as runMLHistoryBackfill, runShopSync as runMLShopSync } from './mercadolivre-service';
 import { runHistoryBackfill, runShopSync, WINDOW_SECONDS } from './service';
 
 // Avisa a conta quando ela cruza esse percentual do limite mensal do plano,
@@ -91,7 +92,9 @@ export async function syncRoutes(app: FastifyInstance) {
         }
       }
 
-      runShopSync(shop.id).catch((err) => app.log.error(err));
+      // Mesma rota serve os dois marketplaces - só muda qual sync dispara.
+      const sync = shop.provider === 'mercado_livre' ? runMLShopSync : runShopSync;
+      sync(shop.id).catch((err) => app.log.error(err));
 
       return reply.send({ status: 'running', ordersSynced: 0 });
     }
@@ -168,8 +171,15 @@ export async function syncRoutes(app: FastifyInstance) {
         return reply.status(403).send({ message: block.message, code: 'sales_limit_reached' });
       }
 
-      const since = new Date(Date.now() - HISTORY_BACKFILL_DAYS * 24 * 60 * 60 * 1000);
-      runHistoryBackfill(shop.id, since).catch((err) => app.log.error(err));
+      // Mercado Livre não tem limite de 15 dias por chamada (ver
+      // mercadolivre-service.ts) - o "backfill" de lá já é o histórico
+      // inteiro, sem precisar de uma data de início.
+      if (shop.provider === 'mercado_livre') {
+        runMLHistoryBackfill(shop.id).catch((err) => app.log.error(err));
+      } else {
+        const since = new Date(Date.now() - HISTORY_BACKFILL_DAYS * 24 * 60 * 60 * 1000);
+        runHistoryBackfill(shop.id, since).catch((err) => app.log.error(err));
+      }
 
       return reply.send({ status: 'running', ordersSynced: 0, windowsDone: 0, windowsTotal: HISTORY_BACKFILL_WINDOWS_TOTAL });
     }
