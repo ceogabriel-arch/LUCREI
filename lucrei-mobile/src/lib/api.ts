@@ -343,6 +343,10 @@ export type Order = {
   // pedidos.tsx, modo "Todas as lojas") - a resposta da API em si nunca
   // manda isso, já que cada chamada já é por uma loja só.
   shopName?: string;
+  // Idem - preenchido no cliente (os dois modos, combinado ou loja única) a
+  // partir da loja já conhecida, pra "Taxa Shopee"/"Taxa Mercado Livre" no
+  // detalhe do pedido não ficar fixo errado pra loja ML.
+  provider?: 'shopee' | 'mercado_livre';
 };
 
 export function getOrders(token: string, shopId: string, period: Period) {

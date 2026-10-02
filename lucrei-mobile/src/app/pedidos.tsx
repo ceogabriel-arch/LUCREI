@@ -49,7 +49,8 @@ function BreakdownRow({ label, value, isTotal }: { label: string; value: string;
   );
 }
 
-function ItemBreakdown({ item }: { item: OrderLineItem }) {
+function ItemBreakdown({ item, provider }: { item: OrderLineItem; provider?: 'shopee' | 'mercado_livre' }) {
+  const feeLabel = provider === 'mercado_livre' ? '− Taxa Mercado Livre' : '− Taxa Shopee';
   return (
     <View className="rounded-2xl border border-lucrei-border bg-lucrei-surfaceAlt p-4">
       <Text className="text-sm font-medium text-lucrei-text">
@@ -58,7 +59,7 @@ function ItemBreakdown({ item }: { item: OrderLineItem }) {
       <View className="mt-2 border-t border-lucrei-border pt-2">
         <BreakdownRow label="Venda" value={formatBRL(item.salePrice)} />
         <BreakdownRow label="− Frete alocado" value={formatBRL(item.shippingFeeAllocated)} />
-        <BreakdownRow label="− Taxa Shopee" value={formatBRL(item.shopeeFeeAllocated)} />
+        <BreakdownRow label={feeLabel} value={formatBRL(item.shopeeFeeAllocated)} />
         {item.taxAllocated > 0 && <BreakdownRow label="− Imposto" value={formatBRL(item.taxAllocated)} />}
         <BreakdownRow
           label="− Custo do produto"
@@ -98,7 +99,7 @@ function OrderDetailModal({ order, onClose }: { order: Order | null; onClose: ()
 
           <ScrollView style={{ flexShrink: 1 }} contentContainerClassName="gap-3 p-5">
             {order?.lineItems.map((item) => (
-              <ItemBreakdown key={item.id} item={item} />
+              <ItemBreakdown key={item.id} item={item} provider={order.provider} />
             ))}
           </ScrollView>
         </SafeAreaView>
@@ -264,10 +265,12 @@ export default function PedidosScreen() {
       const ordersPromise = viewingAll
         ? Promise.all(activeShops.map((shop) => getOrders(token, shop.id, PERIOD_TO_API[period]))).then((results) =>
             results
-              .flatMap((r, i) => r.orders.map((o) => ({ ...o, shopName: activeShops[i].shopName })))
+              .flatMap((r, i) => r.orders.map((o) => ({ ...o, shopName: activeShops[i].shopName, provider: activeShops[i].provider })))
               .sort((a, b) => (a.orderDate < b.orderDate ? 1 : -1))
           )
-        : getOrders(token, selectedShop!.id, PERIOD_TO_API[period]).then((r) => r.orders);
+        : getOrders(token, selectedShop!.id, PERIOD_TO_API[period]).then((r) =>
+            r.orders.map((o) => ({ ...o, provider: selectedShop!.provider }))
+          );
       const [orders, salesUsage] = await Promise.all([ordersPromise, getSalesUsage(token)]);
       setOrders(orders);
       setUsage(salesUsage);
