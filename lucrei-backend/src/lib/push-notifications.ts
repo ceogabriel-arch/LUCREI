@@ -12,7 +12,8 @@ export async function sendPushNotification(
   pushToken: string,
   title: string,
   body: string,
-  data?: Record<string, unknown>
+  data?: Record<string, unknown>,
+  sound: string = 'default'
 ) {
   const { Expo } = await loadExpoModule();
   // Antes só retornava aqui sem erro nenhum - quem chama achava que tinha
@@ -24,7 +25,10 @@ export async function sendPushNotification(
   }
 
   const expo = new Expo();
-  const [ticket] = await expo.sendPushNotificationsAsync([{ to: pushToken, sound: 'default', title, body, data }]);
+  // Som customizado só existe no app nativo (empacotado via o plugin
+  // expo-notifications - ver app.json) - na web o campo é ignorado pelo
+  // próprio navegador, sem efeito nenhum, sem erro nenhum.
+  const [ticket] = await expo.sendPushNotificationsAsync([{ to: pushToken, sound, title, body, data }]);
   if (ticket.status === 'error') {
     throw new Error(ticket.message);
   }

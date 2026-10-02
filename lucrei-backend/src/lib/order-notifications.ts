@@ -20,27 +20,41 @@ const FALLBACK_WINDOW_MS = 24 * 60 * 60 * 1000;
 // faturamento entra no corpo como contexto do tamanho do pedido. O
 // marketplace abreviado vai no título pra quem tem loja Shopee e Mercado
 // Livre ao mesmo tempo saber de onde veio sem abrir o app.
+// Nomes dos arquivos de som customizado empacotados pelo plugin
+// expo-notifications (ver app.json) - só tocam no app nativo depois de um
+// build novo, a web ignora esse campo sem erro.
+const SOUND_PROFIT = 'lu-crei.wav';
+const SOUND_LOSS = 'alerta-prejuizo.wav';
+
 function buildNotificationMessage(
   totalProfit: number | null,
   totalRevenue: number,
   marketplaceLabel: string,
-): { title: string; body: string } {
+): { title: string; body: string; sound: string } {
   const revenueText = formatBRL(totalRevenue);
   if (totalProfit === null) {
     return {
       title: `Pedido concluído (${marketplaceLabel})`,
       body: `Pedido de ${revenueText} - cadastre o custo do produto pra saber quanto você lucrou nele.`,
+      sound: SOUND_PROFIT,
     };
   }
+  // Margem sobre o faturamento do pedido - só faz sentido com faturamento
+  // positivo (evita divisão por zero/sinal estranho num pedido de valor 0).
+  const marginPct = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
+  const marginText = `${marginPct.toFixed(1)}%`;
+
   if (totalProfit < 0) {
     return {
       title: `Prejuízo de ${formatBRL(Math.abs(totalProfit))} (${marketplaceLabel})`,
-      body: `Pedido de ${revenueText} - esse aqui fechou no prejuízo, vale dar uma olhada.`,
+      body: `Pedido de ${revenueText} (${marginText}) - esse aqui fechou no prejuízo, vale dar uma olhada.`,
+      sound: SOUND_LOSS,
     };
   }
   return {
     title: `Lucro de ${formatBRL(totalProfit)} (${marketplaceLabel})`,
-    body: `Pedido de ${revenueText} - lucro líquido já calculado, na hora.`,
+    body: `Pedido de ${revenueText} - lucro líquido de ${marginText} já calculado, na hora.`,
+    sound: SOUND_PROFIT,
   };
 }
 
@@ -103,10 +117,10 @@ export async function notifyOrderCompletedIfNeeded(params: {
   if (claimed.count === 0) return;
 
   const marketplaceLabel = shop.provider === 'mercado_livre' ? 'ML' : 'Shopee';
-  const { title, body } = buildNotificationMessage(params.totalProfit, params.totalRevenue, marketplaceLabel);
+  const { title, body, sound } = buildNotificationMessage(params.totalProfit, params.totalRevenue, marketplaceLabel);
 
   try {
-    await sendPushNotification(owner.pushToken, title, body, { orderSn: params.orderSn });
+    await sendPushNotification(owner.pushToken, title, body, { orderSn: params.orderSn }, sound);
   } catch (err) {
     // O pedido foi "reservado" acima antes de mandar de verdade, pra dois
     // processos concorrentes (webhook + sync) não mandarem a mesma

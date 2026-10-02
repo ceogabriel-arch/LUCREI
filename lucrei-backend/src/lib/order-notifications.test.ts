@@ -143,7 +143,8 @@ describe('notifyOrderCompletedIfNeeded', () => {
       'ExponentPushToken[abc]',
       expect.stringContaining('42,50'),
       expect.stringContaining('150,00'),
-      { orderSn: 'SN123' }
+      { orderSn: 'SN123' },
+      'lu-crei.wav'
     );
   });
 
@@ -165,7 +166,8 @@ describe('notifyOrderCompletedIfNeeded', () => {
       'ExponentPushToken[abc]',
       expect.stringMatching(/prejuízo/i),
       expect.any(String),
-      { orderSn: 'SN123' }
+      { orderSn: 'SN123' },
+      'alerta-prejuizo.wav'
     );
     const [, title] = sendPushNotificationMock.mock.calls[0];
     expect(title).toContain('5,00');
@@ -190,7 +192,8 @@ describe('notifyOrderCompletedIfNeeded', () => {
       'ExponentPushToken[abc]',
       expect.any(String),
       expect.stringContaining('cadastre o custo'),
-      { orderSn: 'SN123' }
+      { orderSn: 'SN123' },
+      'lu-crei.wav'
     );
   });
 
@@ -207,7 +210,7 @@ describe('notifyOrderCompletedIfNeeded', () => {
       totalProfit: 10,
       totalRevenue: 150,
     });
-    expect(sendPushNotificationMock).toHaveBeenNthCalledWith(1, expect.anything(), expect.stringContaining('(Shopee)'), expect.any(String), expect.anything());
+    expect(sendPushNotificationMock).toHaveBeenNthCalledWith(1, expect.anything(), expect.stringContaining('(Shopee)'), expect.any(String), expect.anything(), expect.anything());
 
     prismaMock.order.updateMany.mockResolvedValue({ count: 1 });
     prismaMock.shop.findUnique.mockResolvedValue({ id: 's2', userId: 'u1', provider: 'mercado_livre' });
@@ -219,7 +222,7 @@ describe('notifyOrderCompletedIfNeeded', () => {
       totalProfit: 10,
       totalRevenue: 150,
     });
-    expect(sendPushNotificationMock).toHaveBeenNthCalledWith(2, expect.anything(), expect.stringContaining('(ML)'), expect.any(String), expect.anything());
+    expect(sendPushNotificationMock).toHaveBeenNthCalledWith(2, expect.anything(), expect.stringContaining('(ML)'), expect.any(String), expect.anything(), expect.anything());
   });
 
   it('does not send when the owner has no push token registered', async () => {
