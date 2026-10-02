@@ -391,33 +391,78 @@ export async function productRoutes(app: FastifyInstance) {
         lineItemsByShopeeId.set(itemId, list);
       }
 
+      const toCreate = items.filter((item) => !existingByItemId.has(item.shopeeItemId));
+      const toUpdate = items.filter((item) => existingByItemId.has(item.shopeeItemId));
+
       const products = await prisma.$transaction(
         async (tx) => {
-          const results = [];
-          for (const item of items) {
-            const existing = existingByItemId.get(item.shopeeItemId);
-            const product = existing
-              ? await tx.product.update({
-                  where: { id: existing.id },
-                  data: { name: item.name, costPrice: item.costPrice, costSource: 'manual' },
-                })
-              : await tx.product.create({
-                  data: {
-                    shopId: shop.id,
-                    name: item.name,
-                    costPrice: item.costPrice,
-                    costSource: 'manual',
-                    ...(isMercadoLivre ? { mercadoLivreItemId: item.shopeeItemId } : { shopeeItemId: item.shopeeItemId }),
-                  },
-                });
-            results.push(product);
+          // Antes: um create/update POR produto, cada um seguido de um
+          // UPDATE de line items só dele - "Selecionar todos" numa loja com
+          // 100+ produtos virava 200+ idas sequenciais ao banco dentro de
+          // UMA transação (reportado ao vivo como lento). Agora: 1 createMany
+          // pros produtos novos, 1 UPDATE...FROM(VALUES) pros existentes, e 1
+          // UPDATE...FROM(VALUES) só pra TODOS os line items afetados juntos
+          // - o tamanho do lote deixa de importar pro número de round-trips.
+          const created = toCreate.length
+            ? await tx.product.createManyAndReturn({
+                data: toCreate.map((item) => ({
+                  shopId: shop.id,
+                  name: item.name,
+                  costPrice: item.costPrice,
+                  costSource: 'manual' as const,
+                  ...(isMercadoLivre ? { mercadoLivreItemId: item.shopeeItemId } : { shopeeItemId: item.shopeeItemId }),
+                })),
+              })
+            : [];
 
-            await bulkRecalcLineItems(tx, product.id, item.costPrice, lineItemsByShopeeId.get(item.shopeeItemId) ?? []);
+          if (toUpdate.length > 0) {
+            const rows = toUpdate.map((item) => {
+              const existing = existingByItemId.get(item.shopeeItemId)!;
+              return Prisma.sql`(${existing.id}::text, ${item.name}::text, ${item.costPrice}::numeric)`;
+            });
+            await tx.$executeRaw`
+              UPDATE "Product" AS p
+              SET name = v.name, "costPrice" = v.cost, "costSource" = 'manual'
+              FROM (VALUES ${Prisma.join(rows)}) AS v(id, name, cost)
+              WHERE p.id = v.id
+            `;
           }
-          return results;
+
+          const productIdByItemId = new Map<string, string>();
+          for (const p of created) {
+            const itemId = isMercadoLivre ? p.mercadoLivreItemId : p.shopeeItemId;
+            if (itemId) productIdByItemId.set(itemId, p.id);
+          }
+          for (const item of toUpdate) {
+            productIdByItemId.set(item.shopeeItemId, existingByItemId.get(item.shopeeItemId)!.id);
+          }
+
+          const recalcRows: Prisma.Sql[] = [];
+          for (const item of items) {
+            const productId = productIdByItemId.get(item.shopeeItemId);
+            if (!productId) continue;
+            for (const li of lineItemsByShopeeId.get(item.shopeeItemId) ?? []) {
+              const productCostSnapshot = item.costPrice * li.quantity;
+              const profit =
+                Number(li.salePrice) - Number(li.shippingFeeAllocated) - Number(li.shopeeFeeAllocated) - productCostSnapshot;
+              recalcRows.push(
+                Prisma.sql`(${li.id}::text, ${productId}::text, ${productCostSnapshot}::numeric, ${profit}::numeric)`
+              );
+            }
+          }
+          if (recalcRows.length > 0) {
+            await tx.$executeRaw`
+              UPDATE "OrderLineItem" AS oli
+              SET "productId" = v."productId", "productCostSnapshot" = v.cost, "profit" = v.profit
+              FROM (VALUES ${Prisma.join(recalcRows)}) AS v(id, "productId", cost, profit)
+              WHERE oli.id = v.id
+            `;
+          }
+
+          return tx.product.findMany({ where: { id: { in: [...productIdByItemId.values()] } } });
         },
-        // O padrão do Prisma (5s) estoura fácil com dezenas de produtos, cada um
-        // podendo atualizar vários line items de pedidos junto.
+        // O padrão do Prisma (5s) já não deveria estourar mais com lote
+        // grande (bem menos round-trips agora), mas mantém a folga.
         { timeout: 60_000, maxWait: 15_000 }
       );
 
