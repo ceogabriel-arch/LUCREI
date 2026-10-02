@@ -10,9 +10,9 @@ import { useModalPresentation } from '@/lib/responsive';
 import { useColors } from '@/lib/theme';
 
 // Detalhe por trás do card "Previsão de lucro" no Início - mostra cada
-// pedido comprado na Shopee que ainda não completou, e há quanto tempo está
-// parado nesse status, ordenado do mais antigo pro mais recente (o que o
-// backend já devolve).
+// pedido comprado (Shopee ou Mercado Livre) que ainda não completou, e há
+// quanto tempo está parado nesse status, ordenado do mais antigo pro mais
+// recente (o que o backend já devolve).
 export function PendingOrdersModal({
   visible,
   onClose,
@@ -59,7 +59,7 @@ export function PendingOrdersModal({
           <View className="flex-row items-center justify-between border-b border-lucrei-border px-5 py-4">
             <View>
               <Text className="text-base font-semibold text-lucrei-text">Pedidos em processamento</Text>
-              <Text className="text-xs text-lucrei-textMuted">Comprados na Shopee, ainda não concluídos</Text>
+              <Text className="text-xs text-lucrei-textMuted">Comprados, ainda não concluídos</Text>
             </View>
             <Pressable onPress={onClose} hitSlop={8}>
               <Ionicons name="close" size={22} color={Colors.textMuted} />

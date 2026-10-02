@@ -219,8 +219,8 @@ export default function InicioScreen() {
     if (refreshSignal > 0) loadSummary();
   }, [refreshSignal, loadSummary]);
 
-  // Previsão de lucro (pedidos recém-comprados na Shopee, ainda não
-  // concluídos) - estimativa separada do resumo real, não trava nem
+  // Previsão de lucro (pedidos recém-comprados, ainda não concluídos em
+  // nenhum marketplace) - estimativa separada do resumo real, não trava nem
   // depende dele. Não é filtrada por período (Hoje/7 dias/30 dias): é
   // sempre "quanto tem em aberto agora", igual o contador em si.
   const loadForecast = useCallback(async () => {
@@ -568,7 +568,7 @@ export default function InicioScreen() {
                   <Text className="text-sm font-medium text-lucrei-text">Previsão de lucro (estimado)</Text>
                   <Text className="mt-0.5 text-xs text-lucrei-textMuted">
                     {forecast.pendingCount} {forecast.pendingCount === 1 ? 'pedido comprado' : 'pedidos comprados'}{' '}
-                    ainda em processamento na Shopee. Toque pra ver.
+                    ainda em processamento. Toque pra ver.
                   </Text>
                 </View>
                 {subscriptionAccess.isPastDue ? (

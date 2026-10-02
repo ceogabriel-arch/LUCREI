@@ -323,11 +323,15 @@ model OrderLineItem {
 model RecentOrderEvent {
   id            String   @id @default(cuid())
   shopId        String
-  shopeeOrderSn String   @unique
+  // Nullable porque um evento de pedido Mercado Livre não tem shopeeOrderSn
+  // (e vice-versa) - mesmo padrão de Shop/Order desde a Fase 1/2 do ML.
+  shopeeOrderSn String?  @unique
+  mercadoLivreOrderId String? @unique
   orderStatus   String
-  // Preenchido com o horário em que recebemos o PRIMEIRO push desse pedido
-  // (a Shopee não manda o horário de criação nesse tipo de push) - usado só
-  // pra descartar pedido "fantasma" há tempo demais sem resolução.
+  // Preenchido com o horário em que vimos esse pedido pela primeira vez - via
+  // push (Shopee) ou via sincronização periódica (Mercado Livre, que ainda
+  // não tem webhook). Usado só pra descartar pedido "fantasma" há tempo
+  // demais sem resolução.
   orderDate     DateTime
   updatedAt     DateTime @updatedAt
 

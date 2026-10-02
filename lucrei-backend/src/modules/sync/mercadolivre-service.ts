@@ -3,15 +3,19 @@ import { notifyOrderCompletedIfNeeded } from '../../lib/order-notifications';
 import { getValidAccessToken } from '../../lib/mercadolivre-token';
 import { prisma } from '../../lib/prisma';
 import { getOrder, getShipmentCosts, searchOrders } from '../../mercadolivre-client';
+import { trackRecentMercadoLivreOrderEvent } from '../../lib/recent-order-events';
 import { computeLineProfit } from './order-math';
 import { allocateMLLineItem, computeMLOrderTotals } from './mercadolivre-order-math';
 
-// "paid" é o mais próximo do COMPLETED da Shopee que dá pra pedir direto no
-// filtro de busca do Mercado Livre - ainda não confirmado contra devolução/
-// cancelamento pós-pagamento com um pedido real de verdade (mesma ressalva
-// do mercadolivre-client sobre sale_fee). Revisar assim que uma loja real
-// passar por isso.
+// "paid" é o status "resolvido com sucesso" (equivalente ao COMPLETED da
+// Shopee) - confirmado contra 3 pedidos reais (venda, frete e sale_fee
+// batendo exatos com a API) em 2026-10-02.
 const ELIGIBLE_STATUSES = new Set(['paid']);
+
+// Pedido comprado mas ainda não em nenhum desses três estados finais conta
+// como "em processamento" pra previsão de lucro do Início - mesmo papel que
+// RESOLVED_STATUSES cumpre pro lado Shopee em order-forecast/routes.ts.
+export const ML_RESOLVED_STATUSES = new Set(['paid', 'cancelled', 'invalid']);
 
 async function processOrder(shopDbId: string, accessToken: string, orderId: number) {
   const order = await getOrder(accessToken, orderId);
@@ -146,6 +150,12 @@ export async function syncShopOrders(shopId: string) {
     const page = await searchOrders(accessToken, String(mercadoLivreUserId), { offset, limit: PAGE_SIZE });
     total = page.paging?.total ?? page.results.length;
     ordersSeen += page.results.length;
+
+    // Diferente da Shopee (que alimenta isso via push em tempo real), o
+    // Mercado Livre ainda não tem webhook - é esse sync periódico que
+    // precisa registrar TODO pedido visto (não só os já "paid"), senão a
+    // previsão de lucro nunca saberia de um pedido ainda em processamento.
+    await Promise.all(page.results.map((o) => trackRecentMercadoLivreOrderEvent(shopId, String(o.id), o.status)));
 
     const eligible = page.results.filter((o) => ELIGIBLE_STATUSES.has(o.status));
     for (const o of eligible) {
