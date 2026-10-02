@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 
 import type { FastifyInstance } from 'fastify';
 
+import { sendOpsAlertEmail } from '../../lib/email';
 import { prisma } from '../../lib/prisma';
 import { ensureCurrentPixCharge } from '../../lib/pix-billing';
 import { formatBRL, sendPushNotification } from '../../lib/push-notifications';
@@ -210,6 +211,15 @@ export async function billingRoutes(app: FastifyInstance) {
         }
       } catch (err) {
         app.log.error(err);
+        // Antes só virava log do Railway, que ninguém ficava olhando - um
+        // pagamento que falha silenciosamente é caro demais pra depender de
+        // alguém notar por acaso. Não trava a resposta no envio do e-mail
+        // (erro aqui não pode transformar um 500 legítimo em outro erro).
+        sendOpsAlertEmail(
+          app,
+          `Falha ao processar webhook da Mercado Pago (${type})`,
+          `type: ${type}\ndata.id: ${dataId}\nerro: ${err instanceof Error ? err.message : String(err)}`
+        ).catch(() => {});
         // 500 em vez de engolir o erro - assim a Mercado Pago reentrega o
         // webhook depois de uma falha transitória (rede, DB, timeout) em vez
         // de considerar entregue um evento que na prática não foi processado.

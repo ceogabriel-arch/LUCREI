@@ -196,3 +196,38 @@ export async function sendRewardClaimEmail(
     app.log.error(`Falha ao enviar e-mail de resgate de recompensa: ${response.status} ${body}`);
   }
 }
+
+// Alerta operacional genérico pro time (hoje só suporte@) - sem Sentry, sem
+// serviço novo, reaproveita o Resend que já está configurado. Usado pra
+// coisa que hoje só vira log do Railway (que ninguém fica olhando) mas
+// precisa de atenção rápida, tipo um webhook de pagamento que falhou de
+// verdade (não só uma tentativa que a Mercado Pago ainda vai reentregar).
+export async function sendOpsAlertEmail(app: FastifyInstance, subject: string, details: string) {
+  const apiKey = process.env.RESEND_API_KEY;
+
+  if (!apiKey) {
+    app.log.info(`[email] RESEND_API_KEY não configurado — alerta operacional "${subject}":\n${details}`);
+    return;
+  }
+
+  const html = `<pre style="font-family:Arial,Helvetica,sans-serif;font-size:14px;white-space:pre-wrap;">${details.replace(/</g, '&lt;')}</pre>`;
+
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: process.env.RESEND_FROM_EMAIL || 'Lucrei <onboarding@resend.dev>',
+      to: SUPPORT_EMAIL,
+      subject: `[Alerta Lucrei] ${subject}`,
+      html,
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    app.log.error(`Falha ao enviar e-mail de alerta operacional: ${response.status} ${body}`);
+  }
+}
