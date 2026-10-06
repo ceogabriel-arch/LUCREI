@@ -7,16 +7,20 @@ import { BlurredValue } from '@/components/blurred-value';
 import { DailyProfitChart } from '@/components/daily-profit-chart';
 import { HistoryBackfillCard } from '@/components/history-backfill-card';
 import { PastDueBanner } from '@/components/past-due-banner';
+import { PendingOrdersModal } from '@/components/pending-orders-modal';
 import { Screen } from '@/components/screen';
 import { ShopPicker } from '@/components/shop-picker';
 import type { ThemeColors } from '@/constants/theme';
 import {
   ApiError,
+  getCombinedOrderForecast,
   getCombinedSummary,
   getCombinedSummaryRange,
+  getOrderForecast,
   getShopeeProducts,
   getSummary,
   getSummaryRange,
+  type OrderForecast,
   type ShopeeProduct,
   type Summary,
 } from '@/lib/api';
@@ -169,6 +173,8 @@ function ReportRangeCard({
   const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [forecast, setForecast] = useState<OrderForecast | null>(null);
+  const [pendingOrdersOpen, setPendingOrdersOpen] = useState(false);
   const prevShopIdRef = useRef<string | null>(shopId);
 
   const range = useMemo(() => {
@@ -205,6 +211,24 @@ function ReportRangeCard({
   useEffect(() => {
     load();
   }, [load]);
+
+  // Igual ao card "Previsão de lucro" da Início: pedido já comprado mas
+  // ainda não concluído em nenhum marketplace, sem filtro de período (é
+  // sempre "quanto tem em aberto agora"), pra explicar a diferença entre o
+  // que aparece aqui e o painel da própria Shopee/Mercado Livre.
+  useEffect(() => {
+    let cancelled = false;
+    (shopId === null ? getCombinedOrderForecast(token) : getOrderForecast(token, shopId))
+      .then((f) => {
+        if (!cancelled) setForecast(f);
+      })
+      .catch(() => {
+        if (!cancelled) setForecast(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, shopId]);
 
   function goPrev() {
     if (mode === 'year') {
@@ -319,6 +343,42 @@ function ReportRangeCard({
           <Text className="text-sm text-lucrei-textMuted">Sem dados nesse período.</Text>
         )}
       </View>
+
+      {/* Pedido já comprado mas ainda não concluído em nenhum marketplace -
+          explica por que o painel da própria Shopee/Mercado Livre costuma
+          mostrar mais pedidos/faturamento que o resumo acima: aqui só conta
+          o que já fechou de verdade. Some daqui e entra no resumo sozinho
+          assim que o pedido concluir, sem precisar sincronizar de novo. */}
+      {forecast !== null && forecast.pendingCount > 0 && (
+        <Pressable
+          onPress={() => setPendingOrdersOpen(true)}
+          hitSlop={4}
+          style={({ pressed }) => [
+            { borderColor: Colors.goldDim, backgroundColor: Colors.surfaceAlt, opacity: pressed ? 0.7 : 1 },
+          ]}
+          className="mt-3 flex-row items-center justify-between rounded-2xl border border-dashed p-3.5">
+          <View className="flex-1 pr-3">
+            <Text className="text-sm font-medium text-lucrei-text">+ {forecast.pendingCount}{' '}
+              {forecast.pendingCount === 1 ? 'pedido ainda não concluído' : 'pedidos ainda não concluídos'}
+            </Text>
+            <Text className="mt-0.5 text-xs text-lucrei-textMuted">Ainda em processamento no marketplace. Toque pra ver.</Text>
+          </View>
+          {subscriptionAccess.isPastDue ? (
+            <BlurredValue width={70} />
+          ) : (
+            <Text className="text-sm font-bold" style={{ color: Colors.goldDim }}>
+              + {formatBRL(forecast.projectedProfit)}
+            </Text>
+          )}
+        </Pressable>
+      )}
+
+      <PendingOrdersModal
+        visible={pendingOrdersOpen}
+        onClose={() => setPendingOrdersOpen(false)}
+        token={token}
+        shopId={shopId}
+      />
 
       <Pressable
         onPress={handleExport}
