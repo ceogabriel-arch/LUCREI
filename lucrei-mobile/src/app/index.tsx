@@ -592,28 +592,50 @@ export default function InicioScreen() {
               />
               <View className={isDesktop ? 'flex-row items-center justify-between p-8' : 'p-6'}>
                 <View className={isDesktop ? 'flex-1' : undefined}>
-                  <View className="flex-row items-center gap-2">
-                    <Text className="text-sm text-lucrei-textMuted">Você lucrou</Text>
-                    {!stillLoading && summaryLoading && <ActivityIndicator size="small" color={Colors.textMuted} />}
-                  </View>
-                  {stillLoading ? (
-                    <View className="mt-3 h-[52px] justify-center">
-                      <ActivityIndicator color={Colors.gold} />
-                    </View>
-                  ) : subscriptionAccess.isPastDue ? (
-                    <View className="mt-3">
-                      <BlurredValue width={180} height={isDesktop ? 52 : 44} />
-                    </View>
-                  ) : syncingNow && summary!.ordersCount === 0 ? (
-                    <View className="mt-3 flex-row items-center gap-2">
-                      <ActivityIndicator size="small" color={Colors.gold} />
-                      <Text className="text-base font-medium text-lucrei-textMuted">Buscando seus pedidos recentes...</Text>
-                    </View>
-                  ) : (
-                    <Text className={isDesktop ? 'mt-1 text-6xl font-bold text-lucrei-gold' : 'mt-1 text-5xl font-bold text-lucrei-gold'}>
-                      {formatBRL(summary!.profit)}
-                    </Text>
-                  )}
+                  {/* Lucro travado em R$0,00 (todo item sem custo cadastrado)
+                      parecia número quebrado/erro - mostra o líquido (sem o
+                      custo do produto, que vem pronto da Shopee/ML, mesma
+                      conta do anel) em vez de um zero seco, deixando claro
+                      que ainda falta cadastrar custo pra ver o lucro real.
+                      Só troca quando o lucro de verdade é mesmo zero - loja
+                      com custo já cadastrado continua vendo o lucro normal. */}
+                  {(() => {
+                    const netBeforeProductCost = summary
+                      ? summary.revenue - summary.shippingCost - summary.shopeeFees - summary.taxCost
+                      : 0;
+                    const showNet =
+                      !stillLoading && summary && summary.profit === 0 && summary.itemsMissingCost > 0 && netBeforeProductCost !== 0;
+                    return (
+                      <>
+                        <View className="flex-row items-center gap-2">
+                          <Text className="text-sm text-lucrei-textMuted">
+                            {showNet ? 'Líquido (falta custo do produto)' : 'Você lucrou'}
+                          </Text>
+                          {!stillLoading && summaryLoading && <ActivityIndicator size="small" color={Colors.textMuted} />}
+                        </View>
+                        {stillLoading ? (
+                          <View className="mt-3 h-[52px] justify-center">
+                            <ActivityIndicator color={Colors.gold} />
+                          </View>
+                        ) : subscriptionAccess.isPastDue ? (
+                          <View className="mt-3">
+                            <BlurredValue width={180} height={isDesktop ? 52 : 44} />
+                          </View>
+                        ) : syncingNow && summary!.ordersCount === 0 ? (
+                          <View className="mt-3 flex-row items-center gap-2">
+                            <ActivityIndicator size="small" color={Colors.gold} />
+                            <Text className="text-base font-medium text-lucrei-textMuted">Buscando seus pedidos recentes...</Text>
+                          </View>
+                        ) : (
+                          <Text
+                            className={isDesktop ? 'mt-1 text-6xl font-bold' : 'mt-1 text-5xl font-bold'}
+                            style={{ color: showNet ? Colors.text : Colors.gold }}>
+                            {formatBRL(showNet ? netBeforeProductCost : summary!.profit)}
+                          </Text>
+                        )}
+                      </>
+                    );
+                  })()}
                   {!stillLoading && summary!.itemsMissingCost > 0 && token && (
                     <MissingCostList
                       token={token}
