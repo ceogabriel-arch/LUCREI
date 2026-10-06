@@ -5,6 +5,8 @@ import { checkSubscriptionAccessBlock } from '../../lib/subscription-access';
 import { startOfCurrentMonth } from '../../lib/period';
 import { prisma } from '../../lib/prisma';
 import { sendPushNotification } from '../../lib/push-notifications';
+import { getValidAccessToken } from '../../lib/shopee-token';
+import { getEscrowDetail, getOrderDetail, getOrderList } from '../../shopee-client';
 import { runHistoryBackfill as runMLHistoryBackfill, runShopSync as runMLShopSync } from './mercadolivre-service';
 import { runHistoryBackfill, runShopSync, WINDOW_SECONDS } from './service';
 
@@ -39,6 +41,35 @@ function isRunStale(status: string | null, startedAt: Date | null) {
 }
 
 export async function syncRoutes(app: FastifyInstance) {
+  // TEMP diagnostic route - remove depois de usar. Testa se get_escrow_detail
+  // devolve dado válido pra pedido ainda NÃO concluído, pra saber se dá pra
+  // calcular taxa/frete real antes do status virar COMPLETED (pedido do
+  // usuário: incluir pedido em qualquer status no cálculo, igual UpSeller).
+  app.get<{ Params: { shopId: string } }>('/shops/:shopId/_diag-escrow-test', { onRequest: [app.authenticate] }, async (request, reply) => {
+    const shop = await prisma.shop.findFirst({ where: { id: request.params.shopId, userId: request.user.sub } });
+    if (!shop || shop.provider !== 'shopee') return reply.status(404).send({ message: 'Loja não encontrada.' });
+
+    const { accessToken, shopeeShopId } = await getValidAccessToken(shop.id);
+    const timeTo = Math.floor(Date.now() / 1000);
+    const timeFrom = timeTo - 15 * 24 * 60 * 60;
+
+    const page = await getOrderList(accessToken, shopeeShopId, { timeFrom, timeTo, cursor: '' });
+    const details = await getOrderDetail(accessToken, shopeeShopId, page.order_list.map((o) => o.order_sn));
+    const byStatus: Record<string, number> = {};
+    for (const d of details) byStatus[d.order_status] = (byStatus[d.order_status] ?? 0) + 1;
+
+    const nonCompleted = details.find((d) => !['COMPLETED', 'CANCELLED', 'IN_CANCEL'].includes(d.order_status));
+    if (!nonCompleted) return { byStatus, result: 'no non-completed order in this window' };
+
+    try {
+      const escrow = await getEscrowDetail(accessToken, shopeeShopId, nonCompleted.order_sn);
+      return { byStatus, testedOrderSn: nonCompleted.order_sn, testedStatus: nonCompleted.order_status, escrowIncome: escrow.order_income };
+    } catch (err) {
+      return { byStatus, testedOrderSn: nonCompleted.order_sn, testedStatus: nonCompleted.order_status, escrowError: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
+
   // Dispara o sync e devolve na hora, em vez de segurar a requisição até
   // terminar - com muitos usuários sincronizando ao mesmo tempo (ou uma loja
   // de alto volume), travar a requisição inteira é o que mais pesa num
