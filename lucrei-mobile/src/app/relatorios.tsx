@@ -499,6 +499,18 @@ export default function RelatoriosScreen() {
     if (refreshSignal > 0) load();
   }, [refreshSignal, load]);
 
+  // Atualização automática tipo UpSeller ("vendas de hoje atualizado a cada
+  // 5 minutos") - a notificação push já cobre pedido concluído em apps
+  // nativos, mas no site (sem push) o número só mudava se a pessoa recarregar
+  // a página. Só faz sentido pra "Hoje" - Mês/Ano não mudam minuto a minuto.
+  useFocusEffect(
+    useCallback(() => {
+      if (period !== 'Hoje') return;
+      const interval = setInterval(() => load(), 60_000);
+      return () => clearInterval(interval);
+    }, [period, load])
+  );
+
   async function handleRefresh() {
     setRefreshing(true);
     await load();
