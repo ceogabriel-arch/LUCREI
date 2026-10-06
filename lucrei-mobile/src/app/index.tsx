@@ -9,6 +9,7 @@ import { AchievementsCard } from '@/components/achievements-card';
 import { BlurredValue } from '@/components/blurred-value';
 import { HistoryBackfillCard } from '@/components/history-backfill-card';
 import { MarketplaceBadge } from '@/components/marketplace-badge';
+import { MissingCostList } from '@/components/missing-cost-list';
 import { PastDueBanner } from '@/components/past-due-banner';
 import { PendingOrdersModal } from '@/components/pending-orders-modal';
 import { ProfitBreakdownDonut } from '@/components/profit-donut';
@@ -21,10 +22,12 @@ import {
   getCombinedOrderForecast,
   getCombinedSummary,
   getOrderForecast,
+  getShopeeProducts,
   getSummary,
   getSyncStatus,
   startSync,
   type OrderForecast,
+  type ShopeeProduct,
   type Summary,
 } from '@/lib/api';
 import { showAlert } from '@/lib/alert';
@@ -65,6 +68,7 @@ export default function InicioScreen() {
     { shopId: string; shopName: string; provider: 'shopee' | 'mercado_livre'; profit: number }[]
   >([]);
   const [forecast, setForecast] = useState<OrderForecast | null>(null);
+  const [missingCostProducts, setMissingCostProducts] = useState<ShopeeProduct[]>([]);
   const [lifetimeProfit, setLifetimeProfit] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -222,6 +226,45 @@ export default function InicioScreen() {
   useEffect(() => {
     if (refreshSignal > 0) loadSummary();
   }, [refreshSignal, loadSummary]);
+
+  // Lista por trás do "N item(ns) sem custo cadastrado" - summary só traz a
+  // CONTAGEM (itemsMissingCost), então busca os produtos de verdade à parte
+  // pra alimentar a lista suspensa (ver MissingCostList) com nome e onde
+  // editar o custo de cada um.
+  const loadMissingCostProducts = useCallback(async () => {
+    if (!token || (!viewingAll && !selectedShop)) {
+      setMissingCostProducts([]);
+      return;
+    }
+    try {
+      if (viewingAll) {
+        const activeShops = shops.filter((s) => s.status === 'active');
+        const perShop = await Promise.all(
+          activeShops.map((shop) =>
+            getShopeeProducts(token, shop.id, PERIOD_TO_API[period]).then((res) =>
+              res.products.map((p) => ({ ...p, shopId: shop.id }))
+            )
+          )
+        );
+        setMissingCostProducts(perShop.flat().filter((p) => p.orders > 0 && p.costPrice == null));
+      } else {
+        const res = await getShopeeProducts(token, selectedShop!.id, PERIOD_TO_API[period]);
+        setMissingCostProducts(
+          res.products.filter((p) => p.orders > 0 && p.costPrice == null).map((p) => ({ ...p, shopId: selectedShop!.id }))
+        );
+      }
+    } catch {
+      setMissingCostProducts([]);
+    }
+  }, [token, selectedShop, period, viewingAll, shops]);
+
+  useEffect(() => {
+    loadMissingCostProducts();
+  }, [loadMissingCostProducts]);
+
+  useEffect(() => {
+    if (refreshSignal > 0) loadMissingCostProducts();
+  }, [refreshSignal, loadMissingCostProducts]);
 
   // Previsão de lucro (pedidos recém-comprados, ainda não concluídos em
   // nenhum marketplace) - estimativa separada do resumo real, não trava nem
@@ -564,10 +607,15 @@ export default function InicioScreen() {
                       {formatBRL(summary!.profit)}
                     </Text>
                   )}
-                  {!stillLoading && summary!.itemsMissingCost > 0 && (
-                    <Text className="mt-2 text-xs text-lucrei-textMuted">
-                      {summary!.itemsMissingCost} item(ns) sem custo cadastrado, não entram nesse total.
-                    </Text>
+                  {!stillLoading && summary!.itemsMissingCost > 0 && token && (
+                    <MissingCostList
+                      token={token}
+                      items={missingCostProducts as (ShopeeProduct & { shopId: string })[]}
+                      onSaved={() => {
+                        loadSummary();
+                        loadMissingCostProducts();
+                      }}
+                    />
                   )}
 
                   {!stillLoading && !isDesktop && (

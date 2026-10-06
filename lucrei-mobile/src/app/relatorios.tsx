@@ -6,6 +6,7 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } 
 import { BlurredValue } from '@/components/blurred-value';
 import { DailyProfitChart } from '@/components/daily-profit-chart';
 import { HistoryBackfillCard } from '@/components/history-backfill-card';
+import { MissingCostList } from '@/components/missing-cost-list';
 import { PastDueBanner } from '@/components/past-due-banner';
 import { PendingOrdersModal } from '@/components/pending-orders-modal';
 import { ProfitBreakdownDonut } from '@/components/profit-donut';
@@ -519,6 +520,14 @@ export default function RelatoriosScreen() {
   }
 
   const sold = products.filter((p) => p.orders > 0);
+  // shopId já vem preenchido em cada item no modo "Todas as lojas" (ver
+  // load() acima) - só falta no modo loja única, onde products.shopId nunca
+  // é setado porque é óbvio qual loja é (mas o MissingCostList precisa dele
+  // pra saber onde salvar o custo).
+  const missingCostItems = sold
+    .filter((p) => p.costPrice == null)
+    .map((p) => ({ ...p, shopId: p.shopId ?? selectedShop?.id ?? '' }))
+    .filter((p) => p.shopId !== '');
   const topProfitable = [...sold].sort((a, b) => (b.profit ?? 0) - (a.profit ?? 0)).slice(0, 5);
   const lossMakers = sold
     .filter((p) => (p.profit ?? 0) < 0)
@@ -633,10 +642,8 @@ export default function RelatoriosScreen() {
                   <CostBar label="Imposto" value={summary.taxCost} total={summary.revenue} color={Colors.danger} />
                 )}
                 <CostBar label="Lucro" value={summary.profit} total={summary.revenue} color={Colors.gold} />
-                {summary.itemsMissingCost > 0 && (
-                  <Text className="mt-1 text-xs text-lucrei-textMuted">
-                    {summary.itemsMissingCost} item(ns) sem custo cadastrado, não entram nesse cálculo.
-                  </Text>
+                {summary.itemsMissingCost > 0 && token && (
+                  <MissingCostList token={token} items={missingCostItems} onSaved={load} />
                 )}
               </View>
 
