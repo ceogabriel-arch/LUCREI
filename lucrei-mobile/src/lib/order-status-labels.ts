@@ -6,6 +6,7 @@ export const ORDER_STATUS_LABELS: Record<string, string> = {
   READY_TO_SHIP: 'Pronto pra envio',
   PROCESSED: 'Em processamento',
   SHIPPED: 'Enviado',
+  TO_CONFIRM_RECEIVE: 'Aguardando confirmação de recebimento',
   COMPLETED: 'Concluído',
   IN_CANCEL: 'Cancelando',
   CANCELLED: 'Cancelado',

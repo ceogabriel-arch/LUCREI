@@ -7,7 +7,7 @@ import { sendShopReconnectAttemptEmail } from '../../lib/email';
 import { prisma } from '../../lib/prisma';
 import { trackRecentOrderEvent } from '../../lib/recent-order-events';
 import { exchangeCodeForToken, getAuthorizationUrl, getShopInfo } from '../../shopee-client';
-import { runShopSync, syncOneOrder } from '../sync/service';
+import { isEligibleShopeeStatus, runShopSync, SHOPEE_CANCELLED_STATUSES, syncOneOrder } from '../sync/service';
 
 type AuthorizeUrlQuery = {
   returnUrl?: string;
@@ -44,7 +44,6 @@ const SHOP_AUTHORIZATION_CANCELED_PUSH_CODE = 2;
 // conferir o "code" que realmente vem no log de pushes não reconhecidos
 // abaixo e ajustar essa constante.
 const ORDER_STATUS_PUSH_CODE = 3;
-const ORDER_COMPLETED_STATUS = 'COMPLETED';
 
 // A notificação de "pedido concluído" agora é enviada de dentro do próprio
 // processOrder (ver notifyOrderCompletedIfNeeded) - sincronizar o pedido
@@ -345,12 +344,22 @@ export async function shopRoutes(app: FastifyInstance) {
           // de sincronização de verdade abaixo.
           trackRecentOrderEvent(shop.id, orderSn, status).catch((err) => app.log.error(err));
 
-          if (status === ORDER_COMPLETED_STATUS) {
-            // Não deixa a Shopee esperando o pedido inteiro ser processado e
-            // a notificação ser enviada — responde 200 e termina em segundo
-            // plano. syncOneOrder já manda a notificação sozinho (ver
-            // notifyOrderCompletedIfNeeded dentro de processOrder).
+          if (isEligibleShopeeStatus(status)) {
+            // Sincroniza assim que QUALQUER status de venda de verdade chega
+            // (não só COMPLETED mais - ver isEligibleShopeeStatus) - não
+            // deixa a Shopee esperando o pedido inteiro ser processado e a
+            // notificação ser enviada — responde 200 e termina em segundo
+            // plano. syncOneOrder já manda a notificação sozinho quando o
+            // status for COMPLETED (ver notifyOrderCompletedIfNeeded dentro
+            // de processOrder).
             syncOneOrder(shop.id, orderSn, status).catch((err) => app.log.error(err));
+          } else if (SHOPEE_CANCELLED_STATUSES.has(status)) {
+            // Pedido cancelado antes de concluir - se já tínhamos
+            // sincronizado como venda (status anterior elegível), remove na
+            // hora em vez de esperar o próximo sync periódico retirar.
+            prisma.order
+              .deleteMany({ where: { shopId: shop.id, shopeeOrderSn: orderSn } })
+              .catch((err) => app.log.error(err));
           }
         }
       }

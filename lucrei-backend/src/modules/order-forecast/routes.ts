@@ -9,12 +9,8 @@ import { getValidAccessToken } from '../../lib/shopee-token';
 import { getOrder as getMercadoLivreOrder } from '../../mercadolivre-client';
 import { getOrderDetail } from '../../shopee-client';
 import { ML_RESOLVED_STATUSES } from '../sync/mercadolivre-service';
+import { SHOPEE_PENDING_STATUSES } from '../sync/service';
 import { computeShopSummary } from '../summary/routes';
-
-// Pedido nesses status não vai virar lucro (já concluiu por outro caminho,
-// foi cancelado, ou está sendo cancelado) - não entra na contagem de
-// "ainda em processamento". Equivalente ML é ML_RESOLVED_STATUSES.
-const SHOPEE_RESOLVED_STATUSES = ['COMPLETED', 'CANCELLED', 'IN_CANCEL'];
 
 // Pedido pendente há mais tempo que isso provavelmente perdeu o rastro (push
 // da Shopee não garante entrega, e o sync periódico do ML só vê o que ainda
@@ -40,10 +36,16 @@ async function computeAvgProfitPerOrder(shop: Shop): Promise<number> {
   return recentSummary.ordersCount > 0 ? recentSummary.profit / recentSummary.ordersCount : 0;
 }
 
+// Shopee agora sincroniza (e já calcula taxa/frete/lucro de verdade) assim
+// que o pedido é pago, não só quando conclui - ver isEligibleShopeeStatus em
+// sync/service.ts. Por isso "pendente" aqui encolheu: só sobra o pedido que
+// ainda nem foi pago de verdade (SHOPEE_PENDING_STATUSES), já que o resto já
+// tem número real no resumo. Sem isso o mesmo pedido contaria duas vezes -
+// uma no resumo de verdade, outra estimado aqui.
 function pendingWhereForShop(shop: Shop) {
   return shop.provider === 'mercado_livre'
     ? { shopId: shop.id, mercadoLivreOrderId: { not: null }, orderStatus: { notIn: [...ML_RESOLVED_STATUSES] } }
-    : { shopId: shop.id, shopeeOrderSn: { not: null }, orderStatus: { notIn: SHOPEE_RESOLVED_STATUSES } };
+    : { shopId: shop.id, shopeeOrderSn: { not: null }, orderStatus: { in: [...SHOPEE_PENDING_STATUSES] } };
 }
 
 async function computeShopForecast(shop: Shop): Promise<ShopForecast> {

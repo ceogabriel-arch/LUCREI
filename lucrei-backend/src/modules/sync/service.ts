@@ -6,7 +6,20 @@ import { getValidAccessToken } from '../../lib/shopee-token';
 import { getEscrowDetail, getOrderDetail, getOrderList } from '../../shopee-client';
 import { allocateLineItem, computeLineProfit, computeOrderTotals, computeTaxAllocated } from './order-math';
 
-const ELIGIBLE_STATUSES = new Set(['COMPLETED']);
+// Testado ao vivo contra um pedido real em READY_TO_SHIP (bem antes de
+// COMPLETED): get_escrow_detail já devolve taxa/frete/repasse completos e
+// utilizáveis assim que o pedido é pago - a Shopee calcula isso na hora,
+// não só depois de concluído. Por isso não esperamos mais virar COMPLETED
+// pra contar o pedido, igual o próprio painel "Visão Geral" da Shopee (e o
+// UpSeller) mostram venda assim que ela acontece. Só ficam de fora: pedido
+// ainda não pago (não é venda de verdade ainda) e pedido cancelado.
+const SHOPEE_NOT_YET_SALE_STATUSES = new Set(['UNPAID', 'INVOICE_PENDING']);
+export const SHOPEE_CANCELLED_STATUSES = new Set(['CANCELLED', 'IN_CANCEL']);
+export const SHOPEE_PENDING_STATUSES = SHOPEE_NOT_YET_SALE_STATUSES;
+
+export function isEligibleShopeeStatus(status: string) {
+  return !SHOPEE_NOT_YET_SALE_STATUSES.has(status) && !SHOPEE_CANCELLED_STATUSES.has(status);
+}
 
 async function getShopTaxRate(shopId: string): Promise<number> {
   const shop = await prisma.shop.findUnique({ where: { id: shopId }, select: { taxRatePercent: true } });
@@ -36,11 +49,13 @@ async function processOrder(
     income.shipping_fee_discount_from_3pl
   );
 
-  // update_time é "última mudança de status" - pra um pedido que só chega
-  // aqui depois de virar COMPLETED (ELIGIBLE_STATUSES), na prática é o
-  // momento da conclusão, já que esse é o status final. Grava em toda
-  // sincronização (não só na criação) pra pedido reprocessado também ficar
-  // com a data certa, não só o primeiro registro.
+  // update_time é "última mudança de status" - desde que pedido passou a
+  // sincronizar bem antes de COMPLETED (ver isEligibleShopeeStatus acima),
+  // deixou de ser sempre "momento da conclusão" e virou "desde quando esse
+  // número vale" de forma mais geral (pra período Hoje/7 dias/30 dias). Na
+  // prática ainda fica bem perto de "agora" pra pedido recém-pago, que é o
+  // caso comum. Grava em toda sincronização (não só na criação) pra pedido
+  // reprocessado também ficar com a data certa, não só o primeiro registro.
   const completedAt = updateTime ? new Date(updateTime * 1000) : new Date();
 
   const order = await prisma.order.upsert({
@@ -120,12 +135,18 @@ async function processOrder(
   const totalProfit = itemsMissingCost === income.items.length ? null : profitSum;
   const totalRevenue = lineItemsData.reduce((sum, li) => sum + li.salePrice, 0);
 
+  // orderStatus === 'COMPLETED' é obrigatório aqui agora que processOrder
+  // roda pra QUALQUER status elegível (ver isEligibleShopeeStatus) - sem
+  // essa checagem, a notificação "Pedido concluído" dispararia na primeira
+  // sincronização (ex: READY_TO_SHIP, logo após o pagamento) e nunca mais,
+  // já que notifiedAt é um latch único por pedido (ver notifyOrderCompletedIfNeeded).
+  //
   // Rede de segurança contra o push da Shopee não avisar (não garante
   // entrega) - roda em toda sincronização, não só quando vem do webhook, mas
   // só manda notificação de verdade se o pedido ainda não tiver sido
   // notificado E tiver completado recentemente (ver notifyOrderCompletedIfNeeded).
   // Nunca deixa uma falha aqui derrubar a sincronização do pedido em si.
-  await notifyOrderCompletedIfNeeded({
+  if (orderStatus === 'COMPLETED') await notifyOrderCompletedIfNeeded({
     orderId: order.id,
     orderSn,
     shopDbId,
@@ -229,7 +250,17 @@ async function syncWindowUnbounded(
         page.order_list.map((o) => o.order_sn)
       );
 
-      const eligibleDetails = details.filter((detail) => ELIGIBLE_STATUSES.has(detail.order_status));
+      const eligibleDetails = details.filter((detail) => isEligibleShopeeStatus(detail.order_status));
+
+      // Pedido que já tínhamos sincronizado (contando no faturamento) mas
+      // que virou cancelado antes de concluir não pode continuar contando
+      // pra sempre - remove de vez (cascade apaga os line items junto).
+      // Sem isso, venda cancelada ficaria inflando Faturamento/Lucro depois
+      // de ampliar a sincronização pra além de só COMPLETED.
+      const cancelledSns = details.filter((detail) => SHOPEE_CANCELLED_STATUSES.has(detail.order_status)).map((detail) => detail.order_sn);
+      if (cancelledSns.length > 0) {
+        await prisma.order.deleteMany({ where: { shopId, shopeeOrderSn: { in: cancelledSns } } });
+      }
 
       // Cada pedido faz sua própria chamada de get_escrow_detail (a Shopee só
       // aceita um order_sn por vez ali) mais algumas idas ao banco - processar
