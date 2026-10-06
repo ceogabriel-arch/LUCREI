@@ -10,7 +10,9 @@ import {
   suggestedPriceForNet,
   targetNetFromCost,
   type ShopeeBreakdown,
+  type TaxpayerType,
 } from '@/lib/shopee-pricing';
+import { useSelectedShop } from '@/lib/selected-shop';
 import { useColors } from '@/lib/theme';
 
 type Mode = 'calcular' | 'conferir';
@@ -37,6 +39,11 @@ export default function PrecificadorScreen() {
   const [costInput, setCostInput] = useState('');
   const [marginInput, setMarginInput] = useState('');
   const [priceInput, setPriceInput] = useState('');
+  const { selectedShop, viewingAll } = useSelectedShop();
+  // A tabela segue o cadastro da loja escolhida. Em "Todas as lojas" não há
+  // uma loja só, então cai no padrão CNPJ.
+  const useShopTable = !viewingAll && selectedShop !== null;
+  const taxpayer: TaxpayerType = useShopTable ? selectedShop.taxpayerType : 'cnpj';
 
   let result: ShopeeBreakdown | null = null;
   let suggestedPrice: number | null = null;
@@ -50,11 +57,11 @@ export default function PrecificadorScreen() {
             const margin = parseBRL(marginInput);
             return cost !== null && margin !== null && cost > 0 ? targetNetFromCost(cost, margin) : null;
           })();
-    suggestedPrice = targetNet !== null ? suggestedPriceForNet(targetNet) : null;
-    result = suggestedPrice !== null ? breakdownForPrice(suggestedPrice) : null;
+    suggestedPrice = targetNet !== null ? suggestedPriceForNet(targetNet, taxpayer) : null;
+    result = suggestedPrice !== null ? breakdownForPrice(suggestedPrice, taxpayer) : null;
   } else {
     const price = parseBRL(priceInput);
-    result = price !== null && price > 0 ? breakdownForPrice(price) : null;
+    result = price !== null && price > 0 ? breakdownForPrice(price, taxpayer) : null;
   }
 
   const tabs: { key: Mode; label: string }[] = [
@@ -197,7 +204,13 @@ export default function PrecificadorScreen() {
 
       <View className="mt-4 rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
         <Text className="mb-3 text-sm font-semibold text-lucrei-textMuted">
-          Tabela de referência (CNPJ, vigente desde 01/03/2026)
+          {taxpayer === 'cnpj' ? 'Tabela de referência (CNPJ, vigente desde 01/03/2026)' : 'Tabela de referência (CPF)'}
+        </Text>
+        <Text className="mb-3 text-xs text-lucrei-textMuted">
+          {useShopTable
+            ? `Usando o cadastro ${taxpayer.toUpperCase()} da loja ${selectedShop.shopName}. Troca em Configurações → Lojas conectadas.`
+            : 'Em "Todas as lojas" usa a tabela de CNPJ. Escolha uma loja pra usar o cadastro dela.'}
+          {taxpayer === 'cpf' ? ' Taxas de CPF levantadas em fontes de terceiros, ainda não conferidas com a Shopee.' : ''}
         </Text>
         <View className="flex-row pb-2">
           <Text className="flex-[2] text-xs text-lucrei-textMuted">Faixa</Text>
@@ -205,7 +218,7 @@ export default function PrecificadorScreen() {
           <Text className="flex-1 text-xs text-lucrei-textMuted">Taxa fixa</Text>
           <Text className="flex-1 text-xs text-lucrei-textMuted">Subsídio Pix</Text>
         </View>
-        {SHOPEE_FEE_BANDS.map((band) => (
+        {SHOPEE_FEE_BANDS[taxpayer].map((band) => (
           <View key={band.minPrice} className="flex-row border-t border-lucrei-border py-2.5">
             <Text className="flex-[2] text-sm text-lucrei-text">{band.label}</Text>
             <Text className="flex-1 text-sm text-lucrei-text">{percentLabel(band.commissionRate)}</Text>

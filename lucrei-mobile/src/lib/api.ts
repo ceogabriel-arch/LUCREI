@@ -150,6 +150,9 @@ export type Shop = {
   // null enquanto a loja não tem alíquota de imposto configurada - hoje só o
   // cálculo de lucro da Shopee usa isso de verdade.
   taxRatePercent: number | null;
+  // Define a tabela de taxas da Shopee usada no Precificador (CPF paga taxa
+  // fixa maior por item).
+  taxpayerType: 'cnpj' | 'cpf';
 };
 
 export function getShops(token: string) {
@@ -163,6 +166,14 @@ export function disconnectShop(token: string, shopId: string) {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
     body: '{}',
+  });
+}
+
+export function updateShopTaxpayerType(token: string, shopId: string, taxpayerType: 'cnpj' | 'cpf') {
+  return request<{ id: string; taxpayerType: 'cnpj' | 'cpf' }>(`/shops/${shopId}/taxpayer-type`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ taxpayerType }),
   });
 }
 
