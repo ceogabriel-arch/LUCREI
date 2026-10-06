@@ -244,7 +244,12 @@ function SettingsModal({
           não da tela) - por isso os modais de formulário curto (nome, senha)
           apareciam bem mais estreitos que os 480px esperados, com campo
           cortado e scroll interno desnecessário. */}
-      <KeyboardAvoidingView behavior="padding" style={panelWidthStyle}>
+      {/* No desktop o container precisa ter altura total, senão o maxHeight
+          em % do painel não tem base e o modal fica espremido num bloco
+          pequeno com scroll interno (o que aparecia como caixa cortada). */}
+      <KeyboardAvoidingView
+        behavior="padding"
+        style={modal.isDesktop ? { ...panelWidthStyle, height: '100%', justifyContent: 'center' } : panelWidthStyle}>
         <SafeAreaView edges={['bottom']} style={{ maxHeight: '85%', ...panelWidthStyle }} className={`${modal.panelClassName} bg-lucrei-bg`}>
           <View className="flex-row items-center justify-between border-b border-lucrei-border px-5 py-4">
             <Text className="text-base font-semibold text-lucrei-text">{title}</Text>
