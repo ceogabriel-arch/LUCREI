@@ -482,33 +482,17 @@ export default function InicioScreen() {
             />
             <ShopPicker />
           </View>
-          <View className="flex-row items-center gap-3">
-            {!viewingAll && selectedShop && (
-              <Pressable
-                onPress={handleSync}
-                disabled={syncing}
-                hitSlop={8}
-                className="h-9 w-9 items-center justify-center rounded-xl bg-lucrei-surface"
-                style={{ opacity: syncing ? 0.5 : 1 }}>
-                {syncing ? (
-                  <ActivityIndicator size="small" color={Colors.gold} />
-                ) : (
-                  <Ionicons name="sync" size={16} color={Colors.gold} />
-                )}
-              </Pressable>
-            )}
-            <View
-              className="h-2 w-2 rounded-full"
-              style={{
-                backgroundColor:
-                  backendStatus === 'online'
-                    ? Colors.success
-                    : backendStatus === 'offline'
-                      ? Colors.danger
-                      : Colors.textMuted,
-              }}
-            />
-          </View>
+          <View
+            className="h-2 w-2 rounded-full"
+            style={{
+              backgroundColor:
+                backendStatus === 'online'
+                  ? Colors.success
+                  : backendStatus === 'offline'
+                    ? Colors.danger
+                    : Colors.textMuted,
+            }}
+          />
         </View>
 
         {showSalesLimitWarning && (
@@ -552,26 +536,49 @@ export default function InicioScreen() {
           </Pressable>
         )}
 
-        <View className="mt-7 flex-row items-center gap-2">
-          <View className="flex-row self-start rounded-full bg-lucrei-surface p-1">
-            {PERIODS.map((p) => {
-              const active = p === period;
-              return (
-                <Pressable
-                  key={p}
-                  onPress={() => setPeriod(p)}
-                  className="rounded-full px-3.5 py-1.5"
-                  style={{ backgroundColor: active ? Colors.gold : 'transparent' }}>
-                  <Text
-                    className="text-xs font-medium"
-                    style={{ color: active ? Colors.onGold : Colors.textMuted }}>
-                    {p}
-                  </Text>
-                </Pressable>
-              );
-            })}
+        <View className="mt-7 flex-row items-center justify-between gap-2">
+          <View className="flex-row items-center gap-2">
+            <View className="flex-row self-start rounded-full bg-lucrei-surface p-1">
+              {PERIODS.map((p) => {
+                const active = p === period;
+                return (
+                  <Pressable
+                    key={p}
+                    onPress={() => setPeriod(p)}
+                    className="rounded-full px-3.5 py-1.5"
+                    style={{ backgroundColor: active ? Colors.gold : 'transparent' }}>
+                    <Text
+                      className="text-xs font-medium"
+                      style={{ color: active ? Colors.onGold : Colors.textMuted }}>
+                      {p}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            {!stillLoading && summaryLoading && <ActivityIndicator size="small" color={Colors.gold} />}
           </View>
-          {!stillLoading && summaryLoading && <ActivityIndicator size="small" color={Colors.gold} />}
+
+          {/* Botão pequeno demais no cabeçalho passava despercebido
+              (reportado ao vivo) - agora é um pill dourado com texto, bem
+              mais chamativo, do lado do seletor de período onde a pessoa já
+              está olhando pra conferir se o dado tá atualizado. */}
+          {!viewingAll && selectedShop && (
+            <Pressable
+              onPress={handleSync}
+              disabled={syncing}
+              className="flex-row items-center gap-1.5 rounded-full px-3.5 py-2"
+              style={{ backgroundColor: Colors.gold, opacity: syncing ? 0.6 : 1 }}>
+              {syncing ? (
+                <ActivityIndicator size="small" color={Colors.onGold} />
+              ) : (
+                <Ionicons name="sync" size={14} color={Colors.onGold} />
+              )}
+              <Text className="text-xs font-semibold" style={{ color: Colors.onGold }}>
+                {syncing ? 'Sincronizando...' : 'Sincronizar'}
+              </Text>
+            </Pressable>
+          )}
         </View>
 
         {stillLoading || showingRealData ? (
