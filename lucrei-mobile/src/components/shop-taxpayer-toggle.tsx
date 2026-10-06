@@ -13,26 +13,33 @@ const OPTIONS: { key: TaxpayerType; label: string }[] = [
   { key: 'cpf', label: 'CPF' },
 ];
 
-// Toggle CNPJ / CPF dentro de cada loja em "Lojas conectadas". Salva na hora
-// ao trocar - não tem botão de confirmar, porque é uma escolha binária e o
-// Precificador já mostra qual tabela está usando.
-export function ShopTaxpayerToggle({ shop }: { shop: Shop }) {
+// Toggle CNPJ / CPF da loja escolhida no Precificador. Salva na hora ao
+// trocar e avisa o pai com onChange, pra tabela de taxas mudar sem esperar a
+// lista de lojas recarregar.
+export function ShopTaxpayerToggle({
+  shop,
+  value,
+  onChange,
+}: {
+  shop: Shop;
+  value: TaxpayerType;
+  onChange: (next: TaxpayerType) => void;
+}) {
   const { state } = useAuth();
   const Colors = useColors();
   const { toast, opacity, show } = useToast();
-  const [current, setCurrent] = useState<TaxpayerType>(shop.taxpayerType);
   const [saving, setSaving] = useState(false);
 
   async function handleSelect(next: TaxpayerType) {
-    if (next === current || saving || state.status !== 'authenticated') return;
-    const previous = current;
-    setCurrent(next);
+    if (next === value || saving || state.status !== 'authenticated') return;
+    const previous = value;
+    onChange(next);
     setSaving(true);
     try {
       await updateShopTaxpayerType(state.token, shop.id, next);
-      show({ title: 'Tipo de cadastro salvo', message: `Precificador usando a tabela de ${next.toUpperCase()}.`, tone: 'success' });
+      show({ title: 'Cadastro salvo', message: `Tabela de ${next.toUpperCase()} aplicada na loja ${shop.shopName}.`, tone: 'success' });
     } catch {
-      setCurrent(previous);
+      onChange(previous);
       show({ title: 'Não foi possível salvar', message: 'Tenta de novo em instantes.', tone: 'error' });
     } finally {
       setSaving(false);
@@ -40,20 +47,20 @@ export function ShopTaxpayerToggle({ shop }: { shop: Shop }) {
   }
 
   return (
-    <View className="mt-2.5 border-t border-lucrei-border pt-2.5">
+    <View>
       <ToastBanner toast={toast} opacity={opacity} />
-      <Text className="mb-1.5 text-[11px] text-lucrei-textMuted">Tipo de cadastro na Shopee (tabela de taxas do Precificador)</Text>
+      <Text className="mb-1.5 text-xs text-lucrei-textMuted">Cadastro da loja na Shopee</Text>
       <View className="flex-row gap-1 rounded-lg border border-lucrei-border bg-lucrei-bg p-1">
         {OPTIONS.map((option) => {
-          const active = current === option.key;
+          const active = value === option.key;
           return (
             <Pressable
               key={option.key}
               onPress={() => handleSelect(option.key)}
               disabled={saving}
-              className="flex-1 items-center rounded-md py-1.5"
+              className="flex-1 items-center rounded-md py-2"
               style={{ backgroundColor: active ? Colors.gold : 'transparent' }}>
-              <Text className="text-xs font-medium" style={{ color: active ? Colors.onGold : Colors.textMuted }}>
+              <Text className="text-sm font-medium" style={{ color: active ? Colors.onGold : Colors.textMuted }}>
                 {option.label}
               </Text>
             </Pressable>

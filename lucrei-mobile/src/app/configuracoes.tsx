@@ -19,7 +19,6 @@ import { MarketplaceBadge } from '@/components/marketplace-badge';
 import { Screen } from '@/components/screen';
 import { ToastBanner, useToast } from '@/components/toast';
 import { ShopTaxRateField } from '@/components/shop-tax-rate-field';
-import { ShopTaxpayerToggle } from '@/components/shop-taxpayer-toggle';
 import { API_URL, disconnectShop, getDailyGoalSuggestion, type AuthUser, type Shop } from '@/lib/api';
 import { showAlert } from '@/lib/alert';
 import { useAuth } from '@/lib/auth';
@@ -564,7 +563,6 @@ function ShopRow({ shop, onDisconnected }: { shop: Shop; onDisconnected: () => v
         </Text>
       )}
 
-      {active && <ShopTaxpayerToggle shop={shop} />}
       {active && <ShopTaxRateField shop={shop} />}
     </View>
   );

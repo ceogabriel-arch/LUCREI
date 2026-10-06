@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
+import { ShopTaxpayerToggle } from '@/components/shop-taxpayer-toggle';
 import { TextField } from '@/components/text-field';
 import { formatBRL } from '@/lib/format';
 import {
@@ -43,7 +44,11 @@ export default function PrecificadorScreen() {
   // A tabela segue o cadastro da loja escolhida. Em "Todas as lojas" não há
   // uma loja só, então cai no padrão CNPJ.
   const useShopTable = !viewingAll && selectedShop !== null;
-  const taxpayer: TaxpayerType = useShopTable ? selectedShop.taxpayerType : 'cnpj';
+  const [taxpayer, setTaxpayer] = useState<TaxpayerType>('cnpj');
+  // Quando troca de loja (ou o cadastro dela muda), volta pro valor salvo dela.
+  useEffect(() => {
+    setTaxpayer(useShopTable ? selectedShop.taxpayerType : 'cnpj');
+  }, [useShopTable, selectedShop?.id, selectedShop?.taxpayerType]);
 
   let result: ShopeeBreakdown | null = null;
   let suggestedPrice: number | null = null;
@@ -83,6 +88,17 @@ export default function PrecificadorScreen() {
       <Text className="mt-2 text-base text-lucrei-textMuted">
         Calcula o preço certo considerando comissão + taxa fixa por faixa — não uma margem única.
       </Text>
+
+      {useShopTable && (
+        <View className="mt-4 rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+          <ShopTaxpayerToggle
+            key={selectedShop.id}
+            shop={selectedShop}
+            value={taxpayer}
+            onChange={setTaxpayer}
+          />
+        </View>
+      )}
 
       <View className="mt-5 flex-row gap-2 rounded-2xl border border-lucrei-border bg-lucrei-surface p-1.5">
         {tabs.map((tab) => (
@@ -208,7 +224,7 @@ export default function PrecificadorScreen() {
         </Text>
         <Text className="mb-3 text-xs text-lucrei-textMuted">
           {useShopTable
-            ? `Usando o cadastro ${taxpayer.toUpperCase()} da loja ${selectedShop.shopName}. Troca em Configurações → Lojas conectadas.`
+            ? `Usando o cadastro ${taxpayer.toUpperCase()} da loja ${selectedShop.shopName}.`
             : 'Em "Todas as lojas" usa a tabela de CNPJ. Escolha uma loja pra usar o cadastro dela.'}
           {taxpayer === 'cpf' ? ' Taxas de CPF levantadas em fontes de terceiros, ainda não conferidas com a Shopee.' : ''}
         </Text>
