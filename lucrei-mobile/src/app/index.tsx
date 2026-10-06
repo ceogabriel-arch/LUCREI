@@ -11,6 +11,7 @@ import { HistoryBackfillCard } from '@/components/history-backfill-card';
 import { MarketplaceBadge } from '@/components/marketplace-badge';
 import { PastDueBanner } from '@/components/past-due-banner';
 import { PendingOrdersModal } from '@/components/pending-orders-modal';
+import { ProfitBreakdownDonut } from '@/components/profit-donut';
 import { Screen } from '@/components/screen';
 import { ShopPicker } from '@/components/shop-picker';
 import { Sparkline } from '@/components/sparkline';
@@ -492,10 +493,22 @@ export default function InicioScreen() {
                       <Sparkline data={summary!.trend.map((t) => t.profit)} />
                     </View>
                   )}
+
+                  {/* Anel "pra onde foi o dinheiro" ao lado do lucro, estilo
+                      UpSeller - pedido explicitamente pelo usuário. No celular
+                      fica empilhado abaixo do sparkline por falta de espaço. */}
+                  {!stillLoading && !isDesktop && summary && (
+                    <View className="mt-5 items-center">
+                      <ProfitBreakdownDonut summary={summary} size={84} strokeWidth={12} />
+                    </View>
+                  )}
                 </View>
 
                 {!stillLoading && isDesktop && (
-                  <Sparkline data={summary!.trend.map((t) => t.profit)} width={380} height={110} />
+                  <View className="flex-row items-center gap-8">
+                    {summary && <ProfitBreakdownDonut summary={summary} size={96} strokeWidth={14} />}
+                    <Sparkline data={summary!.trend.map((t) => t.profit)} width={300} height={110} />
+                  </View>
                 )}
               </View>
             </View>
