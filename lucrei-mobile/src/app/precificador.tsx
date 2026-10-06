@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
 import { TextField } from '@/components/text-field';
@@ -68,6 +68,10 @@ export default function PrecificadorScreen() {
 
   return (
     <Screen>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerClassName="pb-8">
       <Text className="text-2xl font-bold text-lucrei-text">Precificador Shopee</Text>
       <Text className="mt-2 text-base text-lucrei-textMuted">
         Calcula o preço certo considerando comissão + taxa fixa por faixa — não uma margem única.
@@ -210,6 +214,7 @@ export default function PrecificadorScreen() {
           </View>
         ))}
       </View>
+      </ScrollView>
     </Screen>
   );
 }
