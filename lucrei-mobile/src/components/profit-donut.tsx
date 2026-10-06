@@ -106,20 +106,9 @@ export function ProfitBreakdownDonut({
     );
   }
 
-  // "Líquido" sai na hora (taxa/frete/imposto já vêm prontos da Shopee/ML,
-  // não dependem de custo de produto cadastrado - ver summary/routes.ts).
-  // Mostrado junto do anel pra não depender de custo cadastrado pra ter ALGO
-  // automático na tela, igual o painel da Shopee/UpSeller mostram na hora -
-  // só o "Lucro" final (depois do custo do produto) ainda depende disso.
-  const netBeforeProductCost = summary.revenue - summary.shippingCost - summary.shopeeFees - summary.taxCost;
-
   return (
     <View className="items-center">
       <DonutRing segments={segments} size={size} strokeWidth={strokeWidth} />
-      <Text className="mt-2 text-base font-bold" style={{ color: netBeforeProductCost >= 0 ? Colors.text : Colors.danger }}>
-        {formatBRL(netBeforeProductCost)}
-      </Text>
-      <Text className="text-[10px] text-lucrei-textMuted">líquido (sem custo do produto)</Text>
       {legend && (
         <View className="mt-3 gap-1">
           {visible.map((s) => (
