@@ -9,7 +9,7 @@ import { HistoryBackfillCard } from '@/components/history-backfill-card';
 import { MissingCostList } from '@/components/missing-cost-list';
 import { PastDueBanner } from '@/components/past-due-banner';
 import { PendingOrdersModal } from '@/components/pending-orders-modal';
-import { ProfitBreakdownDonut } from '@/components/profit-donut';
+import { ProfitBreakdownDonut, RevenueRing } from '@/components/profit-donut';
 import { Screen } from '@/components/screen';
 import { ShopPicker } from '@/components/shop-picker';
 import type { ThemeColors } from '@/constants/theme';
@@ -631,8 +631,9 @@ export default function RelatoriosScreen() {
               <View className="rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
                 <Text className="mb-3 text-sm font-medium text-lucrei-text">Pra onde foi o dinheiro</Text>
                 {summary.revenue > 0 && (
-                  <View className="mb-4 items-center">
-                    <ProfitBreakdownDonut summary={summary} size={110} strokeWidth={16} legend={false} />
+                  <View className="mb-4 flex-row items-center justify-center gap-5">
+                    <RevenueRing revenue={summary.revenue} size={100} strokeWidth={15} />
+                    <ProfitBreakdownDonut summary={summary} size={100} strokeWidth={15} legend={false} />
                   </View>
                 )}
                 <CostBar label="Custo do produto" value={summary.productCost} total={summary.revenue} color={Colors.goldDim} />

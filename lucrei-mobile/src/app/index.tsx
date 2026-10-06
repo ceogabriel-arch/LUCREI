@@ -12,7 +12,7 @@ import { MarketplaceBadge } from '@/components/marketplace-badge';
 import { MissingCostList } from '@/components/missing-cost-list';
 import { PastDueBanner } from '@/components/past-due-banner';
 import { PendingOrdersModal } from '@/components/pending-orders-modal';
-import { ProfitBreakdownDonut } from '@/components/profit-donut';
+import { ProfitBreakdownDonut, RevenueRing } from '@/components/profit-donut';
 import { Screen } from '@/components/screen';
 import { ShopPicker } from '@/components/shop-picker';
 import { Sparkline } from '@/components/sparkline';
@@ -628,16 +628,22 @@ export default function InicioScreen() {
                       UpSeller - pedido explicitamente pelo usuário. No celular
                       fica empilhado abaixo do sparkline por falta de espaço. */}
                   {!stillLoading && !isDesktop && summary && (
-                    <View className="mt-5 items-center">
+                    <View className="mt-5 flex-row items-center justify-center gap-4">
+                      <RevenueRing revenue={summary.revenue} size={84} strokeWidth={12} />
                       <ProfitBreakdownDonut summary={summary} size={84} strokeWidth={12} />
                     </View>
                   )}
                 </View>
 
                 {!stillLoading && isDesktop && (
-                  <View className="flex-row items-center gap-8">
-                    {summary && <ProfitBreakdownDonut summary={summary} size={96} strokeWidth={14} />}
-                    <Sparkline data={summary!.trend.map((t) => t.profit)} width={300} height={110} />
+                  <View className="flex-row items-center gap-6">
+                    {summary && (
+                      <>
+                        <RevenueRing revenue={summary.revenue} size={84} strokeWidth={13} />
+                        <ProfitBreakdownDonut summary={summary} size={84} strokeWidth={13} />
+                      </>
+                    )}
+                    <Sparkline data={summary!.trend.map((t) => t.profit)} width={260} height={110} />
                   </View>
                 )}
               </View>

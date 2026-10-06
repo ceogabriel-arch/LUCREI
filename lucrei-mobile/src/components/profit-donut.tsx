@@ -44,6 +44,22 @@ function DonutRing({ segments, size, strokeWidth }: { segments: Segment[]; size:
   );
 }
 
+// Anel só de faturamento (um segmento só, 100%) - pedido pelo usuário pra
+// ficar ao lado (à esquerda) do anel de custos/taxas, igual par de métricas
+// do UpSeller (cada uma com seu próprio anel, lado a lado).
+export function RevenueRing({ revenue, size = 96, strokeWidth = 14 }: { revenue: number; size?: number; strokeWidth?: number }) {
+  const Colors = useColors();
+  if (revenue <= 0) return null;
+
+  return (
+    <View className="items-center">
+      <DonutRing segments={[{ label: 'Faturamento', value: revenue, color: Colors.gold }]} size={size} strokeWidth={strokeWidth} />
+      <Text className="mt-2 text-base font-bold text-lucrei-text">{formatBRL(revenue)}</Text>
+      <Text className="text-[10px] text-lucrei-textMuted">faturamento</Text>
+    </View>
+  );
+}
+
 // Anel colorido "pra onde foi o dinheiro", estilo painel do UpSeller - ao
 // lado do valor de lucro em destaque, mesma fonte de dados que o card "Pra
 // onde foi o dinheiro" em Relatórios (CostBar), só em formato de rosca em
@@ -106,10 +122,6 @@ export function ProfitBreakdownDonut({
       <Text className="text-[10px] text-lucrei-textMuted">líquido (sem custo do produto)</Text>
       {legend && (
         <View className="mt-3 gap-1">
-          <View className="flex-row items-center gap-1.5">
-            <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: Colors.text }} />
-            <Text className="text-xs text-lucrei-textMuted">Faturamento · {formatBRL(summary.revenue)}</Text>
-          </View>
           {visible.map((s) => (
             <View key={s.label} className="flex-row items-center gap-1.5">
               <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: s.color }} />
