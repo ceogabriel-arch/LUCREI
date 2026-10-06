@@ -226,6 +226,7 @@ export async function shopRoutes(app: FastifyInstance) {
         provider: true,
         historyBackfillStatus: true,
         taxRatePercent: true,
+        taxpayerType: true,
         syncStatus: true,
       },
     });
@@ -281,6 +282,33 @@ export async function shopRoutes(app: FastifyInstance) {
       });
 
       return { id: updated.id, taxRatePercent: updated.taxRatePercent != null ? Number(updated.taxRatePercent) : null };
+    }
+  );
+
+  app.patch<{ Params: { shopId: string }; Body: { taxpayerType: 'cnpj' | 'cpf' } }>(
+    '/shops/:shopId/taxpayer-type',
+    {
+      onRequest: [app.authenticate],
+      schema: {
+        body: {
+          type: 'object',
+          required: ['taxpayerType'],
+          properties: { taxpayerType: { type: 'string', enum: ['cnpj', 'cpf'] } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const shop = await prisma.shop.findFirst({
+        where: { id: request.params.shopId, userId: request.user.sub },
+      });
+      if (!shop) return reply.status(404).send({ message: 'Loja não encontrada.' });
+
+      const updated = await prisma.shop.update({
+        where: { id: shop.id },
+        data: { taxpayerType: request.body.taxpayerType },
+      });
+
+      return { id: updated.id, taxpayerType: updated.taxpayerType };
     }
   );
 
