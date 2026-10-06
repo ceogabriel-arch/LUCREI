@@ -43,24 +43,21 @@ export async function computeShopSummary(shop: Shop, query: SummaryQuery): Promi
   // continua olhando orderDate (data da compra) de propósito - é sobre
   // quando a VENDA aconteceu em relação a conectar a loja, não sobre
   // quando o lucro ficou confirmado.
-  const isLifetimeRewardsQuery = !fromDate && period === 'all';
   const start = fromDate ?? (period === 'all' ? shop.connectedAt : rangeStart(period));
 
-  // Demais casos (presets Hoje/7 dias/30 dias e o from/to dos relatórios
-  // por mês/ano) filtram por completedAt: o lucro só existe de fato
-  // depois do pedido completar, então "Hoje" precisa dizer "completou
-  // hoje", não "foi comprado hoje" (que normalmente é outro dia).
-  const orders = isLifetimeRewardsQuery
-    ? await prisma.order.findMany({
-        where: { shopId: shop.id, orderDate: { gte: start, ...(toDate ? { lt: toDate } : {}) } },
-        include: { lineItems: true },
-        orderBy: { orderDate: 'asc' },
-      })
-    : await prisma.order.findMany({
-        where: { shopId: shop.id, completedAt: { gte: start, ...(toDate ? { lt: toDate } : {}) } },
-        include: { lineItems: true },
-        orderBy: { orderDate: 'asc' },
-      });
+  // Presets (Hoje/7 dias/30 dias/Desde que conectei) filtram pela data da
+  // VENDA (orderDate), igual o painel da Shopee - senão um pedido comprado
+  // há semanas que só mudou de status hoje entrava como "vendido hoje".
+  // Já o from/to dos relatórios por mês/ano continua por completedAt, pra
+  // fechamento contábil de quando o pedido concluiu.
+  const byOrderDate = !fromDate;
+  const orders = await prisma.order.findMany({
+    where: byOrderDate
+      ? { shopId: shop.id, orderDate: { gte: start } }
+      : { shopId: shop.id, completedAt: { gte: start, ...(toDate ? { lt: toDate } : {}) } },
+    include: { lineItems: true },
+    orderBy: { orderDate: 'asc' },
+  });
 
   let revenue = 0;
   let revenueWithKnownCost = 0;
@@ -73,7 +70,8 @@ export async function computeShopSummary(shop: Shop, query: SummaryQuery): Promi
   const profitByDay = new Map<string, number>();
 
   for (const order of orders) {
-    const day = (order.completedAt ?? order.orderDate).toISOString().slice(0, 10);
+    const dayBasis = byOrderDate ? order.orderDate : (order.completedAt ?? order.orderDate);
+    const day = dayBasis.toISOString().slice(0, 10);
     for (const li of order.lineItems) {
       const sale = Number(li.salePrice);
       revenue += sale;
