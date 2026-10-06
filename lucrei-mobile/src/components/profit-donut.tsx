@@ -7,11 +7,27 @@ import { useColors } from '@/lib/theme';
 
 type Segment = { label: string; value: number; color: string };
 
-function DonutRing({ segments, size, strokeWidth }: { segments: Segment[]; size: number; strokeWidth: number }) {
+function DonutRing({
+  segments,
+  size,
+  strokeWidth,
+  total,
+}: {
+  segments: Segment[];
+  size: number;
+  strokeWidth: number;
+  // Base do anel (100%) - precisa ser passado explicitamente em vez de
+  // somar os segmentos: taxa/frete/imposto somam TODO item vendido, mas
+  // custo do produto/lucro só somam item com custo cadastrado (ver
+  // summary/routes.ts), então os segmentos quase nunca somam o faturamento
+  // real. Sem esse "total" certo, a fatia de taxa aparecia proporcionalmente
+  // bem maior do que o % mostrado do lado (bug reportado ao vivo) e não
+  // sobrava nenhum espaço cinza representando o que ainda está sem custo.
+  total: number;
+}) {
   const Colors = useColors();
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
-  const total = segments.reduce((sum, s) => sum + Math.max(s.value, 0), 0);
 
   let cumulative = 0;
   return (
@@ -53,7 +69,12 @@ export function RevenueRing({ revenue, size = 96, strokeWidth = 14 }: { revenue:
 
   return (
     <View className="items-center">
-      <DonutRing segments={[{ label: 'Faturamento', value: revenue, color: Colors.gold }]} size={size} strokeWidth={strokeWidth} />
+      <DonutRing
+        segments={[{ label: 'Faturamento', value: revenue, color: Colors.gold }]}
+        size={size}
+        strokeWidth={strokeWidth}
+        total={revenue}
+      />
       <Text className="mt-2 text-base font-bold text-lucrei-text">{formatBRL(revenue)}</Text>
       <Text className="text-[10px] text-lucrei-textMuted">faturamento</Text>
     </View>
@@ -96,7 +117,7 @@ export function ProfitBreakdownDonut({
     if (summary.revenue <= 0) return null;
     return (
       <View className="items-center">
-        <DonutRing segments={[{ label: 'Sem dado', value: 1, color: Colors.border }]} size={size} strokeWidth={strokeWidth} />
+        <DonutRing segments={[{ label: 'Sem dado', value: 1, color: Colors.border }]} size={size} strokeWidth={strokeWidth} total={1} />
         {legend && (
           <Text className="mt-3 max-w-[140px] text-center text-xs text-lucrei-textMuted">
             Sem custo cadastrado pra calcular ainda
@@ -108,7 +129,7 @@ export function ProfitBreakdownDonut({
 
   return (
     <View className="items-center">
-      <DonutRing segments={segments} size={size} strokeWidth={strokeWidth} />
+      <DonutRing segments={segments} size={size} strokeWidth={strokeWidth} total={summary.revenue} />
       {legend && (
         <View className="mt-3 gap-1">
           {visible.map((s) => (
