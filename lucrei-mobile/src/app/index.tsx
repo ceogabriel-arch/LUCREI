@@ -22,6 +22,8 @@ import {
   getCombinedSummary,
   getOrderForecast,
   getSummary,
+  getSyncStatus,
+  startSync,
   type OrderForecast,
   type Summary,
 } from '@/lib/api';
@@ -65,6 +67,7 @@ export default function InicioScreen() {
   const [forecast, setForecast] = useState<OrderForecast | null>(null);
   const [lifetimeProfit, setLifetimeProfit] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [pendingOrdersOpen, setPendingOrdersOpen] = useState(false);
 
   async function handleConnectShopee() {
@@ -245,6 +248,69 @@ export default function InicioScreen() {
     if (refreshSignal > 0) loadForecast();
   }, [refreshSignal, loadForecast]);
 
+  // Mesmo botão de "Sincronizar agora" que já existia em Pedidos, mas
+  // pedido explicitamente também pra Início - reportado ao vivo que a
+  // pessoa não achava onde sincronizar sem entrar em Pedidos primeiro.
+  const pollSyncUntilDone = useCallback(async () => {
+    const MAX_CONSECUTIVE_FAILURES = 15;
+    let consecutiveFailures = 0;
+    try {
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        await new Promise((r) => setTimeout(r, 3000));
+        if (!token || !selectedShop) break;
+        let status;
+        try {
+          status = await getSyncStatus(token, selectedShop.id);
+        } catch (err) {
+          consecutiveFailures++;
+          if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+            showAlert('Não foi possível sincronizar', err instanceof ApiError ? err.message : 'Verifique sua internet e tente de novo.');
+            break;
+          }
+          continue;
+        }
+        consecutiveFailures = 0;
+        if (status.status === 'done') {
+          await Promise.all([refreshShops(), loadSummary(), loadForecast()]);
+          break;
+        }
+        if (status.status === 'error') {
+          showAlert('Não foi possível sincronizar', status.error ?? 'Tenta de novo em instantes.');
+          break;
+        }
+      }
+    } finally {
+      setSyncing(false);
+    }
+  }, [token, selectedShop, refreshShops, loadSummary, loadForecast]);
+
+  useEffect(() => {
+    if (!token || !selectedShop) return;
+    getSyncStatus(token, selectedShop.id)
+      .then((status) => {
+        if (status.status === 'running') {
+          setSyncing(true);
+          pollSyncUntilDone();
+        }
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedShop?.id]);
+
+  async function handleSync() {
+    if (!token || !selectedShop) return;
+    setSyncing(true);
+    try {
+      await startSync(token, selectedShop.id);
+    } catch (err) {
+      setSyncing(false);
+      showAlert('Não foi possível sincronizar', err instanceof ApiError ? err.message : 'Tenta de novo em instantes.');
+      return;
+    }
+    pollSyncUntilDone();
+  }
+
   async function handleRefresh() {
     setRefreshing(true);
     await Promise.all([refreshShops(), loadSummary(), loadForecast()]);
@@ -373,17 +439,33 @@ export default function InicioScreen() {
             />
             <ShopPicker />
           </View>
-          <View
-            className="h-2 w-2 rounded-full"
-            style={{
-              backgroundColor:
-                backendStatus === 'online'
-                  ? Colors.success
-                  : backendStatus === 'offline'
-                    ? Colors.danger
-                    : Colors.textMuted,
-            }}
-          />
+          <View className="flex-row items-center gap-3">
+            {!viewingAll && selectedShop && (
+              <Pressable
+                onPress={handleSync}
+                disabled={syncing}
+                hitSlop={8}
+                className="h-9 w-9 items-center justify-center rounded-xl bg-lucrei-surface"
+                style={{ opacity: syncing ? 0.5 : 1 }}>
+                {syncing ? (
+                  <ActivityIndicator size="small" color={Colors.gold} />
+                ) : (
+                  <Ionicons name="sync" size={16} color={Colors.gold} />
+                )}
+              </Pressable>
+            )}
+            <View
+              className="h-2 w-2 rounded-full"
+              style={{
+                backgroundColor:
+                  backendStatus === 'online'
+                    ? Colors.success
+                    : backendStatus === 'offline'
+                      ? Colors.danger
+                      : Colors.textMuted,
+              }}
+            />
+          </View>
         </View>
 
         {showSalesLimitWarning && (

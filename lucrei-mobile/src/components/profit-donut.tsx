@@ -72,7 +72,23 @@ export function ProfitBreakdownDonut({
   ];
   const visible = segments.filter((s) => s.value > 0);
 
-  if (visible.length === 0) return null;
+  // Com faturamento mas nenhuma categoria preenchida (loja sem produto
+  // cadastrado ainda - profit null exclui a linha INTEIRA do cálculo, não
+  // só o lucro, ver summary/routes.ts) o anel ficaria "sumido" sem
+  // explicação. Mostra uma rosca cinza neutra em vez de desaparecer.
+  if (visible.length === 0) {
+    if (summary.revenue <= 0) return null;
+    return (
+      <View className="items-center">
+        <DonutRing segments={[{ label: 'Sem dado', value: 1, color: Colors.border }]} size={size} strokeWidth={strokeWidth} />
+        {legend && (
+          <Text className="mt-3 max-w-[140px] text-center text-xs text-lucrei-textMuted">
+            Sem custo cadastrado pra calcular ainda
+          </Text>
+        )}
+      </View>
+    );
+  }
 
   return (
     <View className="items-center">
