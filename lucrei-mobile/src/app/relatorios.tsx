@@ -335,7 +335,11 @@ function ReportRangeCard({
 
       {/* Backfill de histórico continua sendo ação de uma loja Shopee só -
           com "Todas as lojas" (shopId null) não tem pra qual loja apontar. */}
-      {shopId !== null && isShopee && <HistoryBackfillCard token={token} shopId={shopId} onSynced={load} />}
+      {shopId !== null && isShopee && (
+        <View className="mt-2">
+          <HistoryBackfillCard token={token} shopId={shopId} onSynced={load} prominent />
+        </View>
+      )}
     </View>
   );
 }
