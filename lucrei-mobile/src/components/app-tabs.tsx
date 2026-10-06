@@ -21,6 +21,8 @@ const TAB_META: Record<string, { active: IconName; inactive: IconName; label: st
   produtos: { active: 'cube', inactive: 'cube-outline', label: 'Produtos' },
   relatorios: { active: 'bar-chart', inactive: 'bar-chart-outline', label: 'Relatórios' },
   etiquetas: { active: 'print', inactive: 'print-outline', label: 'Etiquetas' },
+  // Rótulo curto aqui pra caber as 7 abas na barra de baixo do celular.
+  precificador: { active: 'pricetag', inactive: 'pricetag-outline', label: 'Preço' },
   configuracoes: { active: 'settings', inactive: 'settings-outline', label: 'Config.' },
 };
 
@@ -80,6 +82,7 @@ export default function AppTabs() {
       <Tabs.Screen name="produtos" options={{ title: 'Produtos' }} />
       <Tabs.Screen name="relatorios" options={{ title: 'Relatórios' }} />
       <Tabs.Screen name="etiquetas" options={{ title: 'Etiquetas' }} />
+      <Tabs.Screen name="precificador" options={{ title: 'Precificador' }} />
       <Tabs.Screen name="configuracoes" options={{ title: 'Config.' }} />
       <Tabs.Screen name="shopee-connected" options={{ href: null }} />
       <Tabs.Screen name="planos" options={{ href: null }} />

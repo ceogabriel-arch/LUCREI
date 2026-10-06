@@ -19,12 +19,13 @@ const LOGO_HEIGHT = LOGO_WIDTH / LOGO_ASPECT;
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
-const NAV_ITEMS: { href: '/' | '/pedidos' | '/produtos' | '/relatorios' | '/etiquetas' | '/configuracoes'; active: IconName; inactive: IconName; label: string }[] = [
+const NAV_ITEMS: { href: '/' | '/pedidos' | '/produtos' | '/relatorios' | '/etiquetas' | '/precificador' | '/configuracoes'; active: IconName; inactive: IconName; label: string }[] = [
   { href: '/', active: 'home', inactive: 'home-outline', label: 'Início' },
   { href: '/pedidos', active: 'receipt', inactive: 'receipt-outline', label: 'Pedidos' },
   { href: '/produtos', active: 'cube', inactive: 'cube-outline', label: 'Produtos' },
   { href: '/relatorios', active: 'bar-chart', inactive: 'bar-chart-outline', label: 'Relatórios' },
   { href: '/etiquetas', active: 'print', inactive: 'print-outline', label: 'Etiquetas' },
+  { href: '/precificador', active: 'pricetag', inactive: 'pricetag-outline', label: 'Precificador' },
   { href: '/configuracoes', active: 'settings', inactive: 'settings-outline', label: 'Configurações' },
 ];
 
