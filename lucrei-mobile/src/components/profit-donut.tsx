@@ -106,6 +106,10 @@ export function ProfitBreakdownDonut({
       <Text className="text-[10px] text-lucrei-textMuted">líquido (sem custo do produto)</Text>
       {legend && (
         <View className="mt-3 gap-1">
+          <View className="flex-row items-center gap-1.5">
+            <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: Colors.text }} />
+            <Text className="text-xs text-lucrei-textMuted">Faturamento · {formatBRL(summary.revenue)}</Text>
+          </View>
           {visible.map((s) => (
             <View key={s.label} className="flex-row items-center gap-1.5">
               <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: s.color }} />
