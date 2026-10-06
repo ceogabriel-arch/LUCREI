@@ -78,13 +78,19 @@ export async function computeShopSummary(shop: Shop, query: SummaryQuery): Promi
       const sale = Number(li.salePrice);
       revenue += sale;
 
+      // Taxa do marketplace, frete e imposto já vêm prontos da Shopee/ML e
+      // do shop.taxRatePercent (ver service.ts/mercadolivre-service.ts) -
+      // não dependem de custo de produto cadastrado, então sempre entram no
+      // total. Só lucro e custo do produto ficam de fora de verdade sem
+      // custo cadastrado (profit null é só por isso - ver computeLineProfit).
+      shippingCost += Number(li.shippingFeeAllocated);
+      shopeeFees += Number(li.shopeeFeeAllocated);
+      taxCost += Number(li.taxAllocated);
+
       if (li.profit !== null) {
         revenueWithKnownCost += sale;
         profit += Number(li.profit);
-        shippingCost += Number(li.shippingFeeAllocated);
-        shopeeFees += Number(li.shopeeFeeAllocated);
         productCost += Number(li.productCostSnapshot ?? 0);
-        taxCost += Number(li.taxAllocated);
         profitByDay.set(day, (profitByDay.get(day) ?? 0) + Number(li.profit));
       } else {
         itemsMissingCost++;
