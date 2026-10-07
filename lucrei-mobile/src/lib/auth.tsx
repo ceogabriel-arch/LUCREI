@@ -17,6 +17,7 @@ import {
   updateDailyGoal as apiUpdateDailyGoal,
   updateName as apiUpdateName,
 } from '@/lib/api';
+import { forgetGoogleWebSession } from '@/lib/google-web-session';
 import { clearToken, getToken, setToken } from '@/lib/token-storage';
 
 type AuthState =
@@ -63,6 +64,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   // o useFocusEffect nele mesmo de novo → chama refreshUser() de novo, sem
   // parar.
   const token = state.status === 'authenticated' ? state.token : null;
+  const email = state.status === 'authenticated' ? state.user.email : null;
 
   useEffect(() => {
     (async () => {
@@ -117,9 +119,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   const logout = useCallback(async () => {
+    // Antes de limpar o token do Lucrei - ver google-web-session.ts pra
+    // entender por que isso é necessário na web (o SDK nativo do Google já
+    // se resolve sozinho em signInWithGoogle, não precisa disso aqui).
+    forgetGoogleWebSession(email);
     await clearToken();
     setState({ status: 'unauthenticated' });
-  }, []);
+  }, [email]);
 
   const updateName = useCallback(
     async (name: string): Promise<AuthResult> => {
