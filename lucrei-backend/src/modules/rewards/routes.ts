@@ -8,9 +8,9 @@ import { sendRewardClaimEmail } from '../../lib/email';
 // ilegítimo, aceito).
 const TIERS: Record<number, string> = {
   1_000: 'Mentoria de alavancagem (ou 3 meses de conta na Lucrei)',
-  10_000: 'Pulseira Lucrei',
-  50_000: 'Caneca + boné Lucrei',
-  100_000: 'Placa Lucrei',
+  50_000: 'Pulseira Lucrei',
+  100_000: 'Caneca + boné Lucrei',
+  200_000: 'Placa Lucrei',
   500_000: 'Placa + podcast Lucrei + garrafa',
   1_000_000: 'Placa + viagem + moletom Lucrei (edição exclusiva "Faturamento ≠ Lucro")',
 };
