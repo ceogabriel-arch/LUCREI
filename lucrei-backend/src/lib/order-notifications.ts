@@ -20,8 +20,8 @@ const FALLBACK_WINDOW_MS = 24 * 60 * 60 * 1000;
 // Nomes dos arquivos de som customizado empacotados pelo plugin
 // expo-notifications (ver app.json) - só tocam no app nativo depois de um
 // build novo, a web ignora esse campo sem erro.
-const SOUND_PROFIT = 'lu-crei.wav';
-const SOUND_LOSS = 'alerta-prejuizo.wav';
+const SOUND_PROFIT = 'lu_crei.wav';
+const SOUND_LOSS = 'alerta_prejuizo.wav';
 
 function buildNotificationMessage(
   totalProfit: number | null,

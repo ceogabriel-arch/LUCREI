@@ -81,7 +81,7 @@ describe('checkDailyGoalReached', () => {
       'Meta batida!',
       expect.stringContaining('105,00'),
       {},
-      'lu-crei.wav'
+      'lu_crei.wav'
     );
   });
 

@@ -43,7 +43,7 @@
         {
           "icon": "./assets/images/notification-icon.png",
           "color": "#F5C518",
-          "sounds": ["./assets/sounds/lu-crei.wav", "./assets/sounds/alerta-prejuizo.wav"]
+          "sounds": ["./assets/sounds/lu_crei.wav", "./assets/sounds/alerta_prejuizo.wav"]
         }
       ],
       [

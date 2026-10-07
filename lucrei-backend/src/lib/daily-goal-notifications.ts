@@ -6,7 +6,7 @@ import { computeShopSummary } from '../modules/summary/routes';
 
 // Mesmo som de "lucro" da notificação de pedido - bater a meta é sempre boa
 // notícia, nunca faz sentido tocar o som de prejuízo aqui.
-const SOUND_GOAL_REACHED = 'lu-crei.wav';
+const SOUND_GOAL_REACHED = 'lu_crei.wav';
 
 // Chamado depois de QUALQUER pedido completar (Shopee ou Mercado Livre) -
 // soma o lucro de hoje em todas as lojas da conta e compara com a meta

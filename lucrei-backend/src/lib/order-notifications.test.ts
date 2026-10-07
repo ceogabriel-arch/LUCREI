@@ -144,7 +144,7 @@ describe('notifyOrderCompletedIfNeeded', () => {
       expect.stringContaining('42,50'),
       expect.stringContaining('150,00'),
       { orderSn: 'SN123' },
-      'lu-crei.wav'
+      'lu_crei.wav'
     );
   });
 
@@ -167,7 +167,7 @@ describe('notifyOrderCompletedIfNeeded', () => {
       expect.stringMatching(/prejuízo/i),
       expect.any(String),
       { orderSn: 'SN123' },
-      'alerta-prejuizo.wav'
+      'alerta_prejuizo.wav'
     );
     const [, title] = sendPushNotificationMock.mock.calls[0];
     expect(title).toContain('5,00');
@@ -193,7 +193,7 @@ describe('notifyOrderCompletedIfNeeded', () => {
       expect.any(String),
       expect.stringContaining('cadastre o custo'),
       { orderSn: 'SN123' },
-      'lu-crei.wav'
+      'lu_crei.wav'
     );
   });
 
