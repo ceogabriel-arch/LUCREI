@@ -71,6 +71,12 @@ node scripts/patch-android-build.js "$TARGET" "$DEBUG_KEYSTORE_PATH"
 export JAVA_HOME="$JAVA_HOME_DIR"
 export ANDROID_HOME="$ANDROID_SDK_DIR"
 export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+# O cache padrão do Gradle (%USERPROFILE%\.gradle) quebra em máquina com
+# usuário acentuado no Windows (ex: "filipe.lourenço") - o jar do prefab
+# (usado pra linkar bibliotecas C++ nativas) falha com ClassNotFoundException
+# porque o classpath gerado corrompe o acento. Cache numa pasta sem acento
+# resolve, sem precisar mudar o usuário do Windows.
+export GRADLE_USER_HOME="C:/gradle-home"
 
 echo "== gradle =="
 cd android
