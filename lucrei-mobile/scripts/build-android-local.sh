@@ -32,6 +32,11 @@ set +a
 : "${UPLOAD_KEYSTORE_PATH:?defina UPLOAD_KEYSTORE_PATH em $ENV_FILE}"
 : "${UPLOAD_KEYSTORE_ALIAS:?defina UPLOAD_KEYSTORE_ALIAS em $ENV_FILE}"
 : "${UPLOAD_KEYSTORE_PASSWORD:?defina UPLOAD_KEYSTORE_PASSWORD em $ENV_FILE}"
+# Senha da chave em si, separada da senha do arquivo da keystore - uma
+# keystore baixada do EAS (`eas credentials` → Download existing keystore)
+# normalmente vem com as duas diferentes. Cai pra UPLOAD_KEYSTORE_PASSWORD se
+# não for definida, pra não quebrar quem já tinha só uma senha configurada.
+UPLOAD_KEYSTORE_KEY_PASSWORD="${UPLOAD_KEYSTORE_KEY_PASSWORD:-$UPLOAD_KEYSTORE_PASSWORD}"
 
 # Java 17 instalado via winget (EclipseAdoptium.Temurin.17.JDK) - o patch
 # exato muda com auto-updates, então acha a pasta em vez de fixar a versão.
@@ -56,7 +61,7 @@ cat >> android/gradle.properties <<EOF
 MYAPP_UPLOAD_STORE_FILE=lucrei-upload-key.jks
 MYAPP_UPLOAD_KEY_ALIAS=$UPLOAD_KEYSTORE_ALIAS
 MYAPP_UPLOAD_STORE_PASSWORD=$UPLOAD_KEYSTORE_PASSWORD
-MYAPP_UPLOAD_KEY_PASSWORD=$UPLOAD_KEYSTORE_PASSWORD
+MYAPP_UPLOAD_KEY_PASSWORD=$UPLOAD_KEYSTORE_KEY_PASSWORD
 EOF
 
 cp "$UPLOAD_KEYSTORE_PATH" android/app/lucrei-upload-key.jks
