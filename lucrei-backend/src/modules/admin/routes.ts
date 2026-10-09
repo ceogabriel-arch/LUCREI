@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import { prisma } from '../../lib/prisma';
+import { STUCK_SYNC_MINUTES, STUCK_BACKFILL_MINUTES } from '../../lib/sync-watchdog';
 
 // Sem tabela de "role" no banco - é só pra uma pessoa (o próprio fundador)
 // por enquanto, então uma lista de e-mails na variável de ambiente já
@@ -28,8 +29,6 @@ async function requireAdmin(request: FastifyRequest, reply: FastifyReply) {
 // sinal de vida" (o backfill reescreve a cada bloco de 15 dias processado -
 // ver sync/service.ts), então ficar velho demais parado em 'running' é o
 // sinal real de travamento, não só demora normal.
-const STUCK_SYNC_MINUTES = 20;
-const STUCK_BACKFILL_MINUTES = 30;
 
 export async function adminRoutes(app: FastifyInstance) {
   app.get('/admin/users', { onRequest: [app.authenticate, requireAdmin] }, async () => {
@@ -84,6 +83,10 @@ export async function adminRoutes(app: FastifyInstance) {
     }
   );
 
+  // sync-watchdog.ts já destrava sozinho (marca como 'error') qualquer
+  // sincronização presa nesses mesmos limites, rodando a cada 10 min - essa
+  // lista normalmente só mostra travamento bem recente (ainda não chegou a
+  // vez do watchdog) ou erro de sincronização de verdade (não travamento).
   app.get('/admin/sync-issues', { onRequest: [app.authenticate, requireAdmin] }, async () => {
     const now = Date.now();
     const shops = await prisma.shop.findMany({

@@ -12,6 +12,7 @@ import staticFiles from '@fastify/static';
 import Fastify, { type FastifyError } from 'fastify';
 
 import { prisma } from './lib/prisma';
+import { startSyncWatchdog } from './lib/sync-watchdog';
 import { adminRoutes } from './modules/admin/routes';
 import { authRoutes } from './modules/auth/routes';
 import { billingRoutes } from './modules/billing/routes';
@@ -195,6 +196,12 @@ async function main() {
 
   const port = Number(process.env.PORT ?? 3000);
   await app.listen({ port, host: '0.0.0.0' });
+
+  // Destrava sozinho qualquer sincronização/backfill que ficou presa em
+  // "rodando" - acontece quando um deploy reinicia o processo no meio de
+  // uma sincronização (já vimos uma loja real travada 7 dias por isso, sem
+  // ninguém notar). Ver sync-watchdog.ts.
+  startSyncWatchdog(app.log);
 }
 
 main().catch((err) => {
