@@ -73,12 +73,31 @@ export function AuthProvider({ children }: PropsWithChildren) {
         setState({ status: 'unauthenticated' });
         return;
       }
-      try {
-        const user = await apiMe(token);
-        setState({ status: 'authenticated', token, user });
-      } catch {
-        await clearToken();
-        setState({ status: 'unauthenticated' });
+      // Reclamado ao vivo: "toda hora tem que ficar pondo a senha". Causa:
+      // qualquer falha aqui (rede instável, deploy do backend, um 500
+      // passageiro) derrubava a sessão igual a um token inválido de verdade -
+      // só um 401 de verdade (token/tokenVersion realmente inválidos)
+      // justifica apagar o token salvo. Pras demais falhas, tenta mais
+      // algumas vezes (rede/servidor costuma voltar em segundos) antes de
+      // desistir - e mesmo desistindo, mantém o token salvo pra próxima
+      // abertura do app tentar de novo sozinha, em vez de pedir senha à toa.
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          const user = await apiMe(token);
+          setState({ status: 'authenticated', token, user });
+          return;
+        } catch (err) {
+          if (err instanceof ApiError && err.status === 401) {
+            await clearToken();
+            setState({ status: 'unauthenticated' });
+            return;
+          }
+          if (attempt === 3) {
+            setState({ status: 'unauthenticated' });
+            return;
+          }
+          await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
+        }
       }
     })();
   }, []);

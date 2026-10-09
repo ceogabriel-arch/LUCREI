@@ -26,7 +26,17 @@ export type AuthUser = {
 };
 export type AuthResponse = { token: string; user: AuthUser };
 
-export class ApiError extends Error {}
+export class ApiError extends Error {
+  // undefined = nem chegou a ter resposta HTTP (falha de rede/CORS/servidor
+  // fora do ar) - diferente de um 401/500 de verdade. auth.tsx usa isso pra
+  // só derrubar a sessão em erro 401 de verdade, nunca num problema
+  // passageiro de conexão (ver restore de sessão).
+  status?: number;
+  constructor(message: string, status?: number) {
+    super(message);
+    this.status = status;
+  }
+}
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (!API_URL) {
@@ -45,7 +55,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   const body = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new ApiError(body?.message ?? 'Algo deu errado. Tente novamente.');
+    throw new ApiError(body?.message ?? 'Algo deu errado. Tente novamente.', response.status);
   }
   return body as T;
 }
