@@ -4,6 +4,7 @@ import path from 'node:path';
 import 'dotenv/config';
 import compress from '@fastify/compress';
 import cors from '@fastify/cors';
+import helmet from '@fastify/helmet';
 import jwt from '@fastify/jwt';
 import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
@@ -46,6 +47,20 @@ async function main() {
   // já afetava "Alterar nome" (PATCH /auth/me) antes disso, só não tinha
   // sido notado.
   await app.register(cors, { origin: true, methods: ['GET', 'HEAD', 'POST', 'PATCH', 'PUT', 'DELETE'] });
+  // Cabeçalhos básicos de segurança (X-Frame-Options, X-Content-Type-Options,
+  // Referrer-Policy etc.) - nenhum existia antes. CSP desligado de propósito:
+  // o padrão do helmet é restritivo e bloquearia o script do Google Sign-In
+  // (accounts.google.com/gsi/client) e do Sentry sem eu conseguir testar ao
+  // vivo contra produção - escrever uma CSP sob medida fica pra depois, com
+  // tempo pra validar cada origem externa que o site carrega. COOP também
+  // desligado: o padrão do helmet (same-origin) é incompatível com o popup
+  // de login do Google, que precisa de postMessage entre janelas de origens
+  // diferentes pra devolver o resultado do login.
+  await app.register(helmet, {
+    contentSecurityPolicy: false,
+    crossOriginOpenerPolicy: false,
+    crossOriginEmbedderPolicy: false,
+  });
   // Achado depois de trocar o zstd por br/gzip/deflate: o problema não era
   // zstd - QUALQUER compressão (br OU gzip) devolve Content-Encoding e
   // Content-Length corretos só que corpo vazio, especificamente nas rotas
@@ -145,8 +160,12 @@ async function main() {
     root: path.join(__dirname, '..', 'public'),
     cacheControl: true,
     setHeaders: (res, filePath) => {
-      // Expo web build hashes filenames under _expo/static, so those are safe to cache forever.
-      if (filePath.includes(`${path.sep}_expo${path.sep}static${path.sep}`)) {
+      // Expo web build hashes filenames under _expo/static AND assets/ (ex:
+      // lucrei-logo.046186b7334eb35455b559dff23c8ae7.png) - ambos são
+      // seguros pra cache eterno. Só "assets" sozinho pegava "no-cache"
+      // antes, fazendo o navegador revalidar ícones que nunca mudam
+      // (o nome muda, não o conteúdo do arquivo).
+      if (filePath.includes(`${path.sep}_expo${path.sep}static${path.sep}`) || filePath.includes(`${path.sep}assets${path.sep}`)) {
         res.header('Cache-Control', 'public, max-age=31536000, immutable');
       } else {
         res.header('Cache-Control', 'no-cache');
