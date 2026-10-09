@@ -1,3 +1,4 @@
+import fsSync from 'node:fs';
 import path from 'node:path';
 
 import 'dotenv/config';
@@ -108,6 +109,37 @@ async function main() {
   });
 
   app.get('/health', async () => ({ status: 'ok' }));
+
+  // Serve o .br/.gz pré-gerado (ver scripts/compress-public-assets.js) pro
+  // bundle JS/CSS do web build, quando existir e o navegador aceitar. Não
+  // usa @fastify/compress pra isso de propósito: a compressão AO VIVO desse
+  // pacote (@fastify/compress 9.2.1) devolve corpo vazio em qualquer
+  // resposta grande no Node 24 (fastify/fastify-compress#393, reproduzido
+  // aqui mesmo) - path separado e pré-computado evita esse bug de vez.
+  app.addHook('onRequest', async (request, reply) => {
+    const url = request.raw.url?.split('?')[0] ?? '';
+    if (!url.includes('/_expo/static/') || !/\.(js|css)$/.test(url)) return;
+
+    const filePath = path.join(__dirname, '..', 'public', decodeURIComponent(url));
+    const acceptEncoding = request.headers['accept-encoding'] ?? '';
+    const contentType = url.endsWith('.css') ? 'text/css; charset=utf-8' : 'application/javascript; charset=utf-8';
+
+    for (const [encoding, ext] of [
+      ['br', '.br'],
+      ['gzip', '.gz'],
+    ] as const) {
+      if (!acceptEncoding.includes(encoding)) continue;
+      const compressedPath = `${filePath}${ext}`;
+      if (!fsSync.existsSync(compressedPath)) continue;
+      reply
+        .header('Content-Encoding', encoding)
+        .header('Vary', 'Accept-Encoding')
+        .header('Cache-Control', 'public, max-age=31536000, immutable')
+        .type(contentType)
+        .send(fsSync.createReadStream(compressedPath));
+      return reply;
+    }
+  });
 
   await app.register(staticFiles, {
     root: path.join(__dirname, '..', 'public'),

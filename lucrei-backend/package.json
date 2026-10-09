@@ -9,7 +9,8 @@
     "start": "prisma migrate deploy && node dist/index.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "test": "vitest run"
+    "test": "vitest run",
+    "compress:public": "node scripts/compress-public-assets.js"
   },
   "keywords": [],
   "author": "",
