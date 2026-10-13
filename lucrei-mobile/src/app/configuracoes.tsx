@@ -216,7 +216,10 @@ function SettingsModal({
   desktopMaxWidth?: number;
 }) {
   const Colors = useColors();
-  const modal = useModalPresentation();
+  // Diálogo centralizado sempre, mesmo em celular - bottom sheet ficava
+  // colado embaixo e cortado pela altura da tela pra formulário curto
+  // (reportado ao vivo com print, "Alterar nome" cortado).
+  const modal = useModalPresentation(true);
   const panelWidthStyle =
     modal.isDesktop && desktopMaxWidth ? { ...modal.panelWidthStyle, maxWidth: desktopMaxWidth } : modal.panelWidthStyle;
 
