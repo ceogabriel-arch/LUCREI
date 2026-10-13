@@ -19,11 +19,17 @@ export function Screen({
   return (
     <SafeAreaView className="flex-1 bg-lucrei-bg">
       {headerGradient && (
+        // Mais alto que só o cabeçalho (340 -> 640) de propósito - os cards
+        // "vidro" (BlurView) mais abaixo na tela (Resumo do período) ficam
+        // sobre fundo liso sem isso, e desfocar uma cor sólida não muda nada
+        // visualmente (reportado ao vivo: "não ficou com aspecto de vidro").
+        // O degradê precisa continuar até onde esses cards aparecem pra ter
+        // alguma variação de cor por trás pro blur realmente suavizar.
         <LinearGradient
           colors={[`${Colors.goldDim}40`, `${Colors.goldDim}00`]}
           locations={[0, 1]}
           pointerEvents="none"
-          style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 340 }}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 640 }}
         />
       )}
       <View className="flex-1 px-5 pt-6" style={webCapWidth()}>

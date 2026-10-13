@@ -1,5 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -49,17 +50,28 @@ export function StatTile({
 
   return (
     <View
-      className={`${large ? 'w-full p-6' : 'w-[152px] p-4'} rounded-2xl border border-lucrei-border`}
+      className={`${large ? 'w-full p-6' : 'w-[152px] p-4'} rounded-2xl border`}
       // A dica escapa da caixa do card (é mais larga que ele) via overflow
       // visible - sem promover o z-index do card INTEIRO (não só do ícone),
       // o próximo card do grid (que vem depois no HTML) pinta por cima
       // dela, cortando/bagunçando visualmente quem passa o mouse.
-      style={{ overflow: 'visible', zIndex: showTooltip ? 30 : 1 }}>
+      // Borda clara (não a cinza padrão) lê como "borda de vidro".
+      style={{ overflow: 'visible', zIndex: showTooltip ? 30 : 1, borderColor: `${Colors.text}26` }}>
       {/* Vidro fosco de verdade (desfoca o que está atrás) em vez de só uma
           cor semi-transparente (tentativa anterior não dava pra notar) -
           BlurView próprio (não o View de fora, que precisa de overflow
-          visible pra dica) cuida de recortar nos cantos arredondados. */}
+          visible pra dica) cuida de recortar nos cantos arredondados. O
+          sheen diagonal por cima é o brilho/reflexo que faz ler como vidro
+          de verdade, não só "card desfocado" (reportado ao vivo que ainda
+          não tinha ficado com essa cara). */}
       <BlurView intensity={30} tint={scheme} style={[StyleSheet.absoluteFill, { borderRadius: 16, overflow: 'hidden' }]} />
+      <LinearGradient
+        colors={['#FFFFFF26', '#FFFFFF00']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0.7, y: 0.9 }}
+        style={[StyleSheet.absoluteFill, { borderRadius: 16 }]}
+        pointerEvents="none"
+      />
       {helpText && (
         <>
           <Pressable

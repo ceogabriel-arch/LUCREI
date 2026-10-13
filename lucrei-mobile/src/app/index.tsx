@@ -580,18 +580,31 @@ export default function InicioScreen() {
 
         {stillLoading || showingRealData ? (
           <>
-            <View className="mt-4 overflow-hidden rounded-3xl border border-lucrei-border">
+            <View
+              className="mt-4 overflow-hidden rounded-3xl border"
+              // Borda clara (não a cinza padrão) é o que o olho lê como
+              // "borda de vidro" - uma borda neutra em cima de um fundo já
+              // escuro não lê como vidro nenhum, só como card normal.
+              style={{ borderColor: `${Colors.text}26` }}>
               {/* Vidro fosco de verdade (BlurView, desfoca o que está atrás)
                   - uma cor só semi-transparente (tentativa anterior) não dava
-                  pra notar direito, porque o fundo logo atrás já é escuro
-                  parecido com o card; o blur de verdade é o que dá a
-                  diferença visível pedida (print do Revolut em anexo). */}
+                  pra notar direito. Ainda assim, blur sozinho não BASTA pra
+                  ler como vidro (reportado ao vivo) - falta o brilho/reflexo
+                  que todo vidro/acrílico tem. O sheen diagonal abaixo (branco
+                  bem fraco, de um canto só) é o que fecha essa leitura. */}
               <BlurView intensity={40} tint={scheme} style={StyleSheet.absoluteFill} />
               <LinearGradient
                 colors={[`${Colors.surfaceAlt}66`, `${Colors.surface}66`]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={StyleSheet.absoluteFill}
+              />
+              <LinearGradient
+                colors={['#FFFFFF29', '#FFFFFF00']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0.6, y: 0.8 }}
+                style={StyleSheet.absoluteFill}
+                pointerEvents="none"
               />
               <View className={isDesktop ? 'flex-row items-center justify-between p-8' : 'p-6'}>
                 <View className={isDesktop ? 'flex-1' : undefined}>
