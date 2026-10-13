@@ -4,6 +4,7 @@ import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useIsDesktopWeb, webCapWidth } from '@/lib/responsive';
+import { useTabBarVisibility } from '@/lib/tab-bar-visibility';
 import { useColors } from '@/lib/theme';
 
 type IconName = keyof typeof Ionicons.glyphMap;
@@ -30,6 +31,7 @@ function CustomTabBar({ state, navigation }: TabBarProps) {
   const insets = useSafeAreaInsets();
   const Colors = useColors();
   const isDesktop = useIsDesktopWeb();
+  const { hidden } = useTabBarVisibility();
   // Etiquetas não funciona bem em tela de celular (nem no app nativo, nem
   // no navegador do celular - reportado ao vivo que também não funciona ali,
   // apesar do <input type="file"> do DOM existir) - só aparece no menu
@@ -40,6 +42,11 @@ function CustomTabBar({ state, navigation }: TabBarProps) {
   // Numa janela larga de desktop, a navegação já é o menu lateral do
   // DesktopShell - a barra de baixo some pra não duplicar.
   if (isDesktop) return null;
+
+  // Modal em tela cheia aberto (ver useHideTabBarWhile) - some com a barra
+  // pra não ficar por cima do modal (bug reportado ao vivo, print em
+  // anexo).
+  if (hidden) return null;
 
   return (
     <View style={{ paddingBottom: insets.bottom || 12, paddingHorizontal: 14, paddingTop: 4, ...webCapWidth() }}>

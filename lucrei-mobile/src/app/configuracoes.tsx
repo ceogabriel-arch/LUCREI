@@ -24,6 +24,7 @@ import { showAlert } from '@/lib/alert';
 import { useAuth } from '@/lib/auth';
 import { fullscreenOverlayStyle, useIsDesktopWeb, useModalPresentation, webCapWidth } from '@/lib/responsive';
 import { useSelectedShop } from '@/lib/selected-shop';
+import { useHideTabBarWhile } from '@/lib/tab-bar-visibility';
 import { useAppTheme, useColors, type ThemePreference } from '@/lib/theme';
 
 const SUPPORT_EMAIL = 'suporte@lucreiapp.com';
@@ -691,6 +692,7 @@ export default function ConfiguracoesScreen() {
   const user = state.status === 'authenticated' ? state.user : null;
   const [openMenu, setOpenMenu] = useState<MenuKey>(null);
   const isDesktop = useIsDesktopWeb();
+  useHideTabBarWhile(openMenu !== null);
 
   return (
     <>
