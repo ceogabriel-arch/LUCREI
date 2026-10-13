@@ -36,9 +36,23 @@ export function QuickActionsRow({ actions }: { actions: QuickAction[] }) {
           <View
             className="h-14 w-14 items-center justify-center rounded-full"
             style={{
-              backgroundColor: action.highlighted ? `${Colors.gold}26` : Colors.surfaceAlt,
+              // Fundo meio transparente nos dois casos (em vez de um cinza
+              // sólido pros não-destacados) - pedido pelo usuário pra dar
+              // uma cara mais "vidro" em vez de caixa opaca.
+              backgroundColor: action.highlighted ? `${Colors.gold}26` : `${Colors.surfaceAlt}99`,
               borderWidth: action.highlighted ? 1.5 : 0,
               borderColor: Colors.gold,
+              // Brilho (glow) só no destacado, pra chamar atenção de
+              // verdade - igual o anel aceso do "Movimentar" no Revolut.
+              ...(action.highlighted
+                ? {
+                    shadowColor: Colors.gold,
+                    shadowOpacity: 0.9,
+                    shadowRadius: 10,
+                    shadowOffset: { width: 0, height: 0 },
+                    elevation: 8,
+                  }
+                : null),
             }}>
             {action.loading ? (
               <ActivityIndicator size="small" color={Colors.gold} />
