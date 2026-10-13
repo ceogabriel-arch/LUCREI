@@ -13,7 +13,6 @@ import { MissingCostList } from '@/components/missing-cost-list';
 import { PastDueBanner } from '@/components/past-due-banner';
 import { PendingOrdersModal } from '@/components/pending-orders-modal';
 import { ProfitBreakdownDonut, RevenueRing } from '@/components/profit-donut';
-import { QuickActionsRow } from '@/components/quick-actions-row';
 import { Screen } from '@/components/screen';
 import { ShopPicker } from '@/components/shop-picker';
 import { Sparkline } from '@/components/sparkline';
@@ -496,21 +495,6 @@ export default function InicioScreen() {
           />
         </View>
 
-        {/* Atalhos redondos estilo Revolut (print de referência do usuário)
-            - Sincronizar em destaque, igual o "Movimentar" fica mais aceso
-            que os vizinhos ali. Só aparece com loja de verdade selecionada,
-            mesma condição que o botão antigo de sincronizar tinha. */}
-        {!viewingAll && selectedShop && (
-          <QuickActionsRow
-            actions={[
-              { key: 'sync', label: syncing ? 'Sincronizando' : 'Sincronizar', icon: 'sync', onPress: handleSync, highlighted: true, loading: syncing },
-              { key: 'pedidos', label: 'Pedidos', icon: 'receipt-outline', onPress: () => router.push('/pedidos') },
-              { key: 'produtos', label: 'Produtos', icon: 'cube-outline', onPress: () => router.push('/produtos') },
-              { key: 'relatorios', label: 'Relatórios', icon: 'bar-chart-outline', onPress: () => router.push('/relatorios') },
-            ]}
-          />
-        )}
-
         {showSalesLimitWarning && (
           <Pressable
             onPress={() => router.push('/planos')}
@@ -552,28 +536,45 @@ export default function InicioScreen() {
           </Pressable>
         )}
 
-        {/* Sincronizar virou um dos atalhos redondos acima - não precisa
-            mais do pill separado aqui do lado do período. */}
-        <View className="mt-7 flex-row items-center gap-2">
-          <View className="flex-row self-start rounded-full bg-lucrei-surface p-1">
-            {PERIODS.map((p) => {
-              const active = p === period;
-              return (
-                <Pressable
-                  key={p}
-                  onPress={() => setPeriod(p)}
-                  className="rounded-full px-3.5 py-1.5"
-                  style={{ backgroundColor: active ? Colors.gold : 'transparent' }}>
-                  <Text
-                    className="text-xs font-medium"
-                    style={{ color: active ? Colors.onGold : Colors.textMuted }}>
-                    {p}
-                  </Text>
-                </Pressable>
-              );
-            })}
+        <View className="mt-7 flex-row items-center justify-between gap-2">
+          <View className="flex-row items-center gap-2">
+            <View className="flex-row self-start rounded-full bg-lucrei-surface p-1">
+              {PERIODS.map((p) => {
+                const active = p === period;
+                return (
+                  <Pressable
+                    key={p}
+                    onPress={() => setPeriod(p)}
+                    className="rounded-full px-3.5 py-1.5"
+                    style={{ backgroundColor: active ? Colors.gold : 'transparent' }}>
+                    <Text
+                      className="text-xs font-medium"
+                      style={{ color: active ? Colors.onGold : Colors.textMuted }}>
+                      {p}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            {!stillLoading && summaryLoading && <ActivityIndicator size="small" color={Colors.gold} />}
           </View>
-          {!stillLoading && summaryLoading && <ActivityIndicator size="small" color={Colors.gold} />}
+
+          {!viewingAll && selectedShop && (
+            <Pressable
+              onPress={handleSync}
+              disabled={syncing}
+              className="flex-row items-center gap-1.5 rounded-full px-3.5 py-2"
+              style={{ backgroundColor: Colors.gold, opacity: syncing ? 0.6 : 1 }}>
+              {syncing ? (
+                <ActivityIndicator size="small" color={Colors.onGold} />
+              ) : (
+                <Ionicons name="sync" size={14} color={Colors.onGold} />
+              )}
+              <Text className="text-xs font-semibold" style={{ color: Colors.onGold }}>
+                {syncing ? 'Sincronizando...' : 'Sincronizar'}
+              </Text>
+            </Pressable>
+          )}
         </View>
 
         {stillLoading || showingRealData ? (
