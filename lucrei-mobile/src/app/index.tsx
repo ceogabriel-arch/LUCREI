@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { BlurView } from 'expo-blur';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -580,13 +581,14 @@ export default function InicioScreen() {
         {stillLoading || showingRealData ? (
           <>
             <View className="mt-4 overflow-hidden rounded-3xl border border-lucrei-border">
-              {/* Meio transparente (pedido pelo usuário, pra dar uma cara de
-                  vidro em vez de card opaco) - só funciona porque o cartão
-                  fica sobre o degrau dourado do headerGradient da tela; sobre
-                  fundo liso ficaria igual, só deixa o que está atrás (o
-                  próprio fundo da tela) leve e visível por baixo. */}
+              {/* Vidro fosco de verdade (BlurView, desfoca o que está atrás)
+                  - uma cor só semi-transparente (tentativa anterior) não dava
+                  pra notar direito, porque o fundo logo atrás já é escuro
+                  parecido com o card; o blur de verdade é o que dá a
+                  diferença visível pedida (print do Revolut em anexo). */}
+              <BlurView intensity={40} tint={scheme} style={StyleSheet.absoluteFill} />
               <LinearGradient
-                colors={[`${Colors.surfaceAlt}B3`, `${Colors.surface}B3`]}
+                colors={[`${Colors.surfaceAlt}66`, `${Colors.surface}66`]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={StyleSheet.absoluteFill}

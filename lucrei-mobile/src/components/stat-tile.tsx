@@ -1,9 +1,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { BlurView } from 'expo-blur';
 import { useState } from 'react';
-import { Platform, Pressable, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { BlurredValue } from '@/components/blurred-value';
-import { useColors } from '@/lib/theme';
+import { useAppTheme } from '@/lib/theme';
 
 // Toque em touchscreen dispara hover sintético (mouseenter/mouseleave) no
 // navegador, então misturar onPress (alternando) com onHoverIn/onHoverOut
@@ -41,7 +42,7 @@ export function StatTile({
   helpText,
   large = false,
 }: StatTileProps) {
-  const Colors = useColors();
+  const { scheme, colors: Colors } = useAppTheme();
   const isGood = (deltaDirection === 'up') === positiveIsGood;
   const deltaColor = isGood ? Colors.success : Colors.danger;
   const [showTooltip, setShowTooltip] = useState(false);
@@ -53,10 +54,12 @@ export function StatTile({
       // visible - sem promover o z-index do card INTEIRO (não só do ícone),
       // o próximo card do grid (que vem depois no HTML) pinta por cima
       // dela, cortando/bagunçando visualmente quem passa o mouse.
-      // backgroundColor via style (não a classe bg-lucrei-surface) pra poder
-      // somar transparência (pedido pelo usuário, print em anexo) - cor de
-      // classe não aceita alpha.
-      style={{ overflow: 'visible', zIndex: showTooltip ? 30 : 1, backgroundColor: `${Colors.surface}B3` }}>
+      style={{ overflow: 'visible', zIndex: showTooltip ? 30 : 1 }}>
+      {/* Vidro fosco de verdade (desfoca o que está atrás) em vez de só uma
+          cor semi-transparente (tentativa anterior não dava pra notar) -
+          BlurView próprio (não o View de fora, que precisa de overflow
+          visible pra dica) cuida de recortar nos cantos arredondados. */}
+      <BlurView intensity={30} tint={scheme} style={[StyleSheet.absoluteFill, { borderRadius: 16, overflow: 'hidden' }]} />
       {helpText && (
         <>
           <Pressable
