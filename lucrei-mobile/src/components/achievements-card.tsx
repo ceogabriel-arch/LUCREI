@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { claimReward, getClaimedRewardTiers, ApiError } from '@/lib/api';
 import { showAlert } from '@/lib/alert';
 import { useAuth } from '@/lib/auth';
+import { GlassCard } from '@/components/glass-card';
 import { TextField } from '@/components/text-field';
 import { formatBRL } from '@/lib/format';
 import { useModalPresentation } from '@/lib/responsive';
@@ -315,9 +316,7 @@ export function AchievementsCard({
 
   return (
     <>
-      <Pressable
-        onPress={() => setExpanded(true)}
-        className={compact ? 'rounded-2xl border border-lucrei-border bg-lucrei-surface' : 'mt-4 rounded-3xl border border-lucrei-border bg-lucrei-surface'}>
+      <GlassCard onPress={() => setExpanded(true)} className={compact ? '' : 'mt-4'} borderRadius={compact ? 16 : 24}>
         <View className={compact ? 'p-3' : 'p-4'}>
           <View className="flex-row items-center justify-between">
             <View className="flex-row items-center gap-2">
@@ -367,7 +366,7 @@ export function AchievementsCard({
             </Text>
           )}
         </View>
-      </Pressable>
+      </GlassCard>
 
       <Modal visible={expanded} animationType="slide" transparent onRequestClose={() => setExpanded(false)}>
         <View className={`flex-1 ${modal.overlayClassName} ${modal.overlayBgClassName}`}>

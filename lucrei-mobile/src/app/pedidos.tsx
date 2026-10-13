@@ -5,6 +5,7 @@ import { ActivityIndicator, Dimensions, Modal, Pressable, RefreshControl, Scroll
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BlurredValue } from '@/components/blurred-value';
+import { GlassCard } from '@/components/glass-card';
 import { PastDueBanner } from '@/components/past-due-banner';
 import { Screen } from '@/components/screen';
 import { ShopPicker } from '@/components/shop-picker';
@@ -119,7 +120,7 @@ function UsageBar({ usage }: { usage: SalesUsage }) {
   const barColor = usage.overLimit ? Colors.danger : nearLimit ? Colors.gold : Colors.success;
 
   return (
-    <View className="mt-4 rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+    <GlassCard className="mt-4 p-4" borderRadius={16}>
       <View className="flex-row items-center justify-between">
         <Text className="text-xs font-medium text-lucrei-textMuted">Vendas do mês</Text>
         <Text className="text-xs font-semibold" style={{ color: barColor }}>
@@ -143,7 +144,7 @@ function UsageBar({ usage }: { usage: SalesUsage }) {
       {nearLimit && (
         <Text className="mt-2 text-xs text-lucrei-textMuted">Quase no limite do seu plano.</Text>
       )}
-    </View>
+    </GlassCard>
   );
 }
 

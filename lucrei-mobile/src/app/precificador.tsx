@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
+import { GlassCard } from '@/components/glass-card';
 import { Screen } from '@/components/screen';
 import { ShopTaxpayerToggle } from '@/components/shop-taxpayer-toggle';
 import { TextField } from '@/components/text-field';
@@ -90,14 +91,14 @@ export default function PrecificadorScreen() {
       </Text>
 
       {useShopTable && (
-        <View className="mt-4 rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+        <GlassCard className="mt-4 p-4" borderRadius={16}>
           <ShopTaxpayerToggle
             key={selectedShop.id}
             shop={selectedShop}
             value={taxpayer}
             onChange={setTaxpayer}
           />
-        </View>
+        </GlassCard>
       )}
 
       <View className="mt-5 flex-row gap-2 rounded-2xl border border-lucrei-border bg-lucrei-surface p-1.5">
@@ -114,7 +115,7 @@ export default function PrecificadorScreen() {
         ))}
       </View>
 
-      <View className="mt-4 rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+      <GlassCard className="mt-4 p-4" borderRadius={16}>
         {mode === 'calcular' ? (
           <>
             <Text className="mb-3 text-sm font-semibold text-lucrei-textMuted">O que você quer receber</Text>
@@ -183,9 +184,9 @@ export default function PrecificadorScreen() {
             <Text className="text-xs text-lucrei-textMuted">Veja quanto a Shopee desconta e quanto sobra pra você nesse preço.</Text>
           </>
         )}
-      </View>
+      </GlassCard>
 
-      <View className="mt-4 rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+      <GlassCard className="mt-4 p-4" borderRadius={16}>
         <Text className="text-sm font-semibold text-lucrei-textMuted">
           {mode === 'calcular' ? 'Preço sugerido' : 'Resultado'}
         </Text>
@@ -216,9 +217,9 @@ export default function PrecificadorScreen() {
             {mode === 'calcular' ? 'Preencha o valor pra ver o preço sugerido.' : 'Preencha o preço pra ver o resultado.'}
           </Text>
         )}
-      </View>
+      </GlassCard>
 
-      <View className="mt-4 rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+      <GlassCard className="mt-4 p-4" borderRadius={16}>
         <Text className="mb-3 text-sm font-semibold text-lucrei-textMuted">
           {taxpayer === 'cnpj' ? 'Tabela de referência (CNPJ, vigente desde 01/03/2026)' : 'Tabela de referência (CPF)'}
         </Text>
@@ -242,7 +243,7 @@ export default function PrecificadorScreen() {
             <Text className="flex-1 text-sm text-lucrei-text">{band.pixSubsidy}</Text>
           </View>
         ))}
-      </View>
+      </GlassCard>
       </ScrollView>
     </Screen>
   );

@@ -15,6 +15,7 @@ import {
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { GlassCard } from '@/components/glass-card';
 import { MarketplaceBadge } from '@/components/marketplace-badge';
 import { Screen } from '@/components/screen';
 import { ToastBanner, useToast } from '@/components/toast';
@@ -157,7 +158,7 @@ function PlanSection({ user }: { user: AuthUser }) {
   }
 
   return (
-    <View className="mt-4 rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+    <GlassCard className="mt-4 p-4" borderRadius={16}>
       <View className="flex-row items-center justify-between">
         <Text className="text-base font-semibold text-lucrei-text">
           {user.plan ? `Plano ${user.plan.name}` : 'Nenhum plano ativo'}
@@ -195,7 +196,7 @@ function PlanSection({ user }: { user: AuthUser }) {
           </Pressable>
         )}
       </View>
-    </View>
+    </GlassCard>
   );
 }
 
@@ -663,7 +664,7 @@ function AppearanceSection() {
   const Colors = useColors();
 
   return (
-    <View className="mt-4 rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+    <GlassCard className="mt-4 p-4" borderRadius={16}>
       <View className="flex-row items-center gap-3">
         <View className="h-9 w-9 items-center justify-center rounded-full bg-lucrei-surfaceAlt">
           <Ionicons name="contrast-outline" size={16} color={Colors.gold} />
@@ -686,7 +687,7 @@ function AppearanceSection() {
           );
         })}
       </View>
-    </View>
+    </GlassCard>
   );
 }
 
@@ -709,10 +710,10 @@ export default function ConfiguracoesScreen() {
         <AppearanceSection />
 
         {user && (
-          <View className="mt-4 rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+          <GlassCard className="mt-4 p-4" borderRadius={16}>
             <Text className="text-base font-semibold text-lucrei-text">{user.name}</Text>
             <Text className="mt-0.5 text-sm text-lucrei-textMuted">{user.email}</Text>
-          </View>
+          </GlassCard>
         )}
 
         {user && <PlanSection user={user} />}

@@ -2,6 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { createElement, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, Text, View } from 'react-native';
 
+import { GlassCard } from '@/components/glass-card';
 import { Screen } from '@/components/screen';
 import { showAlert } from '@/lib/alert';
 import { ApiError } from '@/lib/api';
@@ -69,7 +70,7 @@ export default function EtiquetasScreen() {
         código de barras.
       </Text>
 
-      <View className="mt-5 gap-3 rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+      <GlassCard className="mt-5 gap-3 p-4" borderRadius={16}>
         <View className="flex-row items-center gap-3">
           <Ionicons name="print-outline" size={22} color={Colors.gold} />
           <Text className="flex-1 text-sm text-lucrei-text">
@@ -102,7 +103,7 @@ export default function EtiquetasScreen() {
             Por enquanto essa função está disponível só na versão web (app.lucreiapp.com pelo navegador).
           </Text>
         )}
-      </View>
+      </GlassCard>
 
       {previewUrl && Platform.OS === 'web' ? (
         <View style={[fullscreenOverlayStyle, { backgroundColor: '#000' }]}>

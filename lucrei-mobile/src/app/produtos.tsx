@@ -5,6 +5,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { BlurredValue } from '@/components/blurred-value';
+import { GlassCard } from '@/components/glass-card';
 import { PastDueBanner } from '@/components/past-due-banner';
 import { Screen } from '@/components/screen';
 import { ShopPicker } from '@/components/shop-picker';
@@ -653,7 +654,7 @@ export default function ProdutosScreen() {
           />
 
           {selected.size === 0 && missingCostProducts.length >= MISSING_COST_NUDGE_THRESHOLD && (
-            <View className="mt-3 flex-row items-center gap-3 rounded-2xl border border-lucrei-border bg-lucrei-surface p-3">
+            <GlassCard className="mt-3 flex-row items-center gap-3 p-3" borderRadius={16}>
               <Text className="flex-1 text-xs text-lucrei-textMuted">
                 {missingCostProducts.length} produtos sem custo cadastrado — selecionar todos pra aplicar um valor de
                 uma vez?
@@ -661,7 +662,7 @@ export default function ProdutosScreen() {
               <Pressable onPress={handleSelectMissingCost} className="rounded-xl bg-lucrei-surfaceAlt px-3 py-2">
                 <Text className="text-xs font-bold text-lucrei-gold">Selecionar</Text>
               </Pressable>
-            </View>
+            </GlassCard>
           )}
 
           {filteredProducts.length > 0 && (

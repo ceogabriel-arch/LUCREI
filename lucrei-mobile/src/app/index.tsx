@@ -1,13 +1,12 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { BlurView } from 'expo-blur';
 import { Image } from 'expo-image';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 
 import { AchievementsCard } from '@/components/achievements-card';
 import { BlurredValue } from '@/components/blurred-value';
+import { GlassCard } from '@/components/glass-card';
 import { HistoryBackfillCard } from '@/components/history-backfill-card';
 import { MarketplaceBadge } from '@/components/marketplace-badge';
 import { MissingCostList } from '@/components/missing-cost-list';
@@ -580,32 +579,7 @@ export default function InicioScreen() {
 
         {stillLoading || showingRealData ? (
           <>
-            <View
-              className="mt-4 overflow-hidden rounded-3xl border"
-              // Borda clara (não a cinza padrão) é o que o olho lê como
-              // "borda de vidro" - uma borda neutra em cima de um fundo já
-              // escuro não lê como vidro nenhum, só como card normal.
-              style={{ borderColor: `${Colors.text}26` }}>
-              {/* Vidro fosco de verdade (BlurView, desfoca o que está atrás)
-                  - uma cor só semi-transparente (tentativa anterior) não dava
-                  pra notar direito. Ainda assim, blur sozinho não BASTA pra
-                  ler como vidro (reportado ao vivo) - falta o brilho/reflexo
-                  que todo vidro/acrílico tem. O sheen diagonal abaixo (branco
-                  bem fraco, de um canto só) é o que fecha essa leitura. */}
-              <BlurView intensity={40} tint={scheme} style={StyleSheet.absoluteFill} />
-              <LinearGradient
-                colors={[`${Colors.surfaceAlt}66`, `${Colors.surface}66`]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={StyleSheet.absoluteFill}
-              />
-              <LinearGradient
-                colors={['#FFFFFF29', '#FFFFFF00']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0.6, y: 0.8 }}
-                style={StyleSheet.absoluteFill}
-                pointerEvents="none"
-              />
+            <GlassCard className="mt-4">
               <View className={isDesktop ? 'flex-row items-center justify-between p-8' : 'p-6'}>
                 <View className={isDesktop ? 'flex-1' : undefined}>
                   {/* Lucro travado em R$0,00 (todo item sem custo cadastrado)
@@ -692,7 +666,7 @@ export default function InicioScreen() {
                   </View>
                 )}
               </View>
-            </View>
+            </GlassCard>
 
             <PastDueBanner />
 
@@ -790,9 +764,7 @@ export default function InicioScreen() {
               <View className="mt-3 gap-2">
                 <Text className="text-sm font-medium text-lucrei-textMuted">Lucro por loja</Text>
                 {perShopProfit.map((shop) => (
-                  <View
-                    key={shop.shopId}
-                    className="flex-row items-center justify-between rounded-2xl border border-lucrei-border bg-lucrei-surface p-3.5">
+                  <GlassCard key={shop.shopId} className="flex-row items-center justify-between p-3.5" borderRadius={16}>
                     <View className="flex-row items-center gap-3">
                       <MarketplaceBadge provider={shop.provider} />
                       <Text className="text-sm text-lucrei-text" numberOfLines={1}>
@@ -808,7 +780,7 @@ export default function InicioScreen() {
                         {formatBRL(shop.profit)}
                       </Text>
                     )}
-                  </View>
+                  </GlassCard>
                 ))}
               </View>
             )}
@@ -818,7 +790,7 @@ export default function InicioScreen() {
           // de exemplo com números inventados (ex: "R$ 40.250,00"), o que
           // dava a entender que era algo real. Um estado vazio simples é
           // mais honesto e já deixa claro o que fazer a seguir.
-          <View className="mt-6 items-center rounded-3xl border border-lucrei-border bg-lucrei-surface px-6 py-12">
+          <GlassCard className="mt-6 items-center px-6 py-12">
             <Ionicons name="storefront-outline" size={32} color={Colors.textMuted} />
             <Text className="mt-3 text-center text-base font-semibold text-lucrei-text">
               Conecte sua loja Shopee ou Mercado Livre pra ver seu lucro real aqui
@@ -826,7 +798,7 @@ export default function InicioScreen() {
             <Text className="mt-1 max-w-xs text-center text-sm text-lucrei-textMuted">
               Faturamento, custos e lucro de cada venda aparecem automaticamente assim que você conectar.
             </Text>
-          </View>
+          </GlassCard>
         )}
 
         {/* No desktop largo, Conquistas já mora fixa na barra lateral (ver
