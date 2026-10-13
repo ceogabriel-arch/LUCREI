@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Tabs } from 'expo-router';
-import { Platform, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useIsDesktopWeb, webCapWidth } from '@/lib/responsive';
@@ -30,13 +30,12 @@ function CustomTabBar({ state, navigation }: TabBarProps) {
   const insets = useSafeAreaInsets();
   const Colors = useColors();
   const isDesktop = useIsDesktopWeb();
-  // Etiquetas só funciona no navegador (o redimensionamento de PDF usa um
-  // <input type="file"> do DOM - ver etiquetas.tsx) - no app nativo (celular)
-  // a aba só mostraria o aviso de "disponível só na versão web", então nem
-  // aparece ali. Continua normal na web, inclusive no navegador do celular.
-  const visibleRoutes = state.routes.filter(
-    (route) => TAB_META[route.name] && !(route.name === 'etiquetas' && Platform.OS !== 'web')
-  );
+  // Etiquetas não funciona bem em tela de celular (nem no app nativo, nem
+  // no navegador do celular - reportado ao vivo que também não funciona ali,
+  // apesar do <input type="file"> do DOM existir) - só aparece no menu
+  // lateral de desktop (ver NAV_ITEMS em desktop-shell.tsx), nunca nessa
+  // barra de baixo, que só é usada em tela estreita.
+  const visibleRoutes = state.routes.filter((route) => TAB_META[route.name] && route.name !== 'etiquetas');
 
   // Numa janela larga de desktop, a navegação já é o menu lateral do
   // DesktopShell - a barra de baixo some pra não duplicar.
