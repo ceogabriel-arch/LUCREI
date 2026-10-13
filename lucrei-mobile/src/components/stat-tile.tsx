@@ -48,12 +48,15 @@ export function StatTile({
 
   return (
     <View
-      className={`${large ? 'w-full p-6' : 'w-[152px] p-4'} rounded-2xl border border-lucrei-border bg-lucrei-surface`}
+      className={`${large ? 'w-full p-6' : 'w-[152px] p-4'} rounded-2xl border border-lucrei-border`}
       // A dica escapa da caixa do card (é mais larga que ele) via overflow
       // visible - sem promover o z-index do card INTEIRO (não só do ícone),
       // o próximo card do grid (que vem depois no HTML) pinta por cima
       // dela, cortando/bagunçando visualmente quem passa o mouse.
-      style={{ overflow: 'visible', zIndex: showTooltip ? 30 : 1 }}>
+      // backgroundColor via style (não a classe bg-lucrei-surface) pra poder
+      // somar transparência (pedido pelo usuário, print em anexo) - cor de
+      // classe não aceita alpha.
+      style={{ overflow: 'visible', zIndex: showTooltip ? 30 : 1, backgroundColor: `${Colors.surface}B3` }}>
       {helpText && (
         <>
           <Pressable

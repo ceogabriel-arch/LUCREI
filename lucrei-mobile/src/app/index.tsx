@@ -580,8 +580,13 @@ export default function InicioScreen() {
         {stillLoading || showingRealData ? (
           <>
             <View className="mt-4 overflow-hidden rounded-3xl border border-lucrei-border">
+              {/* Meio transparente (pedido pelo usuário, pra dar uma cara de
+                  vidro em vez de card opaco) - só funciona porque o cartão
+                  fica sobre o degrau dourado do headerGradient da tela; sobre
+                  fundo liso ficaria igual, só deixa o que está atrás (o
+                  próprio fundo da tela) leve e visível por baixo. */}
               <LinearGradient
-                colors={[Colors.surfaceAlt, Colors.surface]}
+                colors={[`${Colors.surfaceAlt}B3`, `${Colors.surface}B3`]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={StyleSheet.absoluteFill}
