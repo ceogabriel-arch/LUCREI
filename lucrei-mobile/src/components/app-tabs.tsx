@@ -67,7 +67,11 @@ function CustomTabBar({ state, navigation }: TabBarProps) {
                 if (!isFocused && !event.defaultPrevented) navigation.navigate(route.name);
               }}
               className="flex-1 items-center justify-center gap-1 rounded-[22px] py-2.5"
-              style={{ backgroundColor: isFocused ? Colors.surfaceAlt : 'transparent' }}>
+              style={{
+                backgroundColor: isFocused ? `${Colors.gold}26` : 'transparent',
+                borderWidth: isFocused ? 1 : 0,
+                borderColor: `${Colors.gold}66`,
+              }}>
               <Ionicons name={isFocused ? meta.active : meta.inactive} size={20} color={isFocused ? Colors.gold : Colors.textMuted} />
               <Text style={{ fontSize: 10, fontWeight: isFocused ? '600' : '400', color: isFocused ? Colors.gold : Colors.textMuted }}>
                 {meta.label}
