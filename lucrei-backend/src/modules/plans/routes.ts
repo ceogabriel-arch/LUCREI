@@ -4,6 +4,7 @@ import type { Plan, User } from '@prisma/client';
 import * as mercadopago from '../../mercadopago-client';
 import { cancelOtherProviderSubscription } from '../../lib/cancel-other-provider-subscription';
 import { applyPercentOff, validateCoupon } from '../../lib/coupons';
+import { sendOpsAlertEmail } from '../../lib/email';
 import { prisma } from '../../lib/prisma';
 import { addDays, createOrGetPixCharge, CYCLE_DAYS_BY_PERIOD } from '../../lib/pix-billing';
 import { createProratedUpgradeCharge, findActivePaidCycle } from '../../lib/plan-upgrade';
@@ -254,6 +255,16 @@ export async function plansRoutes(app: FastifyInstance) {
         }
       } catch (err) {
         app.log.error(err);
+        // Achado ao vivo (14/10): a conta da Mercado Pago ficou sem permissão
+        // pra criar assinatura recorrente ("At least one policy returned
+        // UNAUTHORIZED") e ninguém soube até um cliente tentar pagar e eu
+        // precisar investigar na mão. Mesmo padrão de alerta que o webhook já
+        // usa - não trava a resposta no envio do e-mail.
+        sendOpsAlertEmail(
+          app,
+          'Falha ao criar cobrança de cartão (Mercado Pago)',
+          `userId: ${request.user.sub}\nplano: ${plan.key}\nerro: ${err instanceof Error ? err.message : String(err)}`
+        ).catch(() => {});
         return reply.status(502).send({ message: 'Não foi possível configurar a cobrança agora. Tente novamente em instantes.' });
       }
 
@@ -414,6 +425,15 @@ export async function plansRoutes(app: FastifyInstance) {
         }
       } catch (err) {
         app.log.error(err);
+        // Mesmo caso real do cartão acima, só que pro Pix ("Collector user
+        // without key enabled for QR render") - as duas descobertas só
+        // porque um cliente de verdade esbarrou nelas, sem nenhum aviso
+        // antes disso.
+        sendOpsAlertEmail(
+          app,
+          'Falha ao gerar cobrança Pix (Mercado Pago)',
+          `userId: ${request.user.sub}\nplano: ${plan.key}\nerro: ${err instanceof Error ? err.message : String(err)}`
+        ).catch(() => {});
         return reply.status(502).send({ message: 'Não foi possível gerar o Pix agora. Tente novamente em instantes.' });
       }
 

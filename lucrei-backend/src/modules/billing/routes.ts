@@ -236,6 +236,14 @@ export async function billingRoutes(app: FastifyInstance) {
       return reply.send({ pix });
     } catch (err) {
       app.log.error(err);
+      // Esse é o pior caso de todos: cliente que JÁ PAGA tentando renovar o
+      // ciclo e não consegue - mesmo alerta das falhas de cobrança nova em
+      // plans/routes.ts, aqui ainda mais crítico.
+      sendOpsAlertEmail(
+        app,
+        'Falha ao gerar cobrança Pix de renovação (Mercado Pago)',
+        `userId: ${request.user.sub}\nerro: ${err instanceof Error ? err.message : String(err)}`
+      ).catch(() => {});
       return reply.status(502).send({ message: 'Não foi possível verificar o Pix agora. Tente novamente em instantes.' });
     }
   });
