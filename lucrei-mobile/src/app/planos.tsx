@@ -139,11 +139,31 @@ function PlanCard({ plan, appliedCoupon }: { plan: Plan; appliedCoupon: CouponPr
         <Text className="mt-2 text-2xl font-bold text-lucrei-text">Sob consulta</Text>
       ) : (
         <>
-          <View className="mt-2 flex-row items-baseline gap-2">
+          {/* Com cupom aplicado, o preço corrente entra riscado igual o
+              priceOriginal já fazia pra promoção do próprio plano - pedido
+              ao vivo: antes o desconto só aparecia numa legenda solta
+              embaixo, sem cortar o R$ 97,00 original. Mesma conta de
+              centavos do backend (applyPercentOff), pra nunca mostrar um
+              valor diferente do que a cobrança Pix vai gerar de verdade.
+              effectivePercentOff cobre dois casos: cupom digitado agora
+              (appliedCoupon) OU um desconto que já ficou preso numa
+              assinatura de uma tentativa anterior (user.pendingCouponPercentOff)
+              - sem isso, reaplicar o mesmo código dava erro "já usado" e a
+              tela nunca mostrava que o desconto, na real, já estava valendo. */}
+          <View className="mt-2 flex-row flex-wrap items-baseline gap-2">
             {plan.priceOriginal !== null && (
               <Text className="text-sm text-lucrei-textMuted line-through">{formatBRL(plan.priceOriginal)}</Text>
             )}
-            <Text className="text-2xl font-bold text-lucrei-text">{formatBRL(plan.priceCurrent!)}</Text>
+            <Text
+              className="text-2xl font-bold text-lucrei-text"
+              style={effectivePercentOff !== null ? { textDecorationLine: 'line-through', opacity: 0.5 } : undefined}>
+              {formatBRL(plan.priceCurrent!)}
+            </Text>
+            {effectivePercentOff !== null && (
+              <Text className="text-2xl font-bold" style={{ color: Colors.gold }}>
+                {formatBRL(Math.round(plan.priceCurrent! * (1 - effectivePercentOff / 100) * 100) / 100)}
+              </Text>
+            )}
             <Text className="text-sm text-lucrei-textMuted">{plan.billingPeriod === 'annual' ? '/ano' : '/mês'}</Text>
           </View>
           {plan.billingPeriod === 'annual' && (
@@ -151,31 +171,16 @@ function PlanCard({ plan, appliedCoupon }: { plan: Plan; appliedCoupon: CouponPr
               equivale a {formatBRL(plan.priceCurrent! / 12)}/mês
             </Text>
           )}
-          {/* Antes só existia o texto genérico acima dos cards ("cupom
-              aplicado, 20% off") - reclamado ao vivo que o desconto não
-              aparecia visualmente NO plano, só em texto solto. Mesma conta
-              de centavos do backend (applyPercentOff), pra nunca mostrar um
-              valor diferente do que a cobrança Pix vai gerar de verdade.
-              effectivePercentOff cobre dois casos: cupom digitado agora
-              (appliedCoupon) OU um desconto que já ficou preso numa
-              assinatura de uma tentativa anterior (user.pendingCouponPercentOff)
-              - sem isso, reaplicar o mesmo código dava erro "já usado" e a
-              tela nunca mostrava que o desconto, na real, já estava valendo. */}
           {effectivePercentOff !== null && (
-            <View className="mt-2 flex-row items-center gap-2 rounded-lg bg-lucrei-surfaceAlt px-2.5 py-1.5">
-              <Ionicons name="pricetag" size={13} color={Colors.gold} />
-              <Text className="text-xs text-lucrei-text">
+            <View className="mt-1.5 flex-row items-center gap-1.5">
+              <Ionicons name="pricetag" size={12} color={Colors.gold} />
+              <Text className="text-xs text-lucrei-textMuted">
                 {appliedCoupon ? (
                   <>
-                    Com <Text style={{ fontWeight: '700' }}>{appliedCoupon.code}</Text>:{' '}
+                    cupom <Text style={{ fontWeight: '700', color: Colors.gold }}>{appliedCoupon.code}</Text> —{' '}
                   </>
-                ) : (
-                  'Com seu cupom já aplicado: '
-                )}
-                <Text style={{ color: Colors.gold, fontWeight: '700' }}>
-                  {formatBRL(Math.round(plan.priceCurrent! * (1 - effectivePercentOff / 100) * 100) / 100)}
-                </Text>{' '}
-                na 1ª cobrança (Pix)
+                ) : null}
+                {effectivePercentOff}% off na 1ª cobrança via Pix
               </Text>
             </View>
           )}
