@@ -295,6 +295,14 @@ export async function plansRoutes(app: FastifyInstance) {
 
       const user = await prisma.user.findUniqueOrThrow({ where: { id: request.user.sub }, include: { plan: true } });
 
+      // Cliente já DENTRO de um teste grátis em andamento, escolhendo pagar
+      // por conta própria - diferente de alguém clicando Pix pela primeira
+      // vez (que ainda deve só começar o teste grátis, sem cobrar nada).
+      // Calculado em cima do "user" como veio do banco, antes de qualquer
+      // escrita desta requisição - ver uso mais abaixo.
+      const alreadyMidTrial =
+        user.subscriptionStatus === 'trialing' && user.trialEndsAt !== null && user.trialEndsAt > new Date();
+
       try {
         const upgradeCharge = await createProratedUpgradeCharge(user, plan);
         if (upgradeCharge) {
@@ -359,7 +367,11 @@ export async function plansRoutes(app: FastifyInstance) {
         }
       }
 
-      if (subscription.status === 'trialing') {
+      // Só entra em "teste grátis, sem cobrar nada" quando NÃO é alguém já
+      // em teste escolhendo pagar - essa pessoa cai direto pra geração do
+      // Pix de verdade logo abaixo, com o status continuando 'trialing' até
+      // o pagamento confirmar (ver reply.send no fim da função).
+      if (subscription.status === 'trialing' && !alreadyMidTrial) {
         const updated = await prisma.user.update({
           where: { id: user.id },
           data: { planId: plan.id, subscriptionStatus: 'trialing', trialEndsAt },
@@ -405,9 +417,16 @@ export async function plansRoutes(app: FastifyInstance) {
         return reply.status(502).send({ message: 'Não foi possível gerar o Pix agora. Tente novamente em instantes.' });
       }
 
+      // Quem já estava em teste e decidiu pagar continua 'trialing' até o
+      // webhook confirmar o Pix de verdade - só a confirmação do pagamento
+      // deve encerrar o teste grátis, nunca o clique em si (bug anterior:
+      // clicar em Pix/Cartão durante o teste cortava ele na hora, mesmo sem
+      // ninguém ter pago nada ainda). O handler de webhook já trata
+      // qualquer status anterior -> 'active' de forma genérica, então não
+      // precisa de nenhuma lógica nova lá.
       const updated = await prisma.user.update({
         where: { id: user.id },
-        data: { planId: plan.id, subscriptionStatus: 'past_due', trialEndsAt },
+        data: { planId: plan.id, subscriptionStatus: alreadyMidTrial ? 'trialing' : 'past_due', trialEndsAt },
         include: userWithPlan,
       });
 

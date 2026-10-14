@@ -52,15 +52,24 @@ function PlanCard({ plan, appliedCoupon }: { plan: Plan; appliedCoupon: CouponPr
   const isCustomPricing = plan.priceCurrent === null;
 
   const isCurrent = user?.plan?.key === plan.key && user.subscriptionStatus !== 'canceled';
-  const actionLabel = isCurrent
-    ? 'Plano atual'
-    : user?.plan?.key === plan.key
-      ? 'Reativar plano'
-      : user?.plan
-        ? 'Fazer upgrade'
-        : plan.trialEligible
-          ? 'Testar 15 dias grátis'
-          : 'Assinar agora';
+  // Quem está em teste grátis no plano atual pode decidir pagar antes do
+  // prazo acabar - pedido ao vivo: "o cliente tem que poder sair do teste
+  // de graça por conta própria". O backend só encerra o teste de verdade
+  // quando o pagamento confirma (não quando clica), então mantém os botões
+  // ativos aqui também - só trava quando já é pagamento de verdade
+  // (active/past_due) no plano atual, que aí não tem o que fazer.
+  const isCurrentAndTrialing = isCurrent && user?.subscriptionStatus === 'trialing';
+  const actionLabel = isCurrentAndTrialing
+    ? 'Pagar agora e sair do teste grátis'
+    : isCurrent
+      ? 'Plano atual'
+      : user?.plan?.key === plan.key
+        ? 'Reativar plano'
+        : user?.plan
+          ? 'Fazer upgrade'
+          : plan.trialEligible
+            ? 'Testar 15 dias grátis'
+            : 'Assinar agora';
 
   async function handlePressCard() {
     setSavingMethod('card');
@@ -212,15 +221,15 @@ function PlanCard({ plan, appliedCoupon }: { plan: Plan; appliedCoupon: CouponPr
         </Pressable>
       ) : (
         <View className="mt-5">
-          {!isCurrent && (
+          {(!isCurrent || isCurrentAndTrialing) && (
             <Text className="mb-2 text-center text-xs font-medium text-lucrei-textMuted">{actionLabel}</Text>
           )}
           <View className="flex-row gap-2.5">
             <Pressable
               onPress={handlePressCard}
-              disabled={isCurrent || savingMethod !== null}
+              disabled={(isCurrent && !isCurrentAndTrialing) || savingMethod !== null}
               className="flex-1 flex-row items-center justify-center gap-1.5 rounded-xl bg-lucrei-gold py-3"
-              style={{ opacity: isCurrent ? 0.5 : savingMethod ? 0.7 : 1 }}>
+              style={{ opacity: isCurrent && !isCurrentAndTrialing ? 0.5 : savingMethod ? 0.7 : 1 }}>
               {savingMethod === 'card' ? (
                 <ActivityIndicator size="small" color={Colors.onGold} />
               ) : (
@@ -232,9 +241,9 @@ function PlanCard({ plan, appliedCoupon }: { plan: Plan; appliedCoupon: CouponPr
             </Pressable>
             <Pressable
               onPress={handlePressPix}
-              disabled={isCurrent || savingMethod !== null}
+              disabled={(isCurrent && !isCurrentAndTrialing) || savingMethod !== null}
               className="flex-1 flex-row items-center justify-center gap-1.5 rounded-xl border border-lucrei-border py-3"
-              style={{ opacity: isCurrent ? 0.5 : savingMethod ? 0.7 : 1 }}>
+              style={{ opacity: isCurrent && !isCurrentAndTrialing ? 0.5 : savingMethod ? 0.7 : 1 }}>
               {savingMethod === 'pix' ? (
                 <ActivityIndicator size="small" color={Colors.gold} />
               ) : (
