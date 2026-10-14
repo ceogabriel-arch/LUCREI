@@ -14,6 +14,7 @@ import {
   type ShopeeBreakdown,
   type TaxpayerType,
 } from '@/lib/shopee-pricing';
+import { webCapWidth } from '@/lib/responsive';
 import { useSelectedShop } from '@/lib/selected-shop';
 import { useColors } from '@/lib/theme';
 
@@ -84,7 +85,8 @@ export default function PrecificadorScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        contentContainerClassName="pb-8">
+        contentContainerClassName="pb-8"
+        contentContainerStyle={webCapWidth()}>
       <Text className="text-2xl font-bold text-lucrei-text">Precificador Shopee</Text>
       <Text className="mt-2 text-base text-lucrei-textMuted">
         Calcula o preço certo considerando comissão + taxa fixa por faixa — não uma margem única.

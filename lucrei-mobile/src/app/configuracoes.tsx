@@ -701,7 +701,7 @@ export default function ConfiguracoesScreen() {
   return (
     <>
       <Screen>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="pb-8">
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="pb-8" contentContainerStyle={webCapWidth()}>
         <Text className="text-2xl font-bold text-lucrei-text">Configurações</Text>
         <Text className="mt-2 text-base text-lucrei-textMuted">
           Gerencie seu perfil, senha e lojas conectadas.

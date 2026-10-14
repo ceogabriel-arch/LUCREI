@@ -15,6 +15,7 @@ import {
 } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatBRL } from '@/lib/format';
+import { webCapWidth } from '@/lib/responsive';
 import { useColors } from '@/lib/theme';
 
 type Section = 'metrics' | 'users' | 'rewards' | 'sync';
@@ -120,7 +121,7 @@ export default function AdminScreen() {
           <ActivityIndicator color={Colors.gold} />
         </View>
       ) : (
-        <ScrollView className="mt-5" contentContainerClassName="gap-2.5 pb-10">
+        <ScrollView className="mt-5" contentContainerClassName="gap-2.5 pb-10" contentContainerStyle={webCapWidth()}>
           {section === 'metrics' && metrics && (
             <>
               <MetricRow label="Total de contas" value={String(metrics.totalUsers)} />

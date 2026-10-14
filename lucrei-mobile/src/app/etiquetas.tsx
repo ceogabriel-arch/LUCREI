@@ -8,7 +8,7 @@ import { showAlert } from '@/lib/alert';
 import { ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { resizeLabelPdf } from '@/lib/labels';
-import { fullscreenOverlayStyle } from '@/lib/responsive';
+import { fullscreenOverlayStyle, webCapWidth } from '@/lib/responsive';
 import { useColors } from '@/lib/theme';
 
 type Marketplace = 'shopee' | 'mercado_livre';
@@ -63,6 +63,7 @@ export default function EtiquetasScreen() {
 
   return (
     <Screen>
+      <View style={webCapWidth()}>
       <Text className="text-2xl font-bold text-lucrei-text">Etiquetas</Text>
       <Text className="mt-2 text-base text-lucrei-textMuted">
         Envie o PDF de etiqueta de envio baixado da Shopee ou do Mercado Livre e a gente devolve pronto no tamanho
@@ -104,6 +105,7 @@ export default function EtiquetasScreen() {
           </Text>
         )}
       </GlassCard>
+      </View>
 
       {previewUrl && Platform.OS === 'web' ? (
         <View style={[fullscreenOverlayStyle, { backgroundColor: '#000' }]}>

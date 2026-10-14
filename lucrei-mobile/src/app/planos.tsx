@@ -21,6 +21,7 @@ import {
 import { showAlert } from '@/lib/alert';
 import { useAuth } from '@/lib/auth';
 import { formatBRL } from '@/lib/format';
+import { webCapWidth } from '@/lib/responsive';
 import { useColors } from '@/lib/theme';
 
 type LoadState = 'loading' | 'ready' | 'error';
@@ -420,7 +421,7 @@ export default function PlanosScreen() {
       )}
 
       {loadState === 'ready' && (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="pb-8">
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="pb-8" contentContainerStyle={webCapWidth()}>
           {visiblePlans.map((plan) => (
             <PlanCard key={plan.key} plan={plan} appliedCoupon={appliedCoupon} />
           ))}

@@ -25,7 +25,7 @@ import { useDataRefresh } from '@/lib/data-refresh';
 import { formatBRL } from '@/lib/format';
 import { ORDER_STATUS_LABELS as STATUS_LABELS } from '@/lib/order-status-labels';
 import { PERIOD_TO_API, PERIODS, usePeriod } from '@/lib/period';
-import { useModalPresentation } from '@/lib/responsive';
+import { useModalPresentation, webCapWidth } from '@/lib/responsive';
 import { useSelectedShop } from '@/lib/selected-shop';
 import { useSubscriptionAccess } from '@/lib/subscription-access';
 import { useColors } from '@/lib/theme';
@@ -489,6 +489,7 @@ export default function PedidosScreen() {
           <ScrollView
             showsVerticalScrollIndicator={false}
             contentContainerClassName="mt-4 gap-3 pb-8"
+            contentContainerStyle={webCapWidth()}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.gold} />
             }>

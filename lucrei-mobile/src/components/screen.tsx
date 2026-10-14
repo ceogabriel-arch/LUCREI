@@ -3,7 +3,6 @@ import type { PropsWithChildren } from 'react';
 import { View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { webCapWidth } from '@/lib/responsive';
 import { useColors } from '@/lib/theme';
 
 export function Screen({
@@ -32,7 +31,15 @@ export function Screen({
           style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 640 }}
         />
       )}
-      <View className="flex-1 px-5 pt-6" style={webCapWidth()}>
+      {/* Sem o teto de largura aqui de propósito (ver webCapWidth) - isso
+          encolhia o ScrollView de cada tela pra uma coluna estreita
+          centralizada, e a margem preta dos dois lados ficava sem NADA
+          rolável embaixo do mouse (reportado ao vivo: "scroll não funciona"
+          sobre essas colunas vazias). O teto de largura agora é aplicado no
+          contentContainerStyle do ScrollView de cada tela (ver cada uma) -
+          a área que rola continua a largura inteira, só o conteúdo visível
+          fica centralizado dentro dela. */}
+      <View className="flex-1 px-5 pt-6">
         {children}
       </View>
     </SafeAreaView>

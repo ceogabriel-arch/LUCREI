@@ -35,7 +35,7 @@ import { useAuth } from '@/lib/auth';
 import { useDataRefresh } from '@/lib/data-refresh';
 import { formatBRL } from '@/lib/format';
 import { PERIOD_TO_API, PERIODS, usePeriod } from '@/lib/period';
-import { useIsDesktopWeb } from '@/lib/responsive';
+import { useIsDesktopWeb, webCapWidth } from '@/lib/responsive';
 import { connectMercadoLivreStore } from '@/lib/mercado-livre';
 import { useSelectedShop } from '@/lib/selected-shop';
 import { connectShopeeStore } from '@/lib/shopee';
@@ -470,6 +470,7 @@ export default function InicioScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerClassName="pb-8"
+        contentContainerStyle={webCapWidth()}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.gold} />
         }>

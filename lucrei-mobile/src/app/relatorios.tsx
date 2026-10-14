@@ -32,6 +32,7 @@ import { useDataRefresh } from '@/lib/data-refresh';
 import { exportOrdersCsv } from '@/lib/export-csv';
 import { formatBRL } from '@/lib/format';
 import { PERIOD_TO_API, PERIODS, usePeriod } from '@/lib/period';
+import { webCapWidth } from '@/lib/responsive';
 import { useSelectedShop } from '@/lib/selected-shop';
 import { useSubscriptionAccess } from '@/lib/subscription-access';
 import { useColors } from '@/lib/theme';
@@ -547,6 +548,11 @@ export default function RelatoriosScreen() {
 
   return (
     <Screen>
+      {/* Cabeçalho fica fora do ScrollView (de propósito, pra não rolar
+          junto) - precisa do mesmo teto de largura que o conteúdo rolável
+          abaixo, senão desalinha num monitor bem largo (título lá na
+          esquerda, cards centralizados mais pra dentro). */}
+      <View style={webCapWidth()}>
       <Text className="text-2xl font-bold text-lucrei-text">Relatórios</Text>
       <Text className="mt-1 text-sm text-lucrei-textMuted">Pra onde vai o seu lucro.</Text>
       {activeShops.length > 1 && <ShopPicker />}
@@ -591,11 +597,13 @@ export default function RelatoriosScreen() {
           </Pressable>
         </View>
       )}
+      </View>
 
       {loadState === 'ready' && summary && (
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerClassName="mt-5 gap-3 pb-8"
+          contentContainerStyle={webCapWidth()}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.gold} />
           }>

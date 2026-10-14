@@ -25,6 +25,7 @@ import { useAuth } from '@/lib/auth';
 import { useDataRefresh } from '@/lib/data-refresh';
 import { formatBRL } from '@/lib/format';
 import { PERIOD_TO_API, PERIODS, type PeriodLabel, usePeriod } from '@/lib/period';
+import { webCapWidth } from '@/lib/responsive';
 import { useSelectedShop } from '@/lib/selected-shop';
 import { useSubscriptionAccess } from '@/lib/subscription-access';
 import { useColors } from '@/lib/theme';
@@ -707,6 +708,7 @@ export default function ProdutosScreen() {
 
           <ScrollView
             showsVerticalScrollIndicator={false}
+            contentContainerStyle={webCapWidth()}
             contentContainerClassName="mt-4 gap-3 pb-4"
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.gold} />
