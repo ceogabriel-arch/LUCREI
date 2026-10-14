@@ -5,6 +5,7 @@ import { ActivityIndicator, Dimensions, Modal, Pressable, RefreshControl, Scroll
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BlurredValue } from '@/components/blurred-value';
+import { GlassCard } from '@/components/glass-card';
 import { PastDueBanner } from '@/components/past-due-banner';
 import { Screen } from '@/components/screen';
 import { ShopPicker } from '@/components/shop-picker';
@@ -24,7 +25,7 @@ import { useDataRefresh } from '@/lib/data-refresh';
 import { formatBRL } from '@/lib/format';
 import { ORDER_STATUS_LABELS as STATUS_LABELS } from '@/lib/order-status-labels';
 import { PERIOD_TO_API, PERIODS, usePeriod } from '@/lib/period';
-import { useModalPresentation } from '@/lib/responsive';
+import { useModalPresentation, webCapWidth } from '@/lib/responsive';
 import { useSelectedShop } from '@/lib/selected-shop';
 import { useSubscriptionAccess } from '@/lib/subscription-access';
 import { useColors } from '@/lib/theme';
@@ -119,7 +120,7 @@ function UsageBar({ usage }: { usage: SalesUsage }) {
   const barColor = usage.overLimit ? Colors.danger : nearLimit ? Colors.gold : Colors.success;
 
   return (
-    <View className="mt-4 rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+    <GlassCard className="mt-4 p-4" borderRadius={16}>
       <View className="flex-row items-center justify-between">
         <Text className="text-xs font-medium text-lucrei-textMuted">Vendas do mês</Text>
         <Text className="text-xs font-semibold" style={{ color: barColor }}>
@@ -143,7 +144,7 @@ function UsageBar({ usage }: { usage: SalesUsage }) {
       {nearLimit && (
         <Text className="mt-2 text-xs text-lucrei-textMuted">Quase no limite do seu plano.</Text>
       )}
-    </View>
+    </GlassCard>
   );
 }
 
@@ -488,6 +489,7 @@ export default function PedidosScreen() {
           <ScrollView
             showsVerticalScrollIndicator={false}
             contentContainerClassName="mt-4 gap-3 pb-8"
+            contentContainerStyle={webCapWidth()}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.gold} />
             }>

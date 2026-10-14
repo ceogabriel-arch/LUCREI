@@ -56,11 +56,16 @@ async function main() {
   // tempo pra validar cada origem externa que o site carrega. COOP também
   // desligado: o padrão do helmet (same-origin) é incompatível com o popup
   // de login do Google, que precisa de postMessage entre janelas de origens
-  // diferentes pra devolver o resultado do login.
+  // diferentes pra devolver o resultado do login. CORP também desligado
+  // pelo mesmo motivo de fundo: essa API é chamada entre origens de
+  // propósito (app.lucreiapp.com chamando lucrei-production-....railway.app,
+  // domínios diferentes) - o padrão do helmet ('same-origin') é pensado pra
+  // API que só serve o próprio front, não o nosso caso.
   await app.register(helmet, {
     contentSecurityPolicy: false,
     crossOriginOpenerPolicy: false,
     crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: false,
   });
   // Achado depois de trocar o zstd por br/gzip/deflate: o problema não era
   // zstd - QUALQUER compressão (br OU gzip) devolve Content-Encoding e

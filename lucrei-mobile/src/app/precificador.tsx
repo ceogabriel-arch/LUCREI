@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
+import { GlassCard } from '@/components/glass-card';
 import { Screen } from '@/components/screen';
 import { ShopTaxpayerToggle } from '@/components/shop-taxpayer-toggle';
 import { TextField } from '@/components/text-field';
@@ -13,6 +14,7 @@ import {
   type ShopeeBreakdown,
   type TaxpayerType,
 } from '@/lib/shopee-pricing';
+import { webCapWidth } from '@/lib/responsive';
 import { useSelectedShop } from '@/lib/selected-shop';
 import { useColors } from '@/lib/theme';
 
@@ -83,21 +85,22 @@ export default function PrecificadorScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        contentContainerClassName="pb-8">
+        contentContainerClassName="pb-8"
+        contentContainerStyle={webCapWidth()}>
       <Text className="text-2xl font-bold text-lucrei-text">Precificador Shopee</Text>
       <Text className="mt-2 text-base text-lucrei-textMuted">
         Calcula o preço certo considerando comissão + taxa fixa por faixa — não uma margem única.
       </Text>
 
       {useShopTable && (
-        <View className="mt-4 rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+        <GlassCard className="mt-4 p-4" borderRadius={16}>
           <ShopTaxpayerToggle
             key={selectedShop.id}
             shop={selectedShop}
             value={taxpayer}
             onChange={setTaxpayer}
           />
-        </View>
+        </GlassCard>
       )}
 
       <View className="mt-5 flex-row gap-2 rounded-2xl border border-lucrei-border bg-lucrei-surface p-1.5">
@@ -105,16 +108,30 @@ export default function PrecificadorScreen() {
           <Pressable
             key={tab.key}
             onPress={() => setMode(tab.key)}
-            className="flex-1 items-center rounded-xl py-2.5"
+            className="flex-1 items-center justify-center rounded-xl px-1 py-2.5"
             style={{ backgroundColor: mode === tab.key ? Colors.surfaceAlt : 'transparent' }}>
-            <Text className="text-sm font-medium" style={{ color: mode === tab.key ? Colors.gold : Colors.textMuted }}>
+            {/* "Conferir um preço já usado" não cabia numa linha só no
+                celular, esticando essa aba pra 2 linhas enquanto a vizinha
+                ("Calcular preço de venda") ficava 1 linha só - as duas
+                caixas esticavam pra mesma altura (a do texto maior), mas o
+                texto curto sobrava "flutuando" no meio de uma caixa alta
+                demais, com cara estranha (reportado ao vivo, print em
+                anexo). text-xs (era text-sm) dá espaço de sobra pra caber
+                numa linha só; numberOfLines+adjustsFontSizeToFit é rede de
+                segurança pro nativo (web ainda cai pra 1 linha só mesmo sem
+                adjustsFontSizeToFit, que o react-native-web não implementa). */}
+            <Text
+              className="text-xs font-medium"
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              style={{ color: mode === tab.key ? Colors.gold : Colors.textMuted }}>
               {tab.label}
             </Text>
           </Pressable>
         ))}
       </View>
 
-      <View className="mt-4 rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+      <GlassCard className="mt-4 p-4" borderRadius={16}>
         {mode === 'calcular' ? (
           <>
             <Text className="mb-3 text-sm font-semibold text-lucrei-textMuted">O que você quer receber</Text>
@@ -183,9 +200,9 @@ export default function PrecificadorScreen() {
             <Text className="text-xs text-lucrei-textMuted">Veja quanto a Shopee desconta e quanto sobra pra você nesse preço.</Text>
           </>
         )}
-      </View>
+      </GlassCard>
 
-      <View className="mt-4 rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+      <GlassCard className="mt-4 p-4" borderRadius={16}>
         <Text className="text-sm font-semibold text-lucrei-textMuted">
           {mode === 'calcular' ? 'Preço sugerido' : 'Resultado'}
         </Text>
@@ -216,9 +233,9 @@ export default function PrecificadorScreen() {
             {mode === 'calcular' ? 'Preencha o valor pra ver o preço sugerido.' : 'Preencha o preço pra ver o resultado.'}
           </Text>
         )}
-      </View>
+      </GlassCard>
 
-      <View className="mt-4 rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+      <GlassCard className="mt-4 p-4" borderRadius={16}>
         <Text className="mb-3 text-sm font-semibold text-lucrei-textMuted">
           {taxpayer === 'cnpj' ? 'Tabela de referência (CNPJ, vigente desde 01/03/2026)' : 'Tabela de referência (CPF)'}
         </Text>
@@ -242,7 +259,7 @@ export default function PrecificadorScreen() {
             <Text className="flex-1 text-sm text-lucrei-text">{band.pixSubsidy}</Text>
           </View>
         ))}
-      </View>
+      </GlassCard>
       </ScrollView>
     </Screen>
   );

@@ -2,12 +2,13 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { createElement, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, Text, View } from 'react-native';
 
+import { GlassCard } from '@/components/glass-card';
 import { Screen } from '@/components/screen';
 import { showAlert } from '@/lib/alert';
 import { ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { resizeLabelPdf } from '@/lib/labels';
-import { fullscreenOverlayStyle } from '@/lib/responsive';
+import { fullscreenOverlayStyle, webCapWidth } from '@/lib/responsive';
 import { useColors } from '@/lib/theme';
 
 type Marketplace = 'shopee' | 'mercado_livre';
@@ -62,6 +63,7 @@ export default function EtiquetasScreen() {
 
   return (
     <Screen>
+      <View style={webCapWidth()}>
       <Text className="text-2xl font-bold text-lucrei-text">Etiquetas</Text>
       <Text className="mt-2 text-base text-lucrei-textMuted">
         Envie o PDF de etiqueta de envio baixado da Shopee ou do Mercado Livre e a gente devolve pronto no tamanho
@@ -69,7 +71,7 @@ export default function EtiquetasScreen() {
         código de barras.
       </Text>
 
-      <View className="mt-5 gap-3 rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+      <GlassCard className="mt-5 gap-3 p-4" borderRadius={16}>
         <View className="flex-row items-center gap-3">
           <Ionicons name="print-outline" size={22} color={Colors.gold} />
           <Text className="flex-1 text-sm text-lucrei-text">
@@ -102,6 +104,7 @@ export default function EtiquetasScreen() {
             Por enquanto essa função está disponível só na versão web (app.lucreiapp.com pelo navegador).
           </Text>
         )}
+      </GlassCard>
       </View>
 
       {previewUrl && Platform.OS === 'web' ? (

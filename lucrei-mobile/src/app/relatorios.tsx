@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } 
 
 import { BlurredValue } from '@/components/blurred-value';
 import { DailyProfitChart } from '@/components/daily-profit-chart';
+import { GlassCard } from '@/components/glass-card';
 import { HistoryBackfillCard } from '@/components/history-backfill-card';
 import { MissingCostList } from '@/components/missing-cost-list';
 import { PastDueBanner } from '@/components/past-due-banner';
@@ -31,6 +32,7 @@ import { useDataRefresh } from '@/lib/data-refresh';
 import { exportOrdersCsv } from '@/lib/export-csv';
 import { formatBRL } from '@/lib/format';
 import { PERIOD_TO_API, PERIODS, usePeriod } from '@/lib/period';
+import { webCapWidth } from '@/lib/responsive';
 import { useSelectedShop } from '@/lib/selected-shop';
 import { useSubscriptionAccess } from '@/lib/subscription-access';
 import { useColors } from '@/lib/theme';
@@ -277,7 +279,7 @@ function ReportRangeCard({
     mode === 'lifetime' ? 'Desde que conectei' : mode === 'year' ? String(year) : `${MONTH_NAMES[month - 1]} de ${year}`;
 
   return (
-    <View className="rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+    <GlassCard className="p-4" borderRadius={16}>
       <Text className="mb-3 text-sm font-medium text-lucrei-text">Relatório por período</Text>
 
       <View className="flex-row gap-2">
@@ -401,7 +403,7 @@ function ReportRangeCard({
           <HistoryBackfillCard token={token} shopId={shopId} onSynced={load} prominent />
         </View>
       )}
-    </View>
+    </GlassCard>
   );
 }
 
@@ -546,6 +548,11 @@ export default function RelatoriosScreen() {
 
   return (
     <Screen>
+      {/* Cabeçalho fica fora do ScrollView (de propósito, pra não rolar
+          junto) - precisa do mesmo teto de largura que o conteúdo rolável
+          abaixo, senão desalinha num monitor bem largo (título lá na
+          esquerda, cards centralizados mais pra dentro). */}
+      <View style={webCapWidth()}>
       <Text className="text-2xl font-bold text-lucrei-text">Relatórios</Text>
       <Text className="mt-1 text-sm text-lucrei-textMuted">Pra onde vai o seu lucro.</Text>
       {activeShops.length > 1 && <ShopPicker />}
@@ -590,11 +597,13 @@ export default function RelatoriosScreen() {
           </Pressable>
         </View>
       )}
+      </View>
 
       {loadState === 'ready' && summary && (
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerClassName="mt-5 gap-3 pb-8"
+          contentContainerStyle={webCapWidth()}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.gold} />
           }>
@@ -614,20 +623,20 @@ export default function RelatoriosScreen() {
           <PastDueBanner />
 
           {subscriptionAccess.isPastDue ? (
-            <View className="items-center rounded-2xl border border-lucrei-border bg-lucrei-surface p-6">
+            <GlassCard className="items-center p-6" borderRadius={16}>
               <Ionicons name="lock-closed" size={20} color={Colors.textMuted} />
               <Text className="mt-2 text-center text-sm text-lucrei-textMuted">
                 Gráficos e detalhamento de lucro ficam ocultos até você regularizar o pagamento.
               </Text>
-            </View>
+            </GlassCard>
           ) : (
             <>
-              <View className="rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+              <GlassCard className="p-4" borderRadius={16}>
                 <Text className="text-sm font-medium text-lucrei-text">Lucro por dia</Text>
                 <DailyProfitChart data={summary.trend} />
-              </View>
+              </GlassCard>
 
-              <View className="rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+              <GlassCard className="p-4" borderRadius={16}>
                 <Text className="mb-3 text-sm font-medium text-lucrei-text">Pra onde foi o dinheiro</Text>
                 {summary.revenue > 0 && (
                   <View className="mb-4 h-3 flex-row overflow-hidden rounded-full">
@@ -654,10 +663,10 @@ export default function RelatoriosScreen() {
                 {summary.itemsMissingCost > 0 && token && (
                   <MissingCostList token={token} items={missingCostItems} onSaved={load} />
                 )}
-              </View>
+              </GlassCard>
 
               {abcItems.length > 0 && (
-                <View className="rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+                <GlassCard className="p-4" borderRadius={16}>
                   <Text className="mb-1 text-sm font-medium text-lucrei-text">Curva ABC</Text>
                   <Text className="mb-3 text-xs text-lucrei-textMuted">
                     Classificação dos produtos pela contribuição no faturamento.
@@ -692,29 +701,29 @@ export default function RelatoriosScreen() {
                       <AbcRow key={`${item.product.shopId ?? ''}-${item.product.shopeeItemId}`} item={item} />
                     ))}
                   </View>
-                </View>
+                </GlassCard>
               )}
 
               {topProfitable.length > 0 && (
-                <View className="rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+                <GlassCard className="p-4" borderRadius={16}>
                   <Text className="mb-3 text-sm font-medium text-lucrei-text">Produtos mais lucrativos</Text>
                   <View className="gap-2">
                     {topProfitable.map((p) => (
                       <ProductRankRow key={`${p.shopId ?? ''}-${p.shopeeItemId}`} product={p} />
                     ))}
                   </View>
-                </View>
+                </GlassCard>
               )}
 
               {lossMakers.length > 0 && (
-                <View className="rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+                <GlassCard className="p-4" borderRadius={16}>
                   <Text className="mb-3 text-sm font-medium text-lucrei-text">Produtos no prejuízo</Text>
                   <View className="gap-2">
                     {lossMakers.map((p) => (
                       <ProductRankRow key={`${p.shopId ?? ''}-${p.shopeeItemId}`} product={p} />
                     ))}
                   </View>
-                </View>
+                </GlassCard>
               )}
             </>
           )}

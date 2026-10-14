@@ -15,6 +15,7 @@ import {
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { GlassCard } from '@/components/glass-card';
 import { MarketplaceBadge } from '@/components/marketplace-badge';
 import { Screen } from '@/components/screen';
 import { ToastBanner, useToast } from '@/components/toast';
@@ -24,6 +25,7 @@ import { showAlert } from '@/lib/alert';
 import { useAuth } from '@/lib/auth';
 import { fullscreenOverlayStyle, useIsDesktopWeb, useModalPresentation, webCapWidth } from '@/lib/responsive';
 import { useSelectedShop } from '@/lib/selected-shop';
+import { useHideTabBarWhile } from '@/lib/tab-bar-visibility';
 import { useAppTheme, useColors, type ThemePreference } from '@/lib/theme';
 
 const SUPPORT_EMAIL = 'suporte@lucreiapp.com';
@@ -156,7 +158,7 @@ function PlanSection({ user }: { user: AuthUser }) {
   }
 
   return (
-    <View className="mt-4 rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+    <GlassCard className="mt-4 p-4" borderRadius={16}>
       <View className="flex-row items-center justify-between">
         <Text className="text-base font-semibold text-lucrei-text">
           {user.plan ? `Plano ${user.plan.name}` : 'Nenhum plano ativo'}
@@ -194,7 +196,7 @@ function PlanSection({ user }: { user: AuthUser }) {
           </Pressable>
         )}
       </View>
-    </View>
+    </GlassCard>
   );
 }
 
@@ -215,7 +217,10 @@ function SettingsModal({
   desktopMaxWidth?: number;
 }) {
   const Colors = useColors();
-  const modal = useModalPresentation();
+  // Diálogo centralizado sempre, mesmo em celular - bottom sheet ficava
+  // colado embaixo e cortado pela altura da tela pra formulário curto
+  // (reportado ao vivo com print, "Alterar nome" cortado).
+  const modal = useModalPresentation(true);
   const panelWidthStyle =
     modal.isDesktop && desktopMaxWidth ? { ...modal.panelWidthStyle, maxWidth: desktopMaxWidth } : modal.panelWidthStyle;
 
@@ -659,7 +664,7 @@ function AppearanceSection() {
   const Colors = useColors();
 
   return (
-    <View className="mt-4 rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+    <GlassCard className="mt-4 p-4" borderRadius={16}>
       <View className="flex-row items-center gap-3">
         <View className="h-9 w-9 items-center justify-center rounded-full bg-lucrei-surfaceAlt">
           <Ionicons name="contrast-outline" size={16} color={Colors.gold} />
@@ -682,7 +687,7 @@ function AppearanceSection() {
           );
         })}
       </View>
-    </View>
+    </GlassCard>
   );
 }
 
@@ -691,11 +696,12 @@ export default function ConfiguracoesScreen() {
   const user = state.status === 'authenticated' ? state.user : null;
   const [openMenu, setOpenMenu] = useState<MenuKey>(null);
   const isDesktop = useIsDesktopWeb();
+  useHideTabBarWhile(openMenu !== null);
 
   return (
     <>
       <Screen>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="pb-8">
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="pb-8" contentContainerStyle={webCapWidth()}>
         <Text className="text-2xl font-bold text-lucrei-text">Configurações</Text>
         <Text className="mt-2 text-base text-lucrei-textMuted">
           Gerencie seu perfil, senha e lojas conectadas.
@@ -704,10 +710,10 @@ export default function ConfiguracoesScreen() {
         <AppearanceSection />
 
         {user && (
-          <View className="mt-4 rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+          <GlassCard className="mt-4 p-4" borderRadius={16}>
             <Text className="text-base font-semibold text-lucrei-text">{user.name}</Text>
             <Text className="mt-0.5 text-sm text-lucrei-textMuted">{user.email}</Text>
-          </View>
+          </GlassCard>
         )}
 
         {user && <PlanSection user={user} />}

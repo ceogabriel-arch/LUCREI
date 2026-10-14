@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Linking, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 
+import { GlassCard } from '@/components/glass-card';
 import { PixPaymentModal } from '@/components/pix-payment-modal';
 import { Screen } from '@/components/screen';
 import {
@@ -20,6 +21,7 @@ import {
 import { showAlert } from '@/lib/alert';
 import { useAuth } from '@/lib/auth';
 import { formatBRL } from '@/lib/format';
+import { webCapWidth } from '@/lib/responsive';
 import { useColors } from '@/lib/theme';
 
 type LoadState = 'loading' | 'ready' | 'error';
@@ -129,7 +131,7 @@ function PlanCard({ plan, appliedCoupon }: { plan: Plan; appliedCoupon: CouponPr
   const showInvoiceLink = isCurrent && (user?.subscriptionStatus === 'trialing' || user?.subscriptionStatus === 'past_due');
 
   return (
-    <View className="mt-3 rounded-2xl border border-lucrei-border bg-lucrei-surface p-5">
+    <GlassCard className="mt-3 p-5" borderRadius={16}>
       <Text className="text-xs font-semibold uppercase tracking-wide text-lucrei-gold">Plano {plan.name}</Text>
 
       {isCustomPricing ? (
@@ -241,7 +243,7 @@ function PlanCard({ plan, appliedCoupon }: { plan: Plan; appliedCoupon: CouponPr
         pix={pixModal}
         expectedPlanKey={pixModalUpgradeTarget ?? undefined}
       />
-    </View>
+    </GlassCard>
   );
 }
 
@@ -352,7 +354,7 @@ export default function PlanosScreen() {
         })}
       </View>
 
-      <View className="mt-4 rounded-2xl border border-lucrei-border bg-lucrei-surface p-4">
+      <GlassCard className="mt-4 p-4" borderRadius={16}>
         {appliedCoupon ? (
           <View className="flex-row items-center justify-between">
             <View className="flex-1 flex-row items-center gap-2">
@@ -404,7 +406,7 @@ export default function PlanosScreen() {
             </Text>
           </>
         )}
-      </View>
+      </GlassCard>
 
       {loadState === 'loading' && (
         <View className="mt-10 items-center">
@@ -419,7 +421,7 @@ export default function PlanosScreen() {
       )}
 
       {loadState === 'ready' && (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="pb-8">
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="pb-8" contentContainerStyle={webCapWidth()}>
           {visiblePlans.map((plan) => (
             <PlanCard key={plan.key} plan={plan} appliedCoupon={appliedCoupon} />
           ))}

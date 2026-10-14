@@ -93,9 +93,17 @@ const MODAL_DESKTOP_WIDTH = 560;
  * cima arredondados) - certo pra celular, mas numa janela larga de desktop
  * isso vira uma folha esticada colada no rodapé de uma tela gigante, muito
  * feio. No desktop, vira um diálogo flutuante centralizado de verdade.
+ *
+ * forceCentered: pra modal de formulário curto (ex: SettingsModal em
+ * configuracoes.tsx) o bottom sheet também fica ruim em celular - bloco
+ * colado embaixo, metade cortado pela altura da tela (reportado ao vivo
+ * com print). Esses preferem o mesmo diálogo centralizado do desktop
+ * mesmo em tela estreita; o nome do campo continua "isDesktop" só pra não
+ * precisar mudar quem já lê esse retorno, mas passa a significar "trate
+ * como diálogo centralizado", não "é desktop de verdade".
  */
-export function useModalPresentation() {
-  const isDesktop = useIsDesktopWeb();
+export function useModalPresentation(forceCentered = false) {
+  const isDesktop = useIsDesktopWeb() || forceCentered;
   return isDesktop
     ? {
         isDesktop,

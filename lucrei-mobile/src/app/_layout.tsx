@@ -21,6 +21,7 @@ import { DataRefreshProvider, useDataRefresh } from '@/lib/data-refresh';
 import { PeriodProvider } from '@/lib/period';
 import { registerForPushNotifications } from '@/lib/push-notifications';
 import { SelectedShopProvider } from '@/lib/selected-shop';
+import { TabBarVisibilityProvider } from '@/lib/tab-bar-visibility';
 import { AppThemeProvider, ThemeContext, useAppTheme } from '@/lib/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -134,8 +135,10 @@ function ThemedNavigation() {
           <SelectedShopProvider>
             <PeriodProvider>
               <DataRefreshProvider>
-                <RootNavigator />
-                <AlertHost />
+                <TabBarVisibilityProvider>
+                  <RootNavigator />
+                  <AlertHost />
+                </TabBarVisibilityProvider>
               </DataRefreshProvider>
             </PeriodProvider>
           </SelectedShopProvider>

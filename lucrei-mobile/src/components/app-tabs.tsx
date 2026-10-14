@@ -1,9 +1,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Tabs } from 'expo-router';
-import { Platform, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useIsDesktopWeb, webCapWidth } from '@/lib/responsive';
+import { useTabBarVisibility } from '@/lib/tab-bar-visibility';
 import { useColors } from '@/lib/theme';
 
 type IconName = keyof typeof Ionicons.glyphMap;
@@ -30,17 +31,22 @@ function CustomTabBar({ state, navigation }: TabBarProps) {
   const insets = useSafeAreaInsets();
   const Colors = useColors();
   const isDesktop = useIsDesktopWeb();
-  // Etiquetas só funciona no navegador (o redimensionamento de PDF usa um
-  // <input type="file"> do DOM - ver etiquetas.tsx) - no app nativo (celular)
-  // a aba só mostraria o aviso de "disponível só na versão web", então nem
-  // aparece ali. Continua normal na web, inclusive no navegador do celular.
-  const visibleRoutes = state.routes.filter(
-    (route) => TAB_META[route.name] && !(route.name === 'etiquetas' && Platform.OS !== 'web')
-  );
+  const { hidden } = useTabBarVisibility();
+  // Etiquetas não funciona bem em tela de celular (nem no app nativo, nem
+  // no navegador do celular - reportado ao vivo que também não funciona ali,
+  // apesar do <input type="file"> do DOM existir) - só aparece no menu
+  // lateral de desktop (ver NAV_ITEMS em desktop-shell.tsx), nunca nessa
+  // barra de baixo, que só é usada em tela estreita.
+  const visibleRoutes = state.routes.filter((route) => TAB_META[route.name] && route.name !== 'etiquetas');
 
   // Numa janela larga de desktop, a navegação já é o menu lateral do
   // DesktopShell - a barra de baixo some pra não duplicar.
   if (isDesktop) return null;
+
+  // Modal em tela cheia aberto (ver useHideTabBarWhile) - some com a barra
+  // pra não ficar por cima do modal (bug reportado ao vivo, print em
+  // anexo).
+  if (hidden) return null;
 
   return (
     <View style={{ paddingBottom: insets.bottom || 12, paddingHorizontal: 14, paddingTop: 4, ...webCapWidth() }}>
@@ -67,7 +73,11 @@ function CustomTabBar({ state, navigation }: TabBarProps) {
                 if (!isFocused && !event.defaultPrevented) navigation.navigate(route.name);
               }}
               className="flex-1 items-center justify-center gap-1 rounded-[22px] py-2.5"
-              style={{ backgroundColor: isFocused ? Colors.surfaceAlt : 'transparent' }}>
+              style={{
+                backgroundColor: isFocused ? `${Colors.gold}26` : 'transparent',
+                borderWidth: isFocused ? 1 : 0,
+                borderColor: `${Colors.gold}66`,
+              }}>
               <Ionicons name={isFocused ? meta.active : meta.inactive} size={20} color={isFocused ? Colors.gold : Colors.textMuted} />
               <Text style={{ fontSize: 10, fontWeight: isFocused ? '600' : '400', color: isFocused ? Colors.gold : Colors.textMuted }}>
                 {meta.label}
