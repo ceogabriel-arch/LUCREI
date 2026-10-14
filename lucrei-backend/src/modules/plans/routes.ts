@@ -322,15 +322,6 @@ export async function plansRoutes(app: FastifyInstance) {
           },
         });
 
-        // Contabiliza o uso assim que o cupom fica de fato preso a uma
-        // assinatura nova - antes de ela virar cobrança de verdade (trial
-        // ainda não cobra), pra não deixar o mesmo código ser reaplicado
-        // criando assinatura atrás de assinatura sem nunca "gastar" o limite.
-        if (couponId) {
-          await prisma.coupon.update({ where: { id: couponId }, data: { redeemedCount: { increment: 1 } } });
-          await prisma.couponRedemption.create({ data: { couponId, userId: user.id } });
-        }
-
         if (trial.eligibleForTrial) {
           await markShopsTrialConsumed(user.id);
         }
@@ -365,6 +356,17 @@ export async function plansRoutes(app: FastifyInstance) {
         // o valor cheio do plano.
         if (subscription.pendingCouponPercentOff) {
           await prisma.subscription.update({ where: { id: subscription.id }, data: { pendingCouponPercentOff: null } });
+        }
+        // Trava o código só AQUI, numa cobrança de verdade gerada com
+        // sucesso - não na hora de só escolher o plano (ver comentário
+        // antigo removido acima). Quem está elegível pro teste grátis nunca
+        // chega até aqui (early return mais acima) e por isso nunca gastava
+        // nada de verdade, mas o cupom já saía queimado mesmo assim - um
+        // cliente em trial clicando Pix perdia o desconto sem nunca ter sido
+        // cobrado (caso real, resolvido na mão duas vezes antes desse fix).
+        if (couponId) {
+          await prisma.coupon.update({ where: { id: couponId }, data: { redeemedCount: { increment: 1 } } });
+          await prisma.couponRedemption.create({ data: { couponId, userId: user.id } });
         }
       } catch (err) {
         app.log.error(err);
