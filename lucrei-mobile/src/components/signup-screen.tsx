@@ -40,9 +40,12 @@ export function SignupScreen({ onNavigateToLogin }: SignupScreenProps) {
     }
   }
 
+  const Container = isDesktop ? View : SafeAreaView;
+  const KeyboardWrapper = isDesktop ? View : KeyboardAvoidingView;
+
   return (
-    <SafeAreaView className="flex-1 bg-lucrei-bg" style={isDesktop ? { backgroundColor: '#0A0A0B' } : undefined}>
-      <KeyboardAvoidingView behavior="padding" className="flex-1">
+    <Container className="flex-1 bg-lucrei-bg" style={isDesktop ? { backgroundColor: '#0A0A0B' } : undefined}>
+      <KeyboardWrapper {...(isDesktop ? {} : { behavior: 'padding' as const })} className="flex-1">
         <View className={isDesktop ? 'flex-1 flex-row' : 'flex-1'}>
           {isDesktop ? <AuthBrandPanel variant="signup" /> : null}
 
@@ -121,7 +124,7 @@ export function SignupScreen({ onNavigateToLogin }: SignupScreenProps) {
           </View>
           </ScrollView>
         </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+      </KeyboardWrapper>
+    </Container>
   );
 }

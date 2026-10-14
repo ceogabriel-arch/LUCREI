@@ -152,9 +152,17 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
     if (!result.ok) setError(result.message);
   }
 
+  const Container = isDesktop ? View : SafeAreaView;
+  // KeyboardAvoidingView existe só pra sobra do teclado virtual não cobrir o
+  // formulário no celular - no desktop web não tem teclado nenhum sobrepondo
+  // nada, e esse componente estava travando a altura da tela num valor fixo
+  // errado na build estática (reportado ao vivo: painel de marca cortado
+  // bem antes do fim da janela, sobrando vazio preto embaixo).
+  const KeyboardWrapper = isDesktop ? View : KeyboardAvoidingView;
+
   return (
-    <SafeAreaView className="flex-1 bg-lucrei-bg" style={isDesktop ? { backgroundColor: '#0A0A0B' } : undefined}>
-      <KeyboardAvoidingView behavior="padding" className="flex-1">
+    <Container className="flex-1 bg-lucrei-bg" style={isDesktop ? { backgroundColor: '#0A0A0B' } : undefined}>
+      <KeyboardWrapper {...(isDesktop ? {} : { behavior: 'padding' as const })} className="flex-1">
         <View className={isDesktop ? 'flex-1 flex-row' : 'flex-1'}>
           {isDesktop ? <AuthBrandPanel variant="login" /> : null}
 
@@ -245,9 +253,9 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
           </View>
           </ScrollView>
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardWrapper>
 
       <ForgotPasswordModal visible={forgotPasswordVisible} onClose={() => setForgotPasswordVisible(false)} />
-    </SafeAreaView>
+    </Container>
   );
 }
