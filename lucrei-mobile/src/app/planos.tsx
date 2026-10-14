@@ -150,6 +150,23 @@ function PlanCard({ plan, appliedCoupon }: { plan: Plan; appliedCoupon: CouponPr
               equivale a {formatBRL(plan.priceCurrent! / 12)}/mês
             </Text>
           )}
+          {/* Antes só existia o texto genérico acima dos cards ("cupom
+              aplicado, 20% off") - reclamado ao vivo que o desconto não
+              aparecia visualmente NO plano, só em texto solto. Mesma conta
+              de centavos do backend (applyPercentOff), pra nunca mostrar um
+              valor diferente do que a cobrança Pix vai gerar de verdade. */}
+          {appliedCoupon && (
+            <View className="mt-2 flex-row items-center gap-2 rounded-lg bg-lucrei-surfaceAlt px-2.5 py-1.5">
+              <Ionicons name="pricetag" size={13} color={Colors.gold} />
+              <Text className="text-xs text-lucrei-text">
+                Com <Text style={{ fontWeight: '700' }}>{appliedCoupon.code}</Text>:{' '}
+                <Text style={{ color: Colors.gold, fontWeight: '700' }}>
+                  {formatBRL(Math.round(plan.priceCurrent! * (1 - appliedCoupon.percentOff / 100) * 100) / 100)}
+                </Text>{' '}
+                na 1ª cobrança (Pix)
+              </Text>
+            </View>
+          )}
         </>
       )}
 
