@@ -48,6 +48,7 @@ function PlanCard({ plan, appliedCoupon }: { plan: Plan; appliedCoupon: CouponPr
   // assinatura pra saber quando o pagamento confirmou.
   const [pixModalUpgradeTarget, setPixModalUpgradeTarget] = useState<string | null>(null);
   const user = state.status === 'authenticated' ? state.user : null;
+  const effectivePercentOff = appliedCoupon?.percentOff ?? user?.pendingCouponPercentOff ?? null;
   const isCustomPricing = plan.priceCurrent === null;
 
   const isCurrent = user?.plan?.key === plan.key && user.subscriptionStatus !== 'canceled';
@@ -154,14 +155,25 @@ function PlanCard({ plan, appliedCoupon }: { plan: Plan; appliedCoupon: CouponPr
               aplicado, 20% off") - reclamado ao vivo que o desconto não
               aparecia visualmente NO plano, só em texto solto. Mesma conta
               de centavos do backend (applyPercentOff), pra nunca mostrar um
-              valor diferente do que a cobrança Pix vai gerar de verdade. */}
-          {appliedCoupon && (
+              valor diferente do que a cobrança Pix vai gerar de verdade.
+              effectivePercentOff cobre dois casos: cupom digitado agora
+              (appliedCoupon) OU um desconto que já ficou preso numa
+              assinatura de uma tentativa anterior (user.pendingCouponPercentOff)
+              - sem isso, reaplicar o mesmo código dava erro "já usado" e a
+              tela nunca mostrava que o desconto, na real, já estava valendo. */}
+          {effectivePercentOff !== null && (
             <View className="mt-2 flex-row items-center gap-2 rounded-lg bg-lucrei-surfaceAlt px-2.5 py-1.5">
               <Ionicons name="pricetag" size={13} color={Colors.gold} />
               <Text className="text-xs text-lucrei-text">
-                Com <Text style={{ fontWeight: '700' }}>{appliedCoupon.code}</Text>:{' '}
+                {appliedCoupon ? (
+                  <>
+                    Com <Text style={{ fontWeight: '700' }}>{appliedCoupon.code}</Text>:{' '}
+                  </>
+                ) : (
+                  'Com seu cupom já aplicado: '
+                )}
                 <Text style={{ color: Colors.gold, fontWeight: '700' }}>
-                  {formatBRL(Math.round(plan.priceCurrent! * (1 - appliedCoupon.percentOff / 100) * 100) / 100)}
+                  {formatBRL(Math.round(plan.priceCurrent! * (1 - effectivePercentOff / 100) * 100) / 100)}
                 </Text>{' '}
                 na 1ª cobrança (Pix)
               </Text>
@@ -385,6 +397,21 @@ export default function PlanosScreen() {
             <Pressable onPress={handleClearCoupon} hitSlop={8}>
               <Ionicons name="close-circle" size={20} color={Colors.textMuted} />
             </Pressable>
+          </View>
+        ) : authState.status === 'authenticated' && authState.user.pendingCouponPercentOff ? (
+          // Cupom já ficou preso numa assinatura de uma tentativa anterior
+          // (ex: reabriu a tela depois de aplicar) - não tem "código" pra
+          // mostrar aqui nem como desaplicar (não é mais um estado local,
+          // já está salvo no servidor), só avisa que já está valendo.
+          <View className="flex-row items-center gap-2">
+            <Ionicons name="checkmark-circle" size={16} color={Colors.gold} />
+            <Text className="flex-1 text-sm text-lucrei-text">
+              Você já tem um cupom aplicado —{' '}
+              <Text style={{ color: Colors.gold, fontWeight: '600' }}>
+                {authState.user.pendingCouponPercentOff}% off
+              </Text>{' '}
+              na 1ª cobrança via Pix. Veja o valor em cada plano abaixo.
+            </Text>
           </View>
         ) : (
           <>

@@ -18,6 +18,9 @@ export type AuthUser = {
   // quanto falta.
   subscriptionBlocked: boolean;
   subscriptionGraceDaysLeft: number | null;
+  // % de desconto já preso na assinatura atual (cupom aplicado antes),
+  // esperando a 1ª cobrança via Pix - null quando não tem nenhum pendente.
+  pendingCouponPercentOff: number | null;
   plan: UserPlan | null;
   // null enquanto a pessoa nunca configurou uma meta diária em Configurações.
   dailyProfitGoal: number | null;
