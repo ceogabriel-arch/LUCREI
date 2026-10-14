@@ -108,9 +108,23 @@ export default function PrecificadorScreen() {
           <Pressable
             key={tab.key}
             onPress={() => setMode(tab.key)}
-            className="flex-1 items-center rounded-xl py-2.5"
+            className="flex-1 items-center justify-center rounded-xl px-1 py-2.5"
             style={{ backgroundColor: mode === tab.key ? Colors.surfaceAlt : 'transparent' }}>
-            <Text className="text-sm font-medium" style={{ color: mode === tab.key ? Colors.gold : Colors.textMuted }}>
+            {/* "Conferir um preço já usado" não cabia numa linha só no
+                celular, esticando essa aba pra 2 linhas enquanto a vizinha
+                ("Calcular preço de venda") ficava 1 linha só - as duas
+                caixas esticavam pra mesma altura (a do texto maior), mas o
+                texto curto sobrava "flutuando" no meio de uma caixa alta
+                demais, com cara estranha (reportado ao vivo, print em
+                anexo). text-xs (era text-sm) dá espaço de sobra pra caber
+                numa linha só; numberOfLines+adjustsFontSizeToFit é rede de
+                segurança pro nativo (web ainda cai pra 1 linha só mesmo sem
+                adjustsFontSizeToFit, que o react-native-web não implementa). */}
+            <Text
+              className="text-xs font-medium"
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              style={{ color: mode === tab.key ? Colors.gold : Colors.textMuted }}>
               {tab.label}
             </Text>
           </Pressable>
