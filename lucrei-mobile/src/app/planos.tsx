@@ -64,7 +64,7 @@ function PlanCard({ plan, appliedCoupon }: { plan: Plan; appliedCoupon: CouponPr
 
   async function handlePressCard() {
     setSavingMethod('card');
-    const result = await selectPlan(plan.key);
+    const result = await selectPlan(plan.key, appliedCoupon?.code);
     setSavingMethod(null);
     if (result.ok) {
       if (result.pix) {
@@ -180,7 +180,7 @@ function PlanCard({ plan, appliedCoupon }: { plan: Plan; appliedCoupon: CouponPr
                     cupom <Text style={{ fontWeight: '700', color: Colors.gold }}>{appliedCoupon.code}</Text> —{' '}
                   </>
                 ) : null}
-                {effectivePercentOff}% off na 1ª cobrança via Pix
+                {effectivePercentOff}% off — no Pix só na 1ª cobrança, no cartão todo mês
               </Text>
             </View>
           )}
@@ -435,6 +435,8 @@ export default function PlanosScreen() {
                 placeholderTextColor={Colors.textMuted}
                 autoCapitalize="characters"
                 autoCorrect={false}
+                returnKeyType="done"
+                onSubmitEditing={handleApplyCoupon}
                 className="flex-1 rounded-xl border border-lucrei-border bg-lucrei-bg px-3.5 py-2.5 text-sm text-lucrei-text"
               />
               <Pressable

@@ -18,10 +18,11 @@ const selectPlanSchema = {
   required: ['key'],
   properties: {
     key: { type: 'string', minLength: 1 },
+    couponCode: { type: 'string' },
   },
 } as const;
 
-type SelectPlanBody = { key: string };
+type SelectPlanBody = { key: string; couponCode?: string };
 
 const selectPixPlanSchema = {
   type: 'object',
@@ -111,6 +112,25 @@ export async function plansRoutes(app: FastifyInstance) {
         return reply.status(400).send({ message: 'Este plano é sob consulta. Fale com nosso time de vendas.' });
       }
 
+      // Mesma validação da rota de Pix - só vale pra uma assinatura NOVA
+      // (ver mais abaixo: não entra no caminho de upgrade de quem já é
+      // assinante pagante no cartão). No cartão o desconto fica valendo em
+      // TODAS as cobranças futuras, não só a primeira (diferente do Pix,
+      // que é uma cobrança avulsa por ciclo) - decisão explícita do
+      // Filipe, porque mudar o valor recorrente depois exigiria um
+      // segundo passo via webhook pra "voltar" o preço, mais um jeito de
+      // dar errado sem necessidade.
+      let couponPercentOff: number | null = null;
+      let couponId: string | null = null;
+      if (request.body.couponCode) {
+        const validation = await validateCoupon(request.body.couponCode, request.user.sub);
+        if (!validation.ok) {
+          return reply.status(400).send({ message: validation.message });
+        }
+        couponPercentOff = validation.coupon.percentOff;
+        couponId = validation.coupon.id;
+      }
+
       const user = await prisma.user.findUniqueOrThrow({ where: { id: request.user.sub }, include: { plan: true } });
 
       try {
@@ -194,10 +214,13 @@ export async function plansRoutes(app: FastifyInstance) {
           // Sem trial, a cobrança já sai imediata na criação - 'past_due' até
           // o webhook confirmar o pagamento, igual o fluxo de Pix já faz.
           nextStatus = trialDays > 0 ? 'trialing' : 'past_due';
+          const cardAmount = couponPercentOff
+            ? applyPercentOff(Number(plan.priceCurrent), couponPercentOff)
+            : Number(plan.priceCurrent);
           const preapproval = await mercadopago.createPreapproval({
             reason: description,
             payerEmail: user.email,
-            value: Number(plan.priceCurrent),
+            value: cardAmount,
             trialDays,
             externalReference: user.id,
             backUrl: `${BACK_URL}/planos`,
@@ -215,6 +238,15 @@ export async function plansRoutes(app: FastifyInstance) {
               lastInvoiceUrl: checkoutUrl,
             },
           });
+
+          // Trava o código só aqui, numa assinatura de verdade criada com
+          // sucesso na Mercado Pago - mesmo raciocínio do fix de Pix (ver
+          // commit anterior): escolher o plano sozinho (ex: elegível pro
+          // teste grátis) nunca deveria gastar o cupom.
+          if (couponId) {
+            await prisma.coupon.update({ where: { id: couponId }, data: { redeemedCount: { increment: 1 } } });
+            await prisma.couponRedemption.create({ data: { couponId, userId: user.id } });
+          }
 
           if (trialDays > 0) {
             await markShopsTrialConsumed(user.id);

@@ -43,7 +43,7 @@ type AuthContextValue = {
   updateDailyGoal: (dailyProfitGoal: number | null) => Promise<AuthResult>;
   changePassword: (currentPassword: string | undefined, newPassword: string) => Promise<AuthResult>;
   deleteAccount: (password?: string) => Promise<AuthResult>;
-  selectPlan: (key: string) => Promise<SelectPlanResult>;
+  selectPlan: (key: string, couponCode?: string) => Promise<SelectPlanResult>;
   selectPlanPix: (key: string, couponCode?: string) => Promise<SelectPlanPixResult>;
   cancelPlan: () => Promise<AuthResult>;
   refreshUser: () => Promise<void>;
@@ -212,10 +212,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
   );
 
   const selectPlan = useCallback(
-    async (key: string): Promise<SelectPlanResult> => {
+    async (key: string, couponCode?: string): Promise<SelectPlanResult> => {
       if (!token) return { ok: false, message: 'Não autenticado.' };
       try {
-        const { checkoutUrl, pix, ...user } = await apiSelectPlan(token, key);
+        const { checkoutUrl, pix, ...user } = await apiSelectPlan(token, key, couponCode);
         setState({ status: 'authenticated', token, user });
         return {
           ok: true,

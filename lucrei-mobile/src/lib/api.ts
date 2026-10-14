@@ -463,14 +463,14 @@ export function getPlans() {
   return request<{ plans: Plan[] }>('/plans');
 }
 
-export function selectPlan(token: string, key: string) {
+export function selectPlan(token: string, key: string, couponCode?: string) {
   // checkoutUrl vem preenchido no fluxo normal; pix vem no lugar quando é um
   // upgrade de plano anual no meio do ciclo (cobrança proporcional avulsa) -
   // nesse caso o plano só muda depois que o Pix for pago, não nessa resposta.
   return request<AuthUser & { checkoutUrl?: string | null; pix?: PixCharge | null }>('/plans/select', {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ key }),
+    body: JSON.stringify({ key, couponCode }),
   });
 }
 
