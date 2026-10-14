@@ -18,7 +18,7 @@ import { computeShopSummary } from '../summary/routes';
 // inflar a contagem pra sempre com pedido "fantasma".
 const PENDING_WINDOW_START = () => rangeStart('30d');
 
-type ShopForecast = { pendingCount: number; projectedProfit: number };
+type ShopForecast = { pendingCount: number; projectedProfit: number; projectedRevenue: number };
 type PendingEvent = {
   shopeeOrderSn: string | null;
   mercadoLivreOrderId: string | null;
@@ -27,13 +27,21 @@ type PendingEvent = {
   shopId: string;
 };
 
-// Lucro médio por pedido concluído recentemente - a taxa/frete exatos de um
-// pedido ainda em processamento só existem depois que ele completa de
-// verdade, então isso é sempre uma estimativa (a mesma média aplicada em
-// cada pedido pendente da loja), nunca um valor garantido por pedido.
-async function computeAvgProfitPerOrder(shop: Shop): Promise<number> {
+// Lucro e faturamento médios por pedido concluído recentemente - a taxa/
+// frete/valor exatos de um pedido ainda em processamento só existem depois
+// que ele completa de verdade, então isso é sempre uma estimativa (a mesma
+// média aplicada em cada pedido pendente da loja), nunca um valor garantido
+// por pedido. As duas médias vêm do mesmo resumo de 30 dias, então uma
+// chamada só serve pras duas (perfil x pedido de "Faturamento" previsto
+// pedido pelo usuário, pra não mostrar R$0,00 cru enquanto pedido recém-
+// comprado ainda não conta como venda confirmada).
+async function computeRecentAverages(shop: Shop): Promise<{ avgProfit: number; avgRevenue: number }> {
   const recentSummary = await computeShopSummary(shop, { period: '30d' });
-  return recentSummary.ordersCount > 0 ? recentSummary.profit / recentSummary.ordersCount : 0;
+  if (recentSummary.ordersCount === 0) return { avgProfit: 0, avgRevenue: 0 };
+  return {
+    avgProfit: recentSummary.profit / recentSummary.ordersCount,
+    avgRevenue: recentSummary.revenue / recentSummary.ordersCount,
+  };
 }
 
 // Shopee agora sincroniza (e já calcula taxa/frete/lucro de verdade) assim
@@ -53,10 +61,10 @@ async function computeShopForecast(shop: Shop): Promise<ShopForecast> {
     where: { ...pendingWhereForShop(shop), orderDate: { gte: PENDING_WINDOW_START() } },
   });
 
-  if (pendingCount === 0) return { pendingCount: 0, projectedProfit: 0 };
+  if (pendingCount === 0) return { pendingCount: 0, projectedProfit: 0, projectedRevenue: 0 };
 
-  const avgProfitPerOrder = await computeAvgProfitPerOrder(shop);
-  return { pendingCount, projectedProfit: pendingCount * avgProfitPerOrder };
+  const { avgProfit, avgRevenue } = await computeRecentAverages(shop);
+  return { pendingCount, projectedProfit: pendingCount * avgProfit, projectedRevenue: pendingCount * avgRevenue };
 }
 
 // Lista (não só conta) os pedidos pendentes - usado pelo detalhe que abre ao
@@ -155,9 +163,9 @@ export async function orderForecastRoutes(app: FastifyInstance) {
       if (!shop) return reply.status(404).send({ message: 'Loja não encontrada.' });
 
       const events = await listPendingOrders([shop]);
-      const [labelByKey, avgProfitPerOrder] = await Promise.all([
+      const [labelByKey, { avgProfit: avgProfitPerOrder }] = await Promise.all([
         fetchProductLabels(events, [shop]),
-        computeAvgProfitPerOrder(shop),
+        computeRecentAverages(shop),
       ]);
       return events.map((e) => ({
         orderSn: orderKey(e),
@@ -174,12 +182,13 @@ export async function orderForecastRoutes(app: FastifyInstance) {
   // lojas" no Início, igual /summary.
   app.get('/order-forecast', { onRequest: [app.authenticate] }, async (request) => {
     const shops = await prisma.shop.findMany({ where: { userId: request.user.sub, status: 'active' } });
-    if (shops.length === 0) return { pendingCount: 0, projectedProfit: 0 };
+    if (shops.length === 0) return { pendingCount: 0, projectedProfit: 0, projectedRevenue: 0 };
 
     const forecasts = await Promise.all(shops.map((shop) => computeShopForecast(shop)));
     return {
       pendingCount: forecasts.reduce((sum, f) => sum + f.pendingCount, 0),
       projectedProfit: forecasts.reduce((sum, f) => sum + f.projectedProfit, 0),
+      projectedRevenue: forecasts.reduce((sum, f) => sum + f.projectedRevenue, 0),
     };
   });
 
@@ -191,7 +200,7 @@ export async function orderForecastRoutes(app: FastifyInstance) {
     const shopById = new Map(shops.map((s) => [s.id, s]));
     const [labelByKey, avgProfitEntries] = await Promise.all([
       fetchProductLabels(events, shops),
-      Promise.all(shops.map(async (shop) => [shop.id, await computeAvgProfitPerOrder(shop)] as const)),
+      Promise.all(shops.map(async (shop) => [shop.id, (await computeRecentAverages(shop)).avgProfit] as const)),
     ]);
     const avgProfitByShop = new Map(avgProfitEntries);
     return events.map((e) => ({

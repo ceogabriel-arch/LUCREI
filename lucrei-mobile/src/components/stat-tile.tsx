@@ -31,6 +31,11 @@ type StatTileProps = {
    * fixa) e usa texto maior. No mobile/scroll horizontal continua com a
    * largura fixa de sempre, que cabe melhor numa fileira que rola de lado. */
   large?: boolean;
+  /** "+R$X previsto" - pedido ainda não confirmado (comprado, mas não
+   * concluído/pago de verdade) que ainda não entra no valor principal.
+   * Neutro de propósito (sem seta, sem verde/vermelho de deltaLabel): não é
+   * uma variação do período, é dinheiro que PODE vir a ser confirmado. */
+  forecastLabel?: string;
 };
 
 export function StatTile({
@@ -42,6 +47,7 @@ export function StatTile({
   blurred = false,
   helpText,
   large = false,
+  forecastLabel,
 }: StatTileProps) {
   const { scheme, colors: Colors } = useAppTheme();
   const isGood = (deltaDirection === 'up') === positiveIsGood;
@@ -139,6 +145,11 @@ export function StatTile({
             {deltaLabel}
           </Text>
         </View>
+      ) : null}
+      {forecastLabel && !blurred ? (
+        <Text className={`text-lucrei-textMuted ${large ? 'mt-2 text-sm' : 'mt-1 text-xs'}`} numberOfLines={1}>
+          {forecastLabel}
+        </Text>
       ) : null}
     </View>
   );

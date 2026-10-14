@@ -434,6 +434,14 @@ export default function InicioScreen() {
           label: 'Faturamento',
           value: formatBRL(summary!.revenue),
           helpText: 'Soma do valor de venda de todos os pedidos do período, sem descontar nada.',
+          // Pedido recém-comprado (ainda não pago/concluído de verdade) não
+          // entra no faturamento confirmado acima - sem isso, um dia com
+          // venda de verdade mas sincronização/confirmação atrasada parecia
+          // "não vendeu nada", o que já assustou cliente novo esperando o
+          // primeiro sync terminar. Mostra como previsão à parte, nunca
+          // somado ao valor confirmado.
+          forecastLabel:
+            forecast && forecast.pendingCount > 0 ? `+${formatBRL(forecast.projectedRevenue)} previsto` : undefined,
         },
         {
           label: 'Custos totais',
@@ -618,11 +626,23 @@ export default function InicioScreen() {
                             <Text className="text-base font-medium text-lucrei-textMuted">Buscando seus pedidos recentes...</Text>
                           </View>
                         ) : (
-                          <Text
-                            className={isDesktop ? 'mt-1 text-6xl font-bold' : 'mt-1 text-5xl font-bold'}
-                            style={{ color: showNet ? Colors.text : Colors.gold }}>
-                            {formatBRL(showNet ? netBeforeProductCost : summary!.profit)}
-                          </Text>
+                          <>
+                            <Text
+                              className={isDesktop ? 'mt-1 text-6xl font-bold' : 'mt-1 text-5xl font-bold'}
+                              style={{ color: showNet ? Colors.text : Colors.gold }}>
+                              {formatBRL(showNet ? netBeforeProductCost : summary!.profit)}
+                            </Text>
+                            {/* Mesmo raciocínio do Faturamento: pedido ainda
+                                não confirmado não some do lucro no card, só
+                                não entra no valor principal (ainda é uma
+                                estimativa, não lucro garantido). */}
+                            {forecast && forecast.pendingCount > 0 && (
+                              <Text className="mt-1 text-sm text-lucrei-textMuted">
+                                +{formatBRL(forecast.projectedProfit)} previsto em {forecast.pendingCount}{' '}
+                                {forecast.pendingCount === 1 ? 'pedido' : 'pedidos'} ainda confirmando
+                              </Text>
+                            )}
+                          </>
                         )}
                       </>
                     );
