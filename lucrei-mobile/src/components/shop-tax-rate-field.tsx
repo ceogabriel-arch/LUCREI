@@ -66,7 +66,16 @@ export function ShopTaxRateField({ shop, compact = false }: { shop: Shop; compac
             )}
           </Pressable>
         </View>
-        {invalid && <Text className="mt-1 text-[11px] text-lucrei-danger">Valor entre 0 e 100.</Text>}
+        {invalid ? (
+          <Text className="mt-1 text-[11px] text-lucrei-danger">Valor entre 0 e 100.</Text>
+        ) : (
+          // Sem isso o valor parece "errado"/sem efeito pra quem olha o
+          // relatório de um período com pedido antigo - o imposto só é
+          // calculado na hora que o pedido sincroniza, usando a alíquota de
+          // ENTÃO, não a atual (pedido explicitamente pelo usuário - o
+          // toast ao salvar já avisava isso, mas sumia rápido demais).
+          <Text className="mt-1 text-[11px] text-lucrei-textMuted">Vale só pra pedido sincronizado dali pra frente.</Text>
+        )}
       </View>
     );
   }
@@ -76,6 +85,9 @@ export function ShopTaxRateField({ shop, compact = false }: { shop: Shop; compac
       <ToastBanner toast={toast} opacity={opacity} />
       <Text className="mb-1.5 text-[11px] text-lucrei-textMuted">
         Alíquota de imposto (%){shop.provider === 'mercado_livre' ? ' — ainda não usada no cálculo do Mercado Livre' : ''}
+      </Text>
+      <Text className="mb-1.5 text-[11px] text-lucrei-textMuted">
+        Vale só pra pedido sincronizado dali pra frente - não recalcula pedido antigo.
       </Text>
       <View className="flex-row items-center gap-2">
         <TextInput
