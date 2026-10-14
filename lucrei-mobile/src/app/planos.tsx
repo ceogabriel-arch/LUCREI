@@ -189,7 +189,7 @@ function PlanCard({ plan, appliedCoupon }: { plan: Plan; appliedCoupon: CouponPr
                     cupom <Text style={{ fontWeight: '700', color: Colors.gold }}>{appliedCoupon.code}</Text> —{' '}
                   </>
                 ) : null}
-                {effectivePercentOff}% off — no Pix só na 1ª cobrança, no cartão todo mês
+                {effectivePercentOff}% off em todas as cobranças
               </Text>
             </View>
           )}
@@ -299,6 +299,10 @@ export default function PlanosScreen() {
   const router = useRouter();
   const Colors = useColors();
   const { state: authState } = useAuth();
+  // Variável à parte só pra TS conseguir estreitar o tipo dentro do JSX
+  // abaixo (o narrowing de "authState.status === 'authenticated'" não
+  // atravessa a condição composta com || mais embaixo).
+  const pendingCouponPercentOff = authState.status === 'authenticated' ? authState.user.pendingCouponPercentOff : null;
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [plans, setPlans] = useState<Plan[]>([]);
   // Se a pessoa já tem um plano, abre o seletor já no período que ela paga
@@ -397,76 +401,85 @@ export default function PlanosScreen() {
         })}
       </View>
 
-      <GlassCard className="mt-4 p-4" borderRadius={16}>
-        {appliedCoupon ? (
-          <View className="flex-row items-center justify-between">
-            <View className="flex-1 flex-row items-center gap-2">
+      {/* Reclamado ao vivo: com justify-between esticando pra preencher a
+          largura inteira da coluna (até 1100px no desktop), um aviso de uma
+          linha só virava uma barra enorme com um vão vazio gigante até o X
+          no canto. alignSelf: flex-start + sem justify-between faz o card
+          abraçar só o próprio conteúdo, igual um chip/toast. O estado do
+          formulário (TextInput + botão Aplicar) continua largura cheia
+          embaixo - esse sim precisa do espaço. */}
+      {(appliedCoupon || pendingCouponPercentOff) && (
+        <GlassCard className="mt-4 p-3.5" borderRadius={16} style={{ alignSelf: 'flex-start', maxWidth: '100%' }}>
+          {appliedCoupon ? (
+            <View className="flex-row items-center gap-2.5">
               <Ionicons name="pricetag" size={16} color={Colors.gold} />
-              <Text className="flex-1 text-sm text-lucrei-text">
+              <Text className="text-sm text-lucrei-text">
                 Cupom <Text style={{ fontWeight: '700' }}>{appliedCoupon.code}</Text> aplicado —{' '}
-                <Text style={{ color: Colors.gold, fontWeight: '600' }}>{appliedCoupon.percentOff}% off</Text> na
-                1ª cobrança via Pix.
+                <Text style={{ color: Colors.gold, fontWeight: '600' }}>{appliedCoupon.percentOff}% off</Text> em
+                todas as cobranças.
               </Text>
-            </View>
-            <Pressable onPress={handleClearCoupon} hitSlop={8}>
-              <Ionicons name="close-circle" size={20} color={Colors.textMuted} />
-            </Pressable>
-          </View>
-        ) : authState.status === 'authenticated' && authState.user.pendingCouponPercentOff ? (
-          // Cupom já ficou preso numa assinatura de uma tentativa anterior
-          // (ex: reabriu a tela depois de aplicar) - não tem "código" pra
-          // mostrar aqui nem como desaplicar (não é mais um estado local,
-          // já está salvo no servidor), só avisa que já está valendo.
-          <View className="flex-row items-center gap-2">
-            <Ionicons name="checkmark-circle" size={16} color={Colors.gold} />
-            <Text className="flex-1 text-sm text-lucrei-text">
-              Você já tem um cupom aplicado —{' '}
-              <Text style={{ color: Colors.gold, fontWeight: '600' }}>
-                {authState.user.pendingCouponPercentOff}% off
-              </Text>{' '}
-              na 1ª cobrança via Pix. Veja o valor em cada plano abaixo.
-            </Text>
-          </View>
-        ) : (
-          <>
-            <View className="flex-row items-center gap-2">
-              <Ionicons name="pricetag-outline" size={16} color={Colors.textMuted} />
-              <Text className="text-sm font-medium text-lucrei-text">Tem um cupom de desconto?</Text>
-            </View>
-            <View className="mt-2.5 flex-row gap-2">
-              <TextInput
-                value={couponInput}
-                onChangeText={(v) => {
-                  setCouponInput(v.toUpperCase());
-                  setCouponError(null);
-                }}
-                placeholder="Código do cupom"
-                placeholderTextColor={Colors.textMuted}
-                autoCapitalize="characters"
-                autoCorrect={false}
-                returnKeyType="done"
-                onSubmitEditing={handleApplyCoupon}
-                className="flex-1 rounded-xl border border-lucrei-border bg-lucrei-bg px-3.5 py-2.5 text-sm text-lucrei-text"
-              />
-              <Pressable
-                onPress={handleApplyCoupon}
-                disabled={checkingCoupon || !couponInput.trim()}
-                className="items-center justify-center rounded-xl bg-lucrei-surfaceAlt px-4"
-                style={{ opacity: checkingCoupon || !couponInput.trim() ? 0.5 : 1 }}>
-                {checkingCoupon ? (
-                  <ActivityIndicator size="small" color={Colors.gold} />
-                ) : (
-                  <Text className="text-sm font-semibold text-lucrei-gold">Aplicar</Text>
-                )}
+              <Pressable onPress={handleClearCoupon} hitSlop={8}>
+                <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
               </Pressable>
             </View>
-            {couponError && <Text className="mt-2 text-xs text-lucrei-danger">{couponError}</Text>}
-            <Text className="mt-2 text-[11px] leading-4 text-lucrei-textMuted">
-              O desconto vale só na 1ª cobrança, pagando via Pix.
-            </Text>
-          </>
-        )}
-      </GlassCard>
+          ) : (
+            // Cupom já ficou preso numa assinatura de uma tentativa anterior
+            // (ex: reabriu a tela depois de aplicar) - não tem "código" pra
+            // mostrar aqui nem como desaplicar (não é mais um estado local,
+            // já está salvo no servidor), só avisa que já está valendo.
+            <View className="flex-row items-center gap-2">
+              <Ionicons name="checkmark-circle" size={16} color={Colors.gold} />
+              <Text className="text-sm text-lucrei-text">
+                Você já tem um cupom aplicado —{' '}
+                <Text style={{ color: Colors.gold, fontWeight: '600' }}>
+                  {pendingCouponPercentOff}% off
+                </Text>{' '}
+                em todas as cobranças. Veja o valor em cada plano abaixo.
+              </Text>
+            </View>
+          )}
+        </GlassCard>
+      )}
+
+      {!appliedCoupon && !pendingCouponPercentOff && (
+        <GlassCard className="mt-4 p-4" borderRadius={16}>
+          <View className="flex-row items-center gap-2">
+            <Ionicons name="pricetag-outline" size={16} color={Colors.textMuted} />
+            <Text className="text-sm font-medium text-lucrei-text">Tem um cupom de desconto?</Text>
+          </View>
+          <View className="mt-2.5 flex-row gap-2">
+            <TextInput
+              value={couponInput}
+              onChangeText={(v) => {
+                setCouponInput(v.toUpperCase());
+                setCouponError(null);
+              }}
+              placeholder="Código do cupom"
+              placeholderTextColor={Colors.textMuted}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              returnKeyType="done"
+              onSubmitEditing={handleApplyCoupon}
+              className="flex-1 rounded-xl border border-lucrei-border bg-lucrei-bg px-3.5 py-2.5 text-sm text-lucrei-text"
+            />
+            <Pressable
+              onPress={handleApplyCoupon}
+              disabled={checkingCoupon || !couponInput.trim()}
+              className="items-center justify-center rounded-xl bg-lucrei-surfaceAlt px-4"
+              style={{ opacity: checkingCoupon || !couponInput.trim() ? 0.5 : 1 }}>
+              {checkingCoupon ? (
+                <ActivityIndicator size="small" color={Colors.gold} />
+              ) : (
+                <Text className="text-sm font-semibold text-lucrei-gold">Aplicar</Text>
+              )}
+            </Pressable>
+          </View>
+          {couponError && <Text className="mt-2 text-xs text-lucrei-danger">{couponError}</Text>}
+          <Text className="mt-2 text-[11px] leading-4 text-lucrei-textMuted">
+            O desconto vale em toda cobrança, por Pix ou cartão.
+          </Text>
+        </GlassCard>
+      )}
 
       {loadState === 'loading' && (
         <View className="mt-10 items-center">

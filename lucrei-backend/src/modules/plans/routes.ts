@@ -396,11 +396,11 @@ export async function plansRoutes(app: FastifyInstance) {
           periodEnd,
           idempotencyKey: mercadopago.pixIdempotencyKey(subscription.id, 'initial'),
         });
-        // Consumido: só essa cobrança leva o desconto, ciclos seguintes cobram
-        // o valor cheio do plano.
-        if (subscription.pendingCouponPercentOff) {
-          await prisma.subscription.update({ where: { id: subscription.id }, data: { pendingCouponPercentOff: null } });
-        }
+        // Decisão explícita do Filipe: o desconto do Pix passou a valer em
+        // TODOS os ciclos futuros também (igual o cartão já faz), não só a
+        // 1ª cobrança - por isso NÃO zera pendingCouponPercentOff aqui.
+        // ensureCurrentPixCharge (pix-billing.ts) usa esse mesmo campo pra
+        // aplicar o desconto de novo em cada renovação de ciclo.
         // Trava o código só AQUI, numa cobrança de verdade gerada com
         // sucesso - não na hora de só escolher o plano (ver comentário
         // antigo removido acima). Quem está elegível pro teste grátis nunca

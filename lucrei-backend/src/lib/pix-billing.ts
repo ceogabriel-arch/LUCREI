@@ -133,8 +133,11 @@ export async function ensureCurrentPixCharge(userId: string): Promise<CurrentPix
 
   // Se um cupom ficou pendente na criação (usuário estava em teste grátis,
   // então a 1ª cobrança de verdade só acontece aqui, quando o trial acaba) -
-  // desconta ela e consome o cupom, pra nenhum ciclo seguinte herdar o
-  // desconto.
+  // desconta ela. Decisão explícita do Filipe: esse desconto vale em TODO
+  // ciclo futuro também (igual o cartão), não só o primeiro - por isso
+  // pendingCouponPercentOff nunca é zerado, nem aqui nem em
+  // /plans/select-pix, e cada renovação passa de novo por aqui aplicando
+  // de novo.
   const hasPendingCoupon = subscription.pendingCouponPercentOff != null;
   const amount = hasPendingCoupon
     ? applyPercentOff(Number(plan.priceCurrent), subscription.pendingCouponPercentOff!)
@@ -152,7 +155,7 @@ export async function ensureCurrentPixCharge(userId: string): Promise<CurrentPix
 
   await prisma.subscription.update({
     where: { id: subscription.id },
-    data: { status: 'past_due', ...(hasPendingCoupon ? { pendingCouponPercentOff: null } : {}) },
+    data: { status: 'past_due' },
   });
   await prisma.user.update({ where: { id: userId }, data: { subscriptionStatus: 'past_due' } });
 
