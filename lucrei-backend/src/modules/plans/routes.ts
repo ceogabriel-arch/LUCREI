@@ -129,9 +129,18 @@ export async function plansRoutes(app: FastifyInstance) {
       // por conta própria - diferente de alguém assinando pela primeira vez
       // (que ainda deve só começar o teste grátis, sem cobrar nada).
       // Calculado em cima do "user" como veio do banco, antes de qualquer
-      // escrita desta requisição.
+      // escrita desta requisição. "user.planId === plan.id" é essencial -
+      // bug reportado ao vivo: trocar de plano NO MEIO do teste (ex: Start
+      // em teste -> "Fazer upgrade" pro Pro) marcava o USUÁRIO como
+      // 'trialing' de novo no final da rota (ver mais abaixo), mesmo a
+      // ASSINATURA já tendo sido criada certinho como 'past_due' (Pro não é
+      // elegível a teste) - porque esse cálculo só olhava se a pessoa
+      // estava trialing em QUALQUER coisa, não se era o mesmo plano pedido.
       const alreadyMidTrial =
-        user.subscriptionStatus === 'trialing' && user.trialEndsAt !== null && user.trialEndsAt > new Date();
+        user.subscriptionStatus === 'trialing' &&
+        user.trialEndsAt !== null &&
+        user.trialEndsAt > new Date() &&
+        user.planId === plan.id;
 
       try {
         const upgradeCharge = await createProratedUpgradeCharge(user, plan);
