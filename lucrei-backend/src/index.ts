@@ -12,6 +12,7 @@ import staticFiles from '@fastify/static';
 import Fastify, { type FastifyError } from 'fastify';
 
 import { prisma } from './lib/prisma';
+import { startHypercashExpiryWatchdog } from './lib/hypercash-expiry-watchdog';
 import { startSyncWatchdog } from './lib/sync-watchdog';
 import { adminRoutes } from './modules/admin/routes';
 import { authRoutes } from './modules/auth/routes';
@@ -207,6 +208,11 @@ async function main() {
   // uma sincronização (já vimos uma loja real travada 7 dias por isso, sem
   // ninguém notar). Ver sync-watchdog.ts.
   startSyncWatchdog(app.log);
+
+  // Expira sozinho link de pagamento da HyperCash pendente havia mais de
+  // 24h - evita um link abandonado continuar valendo pra sempre com o
+  // preço de quando foi gerado. Ver hypercash-expiry-watchdog.ts.
+  startHypercashExpiryWatchdog(app.log);
 }
 
 main().catch((err) => {
