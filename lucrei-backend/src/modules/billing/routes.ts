@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 
 import { sendOpsAlertEmail } from '../../lib/email';
+import { verifyHypercashSignature } from '../../lib/hypercash-webhook';
 import { prisma } from '../../lib/prisma';
 import { ensureCurrentPixCharge } from '../../lib/pix-billing';
 import { formatBRL, sendPushNotification } from '../../lib/push-notifications';
@@ -248,11 +249,12 @@ export async function billingRoutes(app: FastifyInstance) {
     }
   });
 
-  // TEMPORÁRIO - só pra capturar um evento real de teste da HyperCash (botão
-  // "Testar webhook" no painel deles) e descobrir o formato exato da
-  // assinatura (header X-Hypercash-Signature), que não está documentado
-  // publicamente. Não valida nada ainda, não deve ficar assim em produção -
-  // substituir pelo handler de verdade assim que o formato for confirmado.
+  // Assinatura confirmada ao vivo contra um evento de teste real da
+  // HyperCash (o painel deles não documenta isso publicamente) - ver
+  // lib/hypercash-webhook.ts. Captura do corpo bruto necessária pra validar
+  // (mesma pegadinha do push da Shopee: "application/json" precisa de
+  // parser explícito além do "*", senão o parser padrão do Fastify toma a
+  // frente e o rawBody nunca é preenchido).
   const captureRawBody = (req: unknown, body: unknown, done: (err: Error | null, body?: unknown) => void) => {
     (req as { rawBody?: string }).rawBody = body as string;
     try {
@@ -261,47 +263,39 @@ export async function billingRoutes(app: FastifyInstance) {
       done(null, {});
     }
   };
-  // "application/json" precisa ser registrado explicitamente além do "*" - o
-  // Fastify já tem um parser padrão pra esse tipo específico, que tem
-  // prioridade sobre um catch-all e não preenche o rawBody (mesma pegadinha
-  // documentada em shops/routes.ts pro push da Shopee).
   app.addContentTypeParser('application/json', { parseAs: 'string' }, captureRawBody);
   app.addContentTypeParser('*', { parseAs: 'string' }, captureRawBody);
-  app.post('/billing/hypercash/webhook', async (request, reply) => {
+
+  app.post<{ Body: { type?: string; data?: unknown } }>('/billing/hypercash/webhook', async (request, reply) => {
     const rawBody = (request as typeof request & { rawBody?: string }).rawBody ?? '';
-    const sigHeader = (request.headers['x-hypercash-signature'] as string | undefined) ?? '';
-    const secret = process.env.HYPERCASH_WEBHOOK_SECRET ?? '';
-
-    // Cabeçalho no formato Stripe: "t=<timestamp>,v1=<hash>". Testa as
-    // combinações mais prováveis de payload assinado/chave até achar qual
-    // bate com o v1 recebido - calculado aqui dentro (não à mão a partir de
-    // um print) pra não arriscar erro de transcrição.
-    const parts = Object.fromEntries(sigHeader.split(',').map((p) => p.split('=')));
-    const timestamp = parts.t;
-    const providedV1 = parts.v1;
-
-    const attempts: Record<string, string> = {};
-    if (timestamp && secret) {
-      const keyVariants = { withPrefix: secret, noPrefix: secret.replace(/^whsec_/, '') };
-      const payloadVariants = {
-        'timestamp.body': `${timestamp}.${rawBody}`,
-        'timestampBody': `${timestamp}${rawBody}`,
-        bodyOnly: rawBody,
-      };
-      for (const [keyLabel, key] of Object.entries(keyVariants)) {
-        for (const [payloadLabel, payload] of Object.entries(payloadVariants)) {
-          attempts[`${keyLabel}+${payloadLabel}`] = crypto.createHmac('sha256', key).update(payload).digest('hex');
-        }
-      }
+    const secret = process.env.HYPERCASH_WEBHOOK_SECRET;
+    if (!secret) {
+      app.log.error('HYPERCASH_WEBHOOK_SECRET não configurada — recusando webhook da HyperCash.');
+      return reply.status(500).send({ message: 'Servidor não configurado para validar webhooks.' });
     }
-    const match = Object.entries(attempts).find(([, v]) => v === providedV1)?.[0] ?? null;
 
-    sendOpsAlertEmail(
-      app,
-      `[diagnóstico] Webhook de teste da HyperCash recebido${match ? ` - MATCH: ${match}` : ' - nenhuma combinação bateu'}`,
-      `sigHeader: ${sigHeader}\nprovidedV1: ${providedV1}\nmatch: ${match}\n\ntentativas:\n${JSON.stringify(attempts, null, 2)}\n\nheaders: ${JSON.stringify(request.headers, null, 2)}\n\nraw body: ${rawBody}`
-    ).catch(() => {});
-    app.log.info({ headers: request.headers, rawBody, attempts, match }, 'HyperCash webhook de teste recebido');
+    const sigHeader = request.headers['x-hypercash-signature'] as string | undefined;
+    if (!verifyHypercashSignature(sigHeader, rawBody, secret)) {
+      return reply.status(401).send({ message: 'Assinatura inválida.' });
+    }
+
+    const type = request.body?.type;
+
+    // Integração ainda em teste (ver conversa) - nenhum evento real de
+    // assinatura (criada/cobrança/cancelada) foi recebido ainda, só o botão
+    // "Testar webhook" com type "subscription.test". Os nomes de evento de
+    // verdade não estão documentados em lugar nenhum - loga tudo que chegar
+    // em vez de ignorar silenciosamente, até o primeiro evento real definir
+    // o que cada "type" realmente é.
+    if (type !== 'subscription.test') {
+      sendOpsAlertEmail(
+        app,
+        `[HyperCash] Evento não reconhecido recebido: ${type}`,
+        `Ainda não sabemos processar esse evento - ver código em billing/routes.ts.\n\nraw body: ${rawBody}`
+      ).catch(() => {});
+    }
+    app.log.info({ type, rawBody }, 'Webhook HyperCash recebido');
+
     return reply.send({ received: true });
   });
 }
