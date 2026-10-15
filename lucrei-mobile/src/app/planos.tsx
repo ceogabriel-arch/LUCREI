@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 
 import { GlassCard } from '@/components/glass-card';
@@ -34,6 +34,35 @@ function formatIntegrationsLimit(limit: number | null) {
   return limit === 1 ? '1 integração' : `${limit} integrações`;
 }
 
+// No navegador, window.open() só é aceito sem bloqueio de pop-up quando
+// chamado DIRETO dentro do gesto de clique - uma chamada de rede no meio
+// (criar o link de pagamento na HyperCash) é o suficiente pra passar da
+// janela que o navegador aceita como "ainda é o clique do usuário", e o
+// pop-up é bloqueado silenciosamente (reportado ao vivo: funcionava em
+// "Ver fatura", que só lê do nosso banco, mas não em "Assinar", que espera
+// a HyperCash responder). Abre uma aba em branco JÁ no clique (ainda síncrono,
+// sem bloqueio) e só troca a URL dela depois que o link estiver pronto.
+function openPendingTab(): Window | null {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return null;
+  try {
+    return window.open('', '_blank');
+  } catch {
+    return null;
+  }
+}
+
+function resolvePendingTab(pendingTab: Window | null, url: string | null) {
+  if (!url) {
+    pendingTab?.close();
+    return;
+  }
+  if (pendingTab && !pendingTab.closed) {
+    pendingTab.location.href = url;
+  } else {
+    WebBrowser.openBrowserAsync(url);
+  }
+}
+
 function PlanCard({ plan, appliedCoupon }: { plan: Plan; appliedCoupon: CouponPreview | null }) {
   const { state, selectPlan } = useAuth();
   const Colors = useColors();
@@ -64,6 +93,7 @@ function PlanCard({ plan, appliedCoupon }: { plan: Plan; appliedCoupon: CouponPr
             : 'Assinar agora';
 
   async function handlePressSubscribe() {
+    const pendingTab = openPendingTab();
     setSaving(true);
     const result = await selectPlan(plan.key, appliedCoupon?.code);
     setSaving(false);
@@ -83,23 +113,24 @@ function PlanCard({ plan, appliedCoupon }: { plan: Plan; appliedCoupon: CouponPr
             ? `Você agora está no plano ${plan.name}. Seu teste grátis de 15 dias começou.`
             : `Você agora está no plano ${plan.name}.`
       );
-      if (result.checkoutUrl) {
-        WebBrowser.openBrowserAsync(result.checkoutUrl);
-      }
+      resolvePendingTab(pendingTab, result.checkoutUrl);
     } else {
+      pendingTab?.close();
       showAlert('Não foi possível assinar', result.message);
     }
   }
 
   async function handleViewInvoice() {
     if (state.status !== 'authenticated') return;
+    const pendingTab = openPendingTab();
     setCheckingInvoice(true);
     try {
       const { checkoutUrl } = await getCheckoutUrl(state.token);
       if (checkoutUrl) {
-        WebBrowser.openBrowserAsync(checkoutUrl);
+        resolvePendingTab(pendingTab, checkoutUrl);
         return;
       }
+      pendingTab?.close();
       showAlert('Nenhuma fatura', 'Não encontramos uma fatura em aberto para esse plano.');
     } finally {
       setCheckingInvoice(false);
