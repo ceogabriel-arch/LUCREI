@@ -68,11 +68,20 @@ function PlanCard({ plan, appliedCoupon }: { plan: Plan; appliedCoupon: CouponPr
     const result = await selectPlan(plan.key, appliedCoupon?.code);
     setSaving(false);
     if (result.ok) {
+      // checkoutUrl presente = tem cobrança de verdade acontecendo agora
+      // (assinatura nova sem teste, ou pagando pra sair do teste antes do
+      // prazo) - "teste grátis começou" só é verdade quando NENHUM link de
+      // pagamento foi gerado. Antes isso olhava pro trialEndsAt, que
+      // continua preenchido mesmo pagando (status só vira 'active' depois
+      // do webhook confirmar), e mostrava a mensagem errada pra quem
+      // estava saindo do teste pra pagar.
       showAlert(
         'Plano atualizado',
-        result.trialEndsAt
-          ? `Você agora está no plano ${plan.name}. Seu teste grátis de 15 dias começou.`
-          : `Você agora está no plano ${plan.name}.`
+        result.checkoutUrl
+          ? `Abrindo o checkout pra confirmar o pagamento do plano ${plan.name}.`
+          : result.trialEndsAt
+            ? `Você agora está no plano ${plan.name}. Seu teste grátis de 15 dias começou.`
+            : `Você agora está no plano ${plan.name}.`
       );
       if (result.checkoutUrl) {
         WebBrowser.openBrowserAsync(result.checkoutUrl);
