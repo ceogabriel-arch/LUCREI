@@ -144,13 +144,32 @@ function PlanCard({ plan, appliedCoupon }: { plan: Plan; appliedCoupon: CouponPr
     // atual pra sair do teste, trocar entre planos já pagos) segue direto,
     // sem perguntar de novo.
     const wouldEndTrial = user?.subscriptionStatus === 'trialing' && user?.plan?.key !== plan.key;
-    if (wouldEndTrial) {
+    // Cupom é travado na conta PRA SEMPRE assim que usado numa cobrança de
+    // verdade (mesmo cancelando e assinando de novo depois) - pedido ao
+    // vivo: avisar antes, já que não tem como desfazer. "Testar 15 dias
+    // grátis" é o único rótulo que NÃO gera cobrança agora (começa o teste
+    // só), então não precisa avisar nesse caso - o cupom fica pendente e só
+    // é gasto de verdade quando o teste acabar ou a pessoa decidir pagar.
+    const wouldBurnCoupon = Boolean(appliedCoupon) && actionLabel !== 'Testar 15 dias grátis';
+
+    if (wouldEndTrial || wouldBurnCoupon) {
+      const parts: string[] = [];
+      if (wouldEndTrial) {
+        parts.push(
+          `Você ainda está no período de teste grátis do plano ${user?.plan?.name}. Trocar para o plano ${plan.name} encerra esse teste agora e já vai pedir o pagamento.`
+        );
+      }
+      if (wouldBurnCoupon) {
+        parts.push(
+          `O cupom ${appliedCoupon?.code} será usado nessa cobrança e não poderá ser aplicado de novo nessa conta, mesmo cancelando a assinatura depois.`
+        );
+      }
       showAlert(
-        'Encerrar teste grátis?',
-        `Você ainda está no período de teste grátis do plano ${user?.plan?.name}. Trocar para o plano ${plan.name} encerra esse teste agora e já vai pedir o pagamento.`,
+        wouldEndTrial ? 'Encerrar teste grátis?' : 'Confirmar pagamento com cupom?',
+        parts.join(' '),
         [
           { text: 'Voltar', style: 'cancel' },
-          { text: 'Encerrar e pagar', style: 'destructive', onPress: doSubscribe },
+          { text: wouldEndTrial ? 'Encerrar e pagar' : 'Confirmar', style: 'destructive', onPress: doSubscribe },
         ]
       );
       return;
