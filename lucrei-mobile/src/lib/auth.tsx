@@ -3,7 +3,6 @@ import { createContext, type PropsWithChildren, useCallback, useContext, useEffe
 import {
   ApiError,
   type AuthUser,
-  type PixCharge,
   type UserPlan,
   cancelPlan as apiCancelPlan,
   changePassword as apiChangePassword,
@@ -12,7 +11,6 @@ import {
   login as apiLogin,
   me as apiMe,
   selectPlan as apiSelectPlan,
-  selectPlanPix as apiSelectPlanPix,
   signup as apiSignup,
   updateDailyGoal as apiUpdateDailyGoal,
   updateName as apiUpdateName,
@@ -27,10 +25,7 @@ type AuthState =
 
 type AuthResult = { ok: true } | { ok: false; message: string };
 type SelectPlanResult =
-  | { ok: true; checkoutUrl: string | null; trialEndsAt: string | null; pix: PixCharge | null; plan: UserPlan | null }
-  | { ok: false; message: string };
-type SelectPlanPixResult =
-  | { ok: true; pix: PixCharge | null; plan: UserPlan | null }
+  | { ok: true; checkoutUrl: string | null; trialEndsAt: string | null; plan: UserPlan | null }
   | { ok: false; message: string };
 
 type AuthContextValue = {
@@ -44,7 +39,6 @@ type AuthContextValue = {
   changePassword: (currentPassword: string | undefined, newPassword: string) => Promise<AuthResult>;
   deleteAccount: (password?: string) => Promise<AuthResult>;
   selectPlan: (key: string, couponCode?: string) => Promise<SelectPlanResult>;
-  selectPlanPix: (key: string, couponCode?: string) => Promise<SelectPlanPixResult>;
   cancelPlan: () => Promise<AuthResult>;
   refreshUser: () => Promise<void>;
 };
@@ -215,29 +209,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
     async (key: string, couponCode?: string): Promise<SelectPlanResult> => {
       if (!token) return { ok: false, message: 'Não autenticado.' };
       try {
-        const { checkoutUrl, pix, ...user } = await apiSelectPlan(token, key, couponCode);
+        const { checkoutUrl, ...user } = await apiSelectPlan(token, key, couponCode);
         setState({ status: 'authenticated', token, user });
         return {
           ok: true,
           checkoutUrl: checkoutUrl ?? null,
           trialEndsAt: user.trialEndsAt,
-          pix: pix ?? null,
           plan: user.plan,
         };
-      } catch (err) {
-        return { ok: false, message: err instanceof ApiError ? err.message : 'Algo deu errado.' };
-      }
-    },
-    [token]
-  );
-
-  const selectPlanPix = useCallback(
-    async (key: string, couponCode?: string): Promise<SelectPlanPixResult> => {
-      if (!token) return { ok: false, message: 'Não autenticado.' };
-      try {
-        const { pix, ...user } = await apiSelectPlanPix(token, key, couponCode);
-        setState({ status: 'authenticated', token, user });
-        return { ok: true, pix, plan: user.plan };
       } catch (err) {
         return { ok: false, message: err instanceof ApiError ? err.message : 'Algo deu errado.' };
       }
@@ -279,7 +258,6 @@ export function AuthProvider({ children }: PropsWithChildren) {
       changePassword,
       deleteAccount,
       selectPlan,
-      selectPlanPix,
       cancelPlan,
       refreshUser,
     }),
@@ -294,7 +272,6 @@ export function AuthProvider({ children }: PropsWithChildren) {
       changePassword,
       deleteAccount,
       selectPlan,
-      selectPlanPix,
       cancelPlan,
       refreshUser,
     ]

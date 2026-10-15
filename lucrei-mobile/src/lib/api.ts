@@ -464,10 +464,10 @@ export function getPlans() {
 }
 
 export function selectPlan(token: string, key: string, couponCode?: string) {
-  // checkoutUrl vem preenchido no fluxo normal; pix vem no lugar quando é um
-  // upgrade de plano anual no meio do ciclo (cobrança proporcional avulsa) -
-  // nesse caso o plano só muda depois que o Pix for pago, não nessa resposta.
-  return request<AuthUser & { checkoutUrl?: string | null; pix?: PixCharge | null }>('/plans/select', {
+  // checkoutUrl vem preenchido quando precisa pagar agora (abre no
+  // navegador - o cliente escolhe Pix ou cartão na página da HyperCash);
+  // null quando é um teste grátis recém-começado, sem nada a cobrar ainda.
+  return request<AuthUser & { checkoutUrl: string | null }>('/plans/select', {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify({ key, couponCode }),
@@ -480,31 +480,18 @@ export function getCheckoutUrl(token: string) {
   });
 }
 
+// Não usado mais em nenhuma chamada (migração Mercado Pago -> HyperCash, ver
+// conversa) - mantido só porque pix-payment-modal.tsx ainda importa o tipo
+// (componente deixado no repo sem uso, não apagado).
 export type PixCharge = { qrCode: string; qrCodeBase64: string; expiresAt: string; amount: number };
-
-export function selectPlanPix(token: string, key: string, couponCode?: string) {
-  return request<AuthUser & { pix: PixCharge | null }>('/plans/select-pix', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
-    body: JSON.stringify(couponCode ? { key, couponCode } : { key }),
-  });
-}
 
 export type CouponPreview = { code: string; percentOff: number };
 
-// Cupom só se aplica ao fluxo Pix (ver comentário em Subscription no
-// backend) - por isso não existe equivalente pra selectPlan (cartão).
 export function validateCoupon(token: string, code: string) {
   return request<CouponPreview>('/coupons/validate', {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify({ code }),
-  });
-}
-
-export function getCurrentPixCharge(token: string) {
-  return request<{ pix: PixCharge | null }>('/billing/pix/current', {
-    headers: { Authorization: `Bearer ${token}` },
   });
 }
 

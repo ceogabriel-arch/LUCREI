@@ -5,18 +5,15 @@ import { ActivityIndicator, Linking, Pressable, ScrollView, Text, TextInput, Vie
 import * as WebBrowser from 'expo-web-browser';
 
 import { GlassCard } from '@/components/glass-card';
-import { PixPaymentModal } from '@/components/pix-payment-modal';
 import { Screen } from '@/components/screen';
 import {
   getCheckoutUrl,
-  getCurrentPixCharge,
   getPlans,
   validateCoupon,
   ApiError,
   type BillingPeriod,
   type CouponPreview,
   type Plan,
-  type PixCharge,
 } from '@/lib/api';
 import { showAlert } from '@/lib/alert';
 import { useAuth } from '@/lib/auth';
@@ -38,15 +35,10 @@ function formatIntegrationsLimit(limit: number | null) {
 }
 
 function PlanCard({ plan, appliedCoupon }: { plan: Plan; appliedCoupon: CouponPreview | null }) {
-  const { state, selectPlan, selectPlanPix } = useAuth();
+  const { state, selectPlan } = useAuth();
   const Colors = useColors();
-  const [savingMethod, setSavingMethod] = useState<'card' | 'pix' | null>(null);
+  const [saving, setSaving] = useState(false);
   const [checkingInvoice, setCheckingInvoice] = useState(false);
-  const [pixModal, setPixModal] = useState<PixCharge | null>(null);
-  // Preenchido só quando o Pix aberto é um upgrade proporcional (o plano
-  // ainda não mudou) - avisa o modal a checar isso em vez do status da
-  // assinatura pra saber quando o pagamento confirmou.
-  const [pixModalUpgradeTarget, setPixModalUpgradeTarget] = useState<string | null>(null);
   const user = state.status === 'authenticated' ? state.user : null;
   const effectivePercentOff = appliedCoupon?.percentOff ?? user?.pendingCouponPercentOff ?? null;
   const isCustomPricing = plan.priceCurrent === null;
@@ -71,19 +63,11 @@ function PlanCard({ plan, appliedCoupon }: { plan: Plan; appliedCoupon: CouponPr
             ? 'Testar 15 dias grátis'
             : 'Assinar agora';
 
-  async function handlePressCard() {
-    setSavingMethod('card');
+  async function handlePressSubscribe() {
+    setSaving(true);
     const result = await selectPlan(plan.key, appliedCoupon?.code);
-    setSavingMethod(null);
+    setSaving(false);
     if (result.ok) {
-      if (result.pix) {
-        // Upgrade de plano anual no meio do ciclo - precisa pagar a diferença
-        // proporcional antes do plano mudar de verdade. Se o plano na
-        // resposta ainda não é o escolhido, é isso que está acontecendo.
-        setPixModalUpgradeTarget(result.plan?.key !== plan.key ? plan.key : null);
-        setPixModal(result.pix);
-        return;
-      }
       showAlert(
         'Plano atualizado',
         result.trialEndsAt
@@ -98,25 +82,6 @@ function PlanCard({ plan, appliedCoupon }: { plan: Plan; appliedCoupon: CouponPr
     }
   }
 
-  async function handlePressPix() {
-    setSavingMethod('pix');
-    const result = await selectPlanPix(plan.key, appliedCoupon?.code);
-    setSavingMethod(null);
-    if (result.ok) {
-      if (result.pix) {
-        setPixModalUpgradeTarget(result.plan?.key !== plan.key ? plan.key : null);
-        setPixModal(result.pix);
-      } else {
-        showAlert(
-          'Plano atualizado',
-          `Você agora está no plano ${plan.name}. Seu teste grátis de 15 dias começou.`
-        );
-      }
-    } else {
-      showAlert('Não foi possível assinar', result.message);
-    }
-  }
-
   async function handleViewInvoice() {
     if (state.status !== 'authenticated') return;
     setCheckingInvoice(true);
@@ -124,12 +89,6 @@ function PlanCard({ plan, appliedCoupon }: { plan: Plan; appliedCoupon: CouponPr
       const { checkoutUrl } = await getCheckoutUrl(state.token);
       if (checkoutUrl) {
         WebBrowser.openBrowserAsync(checkoutUrl);
-        return;
-      }
-      const { pix } = await getCurrentPixCharge(state.token);
-      if (pix) {
-        setPixModalUpgradeTarget(null);
-        setPixModal(pix);
         return;
       }
       showAlert('Nenhuma fatura', 'Não encontramos uma fatura em aberto para esse plano.');
@@ -221,47 +180,25 @@ function PlanCard({ plan, appliedCoupon }: { plan: Plan; appliedCoupon: CouponPr
         </Pressable>
       ) : (
         <View className="mt-5">
-          {(!isCurrent || isCurrentAndTrialing) && (
-            <Text className="mb-2 text-center text-xs font-medium text-lucrei-textMuted">{actionLabel}</Text>
-          )}
-          <View className="flex-row gap-2.5">
-            <Pressable
-              onPress={handlePressCard}
-              disabled={(isCurrent && !isCurrentAndTrialing) || savingMethod !== null}
-              className="flex-1 flex-row items-center justify-center gap-1.5 rounded-xl bg-lucrei-gold py-3"
-              style={{ opacity: isCurrent && !isCurrentAndTrialing ? 0.5 : savingMethod ? 0.7 : 1 }}>
-              {savingMethod === 'card' ? (
-                <ActivityIndicator size="small" color={Colors.onGold} />
-              ) : (
-                <>
-                  <Ionicons name="card-outline" size={16} color={Colors.onGold} />
-                  <Text className="text-sm font-semibold text-lucrei-onGold">Cartão</Text>
-                </>
-              )}
-            </Pressable>
-            <Pressable
-              onPress={handlePressPix}
-              disabled={(isCurrent && !isCurrentAndTrialing) || savingMethod !== null}
-              className="flex-1 flex-row items-center justify-center gap-1.5 rounded-xl border border-lucrei-border py-3"
-              style={{ opacity: isCurrent && !isCurrentAndTrialing ? 0.5 : savingMethod ? 0.7 : 1 }}>
-              {savingMethod === 'pix' ? (
-                <ActivityIndicator size="small" color={Colors.gold} />
-              ) : (
-                <>
-                  <Ionicons name="qr-code-outline" size={16} color={Colors.gold} />
-                  <Text className="text-sm font-semibold text-lucrei-text">Pix</Text>
-                </>
-              )}
-            </Pressable>
-          </View>
+          <Pressable
+            onPress={handlePressSubscribe}
+            disabled={(isCurrent && !isCurrentAndTrialing) || saving}
+            className="flex-row items-center justify-center gap-1.5 rounded-xl bg-lucrei-gold py-3"
+            style={{ opacity: isCurrent && !isCurrentAndTrialing ? 0.5 : saving ? 0.7 : 1 }}>
+            {saving ? (
+              <ActivityIndicator size="small" color={Colors.onGold} />
+            ) : (
+              <Text className="text-sm font-semibold text-lucrei-onGold">{actionLabel}</Text>
+            )}
+          </Pressable>
         </View>
       )}
 
       {!isCustomPricing && (
         <Text className="mt-3 text-[11px] leading-4 text-lucrei-textMuted">
           {plan.billingPeriod === 'annual'
-            ? '*no cartão a cobrança se repete todo ano até você cancelar. No Pix, um código novo é gerado a cada ano.'
-            : '*no cartão a cobrança se repete todo mês até você cancelar. No Pix, um código novo é gerado a cada mês.'}
+            ? '*a cobrança se repete todo ano até você cancelar.'
+            : '*a cobrança se repete todo mês até você cancelar.'}
         </Text>
       )}
 
@@ -276,16 +213,6 @@ function PlanCard({ plan, appliedCoupon }: { plan: Plan; appliedCoupon: CouponPr
           )}
         </Pressable>
       )}
-
-      <PixPaymentModal
-        visible={pixModal !== null}
-        onClose={() => {
-          setPixModal(null);
-          setPixModalUpgradeTarget(null);
-        }}
-        pix={pixModal}
-        expectedPlanKey={pixModalUpgradeTarget ?? undefined}
-      />
     </GlassCard>
   );
 }

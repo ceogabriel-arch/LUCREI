@@ -4,38 +4,36 @@ import * as mercadopago from '../mercadopago-client';
 import { prisma } from './prisma';
 
 /**
- * Trocar de método de pagamento (cartão <-> Pix) só devia deixar uma
- * assinatura ativa por vez - sem isso, a antiga continua cobrando sozinha
- * (o cartão renova automático, o Pix gera um novo ciclo sempre que a tela de
- * planos é aberta) enquanto a nova também cobra, dobrando o valor pago.
- */
-/**
+ * Rede de segurança pra quem ainda tinha uma assinatura presa na Mercado
+ * Pago de antes da migração pra HyperCash (ver conversa) - sem isso, ela
+ * continuaria cobrando sozinha (cartão renova automático) ao mesmo tempo
+ * que a assinatura nova na HyperCash também cobra. Não deveria mais
+ * acontecer de verdade (nenhuma assinatura mercado_pago/mercado_pago_pix
+ * ativa no banco na data da migração), mas custa pouco manter como
+ * segurança pra conta antiga que reapareça.
+ *
  * Lança se a assinatura antiga era por cartão e a Mercado Pago recusar
  * cancelar de verdade - propositalmente barulhento, porque marcar como
  * cancelado no nosso banco sem o cartão ter sido cancelado de verdade
  * recria o exato problema de cobrança dupla que essa função existe pra
  * evitar (a chamadora deve devolver um erro pro usuário tentar de novo, em
- * vez de seguir criando uma segunda assinatura por cima da zumbi).
+ * vez de seguir criando uma assinatura nova por cima da zumbi).
  */
-export async function cancelOtherProviderSubscription(
-  app: FastifyInstance,
-  userId: string,
-  keepProvider: 'mercado_pago' | 'mercado_pago_pix'
-) {
-  const otherProvider = keepProvider === 'mercado_pago' ? 'mercado_pago_pix' : 'mercado_pago';
-  const existing = await prisma.subscription.findFirst({
-    where: { userId, provider: otherProvider, status: { not: 'canceled' } },
-    orderBy: { createdAt: 'desc' },
+export async function cancelLegacyMercadoPagoSubscription(app: FastifyInstance, userId: string) {
+  const legacy = await prisma.subscription.findMany({
+    where: { userId, provider: { in: ['mercado_pago', 'mercado_pago_pix'] }, status: { not: 'canceled' } },
   });
-  if (!existing) return;
+  if (legacy.length === 0) return;
 
-  if (existing.provider === 'mercado_pago' && existing.providerSubscriptionId) {
-    try {
-      await mercadopago.cancelPreapproval(existing.providerSubscriptionId);
-    } catch (err) {
-      app.log.error(err);
-      throw new Error('Não foi possível cancelar sua assinatura anterior na Mercado Pago.');
+  for (const subscription of legacy) {
+    if (subscription.provider === 'mercado_pago' && subscription.providerSubscriptionId) {
+      try {
+        await mercadopago.cancelPreapproval(subscription.providerSubscriptionId);
+      } catch (err) {
+        app.log.error(err);
+        throw new Error('Não foi possível cancelar sua assinatura anterior na Mercado Pago.');
+      }
     }
+    await prisma.subscription.update({ where: { id: subscription.id }, data: { status: 'canceled' } });
   }
-  await prisma.subscription.update({ where: { id: existing.id }, data: { status: 'canceled' } });
 }

@@ -1,12 +1,18 @@
 import type { FastifyInstance } from 'fastify';
 import type { Plan, User } from '@prisma/client';
 
-import * as mercadopago from '../../mercadopago-client';
-import { cancelOtherProviderSubscription } from '../../lib/cancel-other-provider-subscription';
+import {
+  cancelSubscription as cancelHypercashSubscription,
+  createPaymentLink,
+  deactivatePaymentLink,
+  getSubscriptionByPaymentLinkId,
+  priceToCents,
+} from '../../hypercash-client';
+import { cancelLegacyMercadoPagoSubscription } from '../../lib/cancel-other-provider-subscription';
 import { applyPercentOff, validateCoupon } from '../../lib/coupons';
 import { sendOpsAlertEmail } from '../../lib/email';
 import { prisma } from '../../lib/prisma';
-import { addDays, createOrGetPixCharge, CYCLE_DAYS_BY_PERIOD } from '../../lib/pix-billing';
+import { addDays } from '../../lib/pix-billing';
 import { createProratedUpgradeCharge, findActivePaidCycle } from '../../lib/plan-upgrade';
 import { getSalesLimitStatus } from '../../lib/sales-usage';
 import { serializeUser, userWithPlan } from './serialize-user';
@@ -25,17 +31,6 @@ const selectPlanSchema = {
 
 type SelectPlanBody = { key: string; couponCode?: string };
 
-const selectPixPlanSchema = {
-  type: 'object',
-  required: ['key'],
-  properties: {
-    key: { type: 'string', minLength: 1 },
-    couponCode: { type: 'string' },
-  },
-} as const;
-
-type SelectPixPlanBody = { key: string; couponCode?: string };
-
 const validateCouponSchema = {
   type: 'object',
   required: ['code'],
@@ -48,19 +43,17 @@ type ValidateCouponBody = { code: string };
 
 // Uma loja Shopee que já consumiu o teste grátis (em qualquer conta Lucrei -
 // o shopeeShopId é único e persiste ao trocar de dono) não libera um novo
-// período de teste, mesmo numa conta nova. Compartilhado pelos fluxos de
-// cartão e Pix.
+// período de teste, mesmo numa conta nova.
 export async function resolveTrial(user: User, plan: Plan) {
   const now = new Date();
 
   // Teste grátis já em andamento (trialEndsAt preenchido e no futuro) -
-  // trocar de plano ou de forma de pagamento (Pix/Cartão) NO MEIO do teste
-  // não pode encerrar nem reiniciar ele, só reservar o que vai cobrar
-  // quando o prazo ORIGINAL acabar. Bug reportado ao vivo: escolher
-  // Pix/Cartão durante o teste virava 'past_due' na hora, cortando o teste
-  // antes do prazo - porque trialEndsAt já preenchido também dispara
-  // "alreadyUsedTrial" abaixo, uma regra pensada só pra impedir REINICIAR
-  // um teste já encerrado, não pra isso.
+  // trocar de plano NO MEIO do teste não pode encerrar nem reiniciar ele, só
+  // reservar o que vai cobrar quando o prazo ORIGINAL acabar. Bug reportado
+  // ao vivo: escolher um plano durante o teste virava 'past_due' na hora,
+  // cortando o teste antes do prazo - porque trialEndsAt já preenchido
+  // também dispara "alreadyUsedTrial" abaixo, uma regra pensada só pra
+  // impedir REINICIAR um teste já encerrado, não pra isso.
   if (user.subscriptionStatus === 'trialing' && user.trialEndsAt && user.trialEndsAt > now) {
     const remainingDays = Math.max(1, Math.ceil((user.trialEndsAt.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)));
     return { eligibleForTrial: true, trialEndsAt: user.trialEndsAt, trialDays: remainingDays };
@@ -113,14 +106,6 @@ export async function plansRoutes(app: FastifyInstance) {
         return reply.status(400).send({ message: 'Este plano é sob consulta. Fale com nosso time de vendas.' });
       }
 
-      // Mesma validação da rota de Pix - só vale pra uma assinatura NOVA
-      // (ver mais abaixo: não entra no caminho de upgrade de quem já é
-      // assinante pagante no cartão). No cartão o desconto fica valendo em
-      // TODAS as cobranças futuras, não só a primeira (diferente do Pix,
-      // que é uma cobrança avulsa por ciclo) - decisão explícita do
-      // Filipe, porque mudar o valor recorrente depois exigiria um
-      // segundo passo via webhook pra "voltar" o preço, mais um jeito de
-      // dar errado sem necessidade.
       let couponPercentOff: number | null = null;
       let couponId: string | null = null;
       if (request.body.couponCode) {
@@ -134,10 +119,18 @@ export async function plansRoutes(app: FastifyInstance) {
 
       const user = await prisma.user.findUniqueOrThrow({ where: { id: request.user.sub }, include: { plan: true } });
 
+      // Cliente já DENTRO de um teste grátis em andamento, escolhendo pagar
+      // por conta própria - diferente de alguém assinando pela primeira vez
+      // (que ainda deve só começar o teste grátis, sem cobrar nada).
+      // Calculado em cima do "user" como veio do banco, antes de qualquer
+      // escrita desta requisição.
+      const alreadyMidTrial =
+        user.subscriptionStatus === 'trialing' && user.trialEndsAt !== null && user.trialEndsAt > new Date();
+
       try {
         const upgradeCharge = await createProratedUpgradeCharge(user, plan);
         if (upgradeCharge) {
-          return reply.send({ ...await serializeUser(user), pix: upgradeCharge });
+          return reply.send({ ...(await serializeUser(user)), checkoutUrl: upgradeCharge.checkoutUrl });
         }
       } catch (err) {
         app.log.error(err);
@@ -153,222 +146,48 @@ export async function plansRoutes(app: FastifyInstance) {
         }
       }
 
-      // Trocar pra cartão com uma assinatura Pix ainda ativa cobraria nos dois
-      // ao mesmo tempo (o Pix continuaria gerando cobrança de ciclo sozinho).
+      // Segurança pra conta que ainda tivesse uma assinatura presa na
+      // Mercado Pago de antes da migração pra HyperCash.
       try {
-        await cancelOtherProviderSubscription(app, user.id, 'mercado_pago');
+        await cancelLegacyMercadoPagoSubscription(app, user.id);
       } catch (err) {
         app.log.error(err);
         return reply.status(502).send({ message: 'Não foi possível cancelar sua assinatura anterior. Tente novamente em instantes.' });
       }
 
-      const existingSubscription = await prisma.subscription.findFirst({
-        where: { userId: user.id, provider: 'mercado_pago' },
+      let subscription = await prisma.subscription.findFirst({
+        where: { userId: user.id, provider: 'hypercash', status: { not: 'canceled' } },
         orderBy: { createdAt: 'desc' },
       });
 
-      // Retry de uma requisição que já tinha ido pra frente antes (timeout no
-      // cliente, duplo toque) - o plano já é este e já existe uma assinatura
-      // pra ele, então só devolve o que já existe em vez de criar uma
-      // segunda assinatura de verdade na Mercado Pago.
-      if (existingSubscription && existingSubscription.status !== 'canceled' && user.plan?.id === plan.id) {
-        return reply.send({ ...await serializeUser(user), checkoutUrl: existingSubscription.lastInvoiceUrl });
-      }
-
-      // Só reaproveita a assinatura existente (só troca o valor) se o ciclo de
-      // cobrança continuar o mesmo - mensal->anual (ou vice-versa) precisa de
-      // uma assinatura nova, porque muda a frequência de cobrança na Mercado
-      // Pago, não só o valor.
-      const sameBillingPeriod = user.plan?.billingPeriod === plan.billingPeriod;
-
-      let checkoutUrl: string | null = null;
-      // Preservado por padrão - no caminho de upgrade (assinatura já existe),
-      // o trial (se houver) já foi travado na Mercado Pago na criação
-      // original e não muda por trocar de plano.
-      let trialEndsAt = user.trialEndsAt;
-      // null = não mexe no subscriptionStatus atual do usuário (caminho de
-      // só trocar o valor de uma assinatura já ativa/paga não muda o status).
-      let nextStatus: 'trialing' | 'past_due' | null = null;
-
-      try {
-        const description = `Lucrei - Plano ${plan.name}`;
-
-        if (existingSubscription?.providerSubscriptionId && existingSubscription.status !== 'canceled' && sameBillingPeriod) {
-          await mercadopago.updatePreapprovalValue(
-            existingSubscription.providerSubscriptionId,
-            Number(plan.priceCurrent)
-          );
-          checkoutUrl = existingSubscription.lastInvoiceUrl;
-        } else {
-          if (existingSubscription?.providerSubscriptionId && existingSubscription.status !== 'canceled') {
-            try {
-              await mercadopago.cancelPreapproval(existingSubscription.providerSubscriptionId);
-            } catch (err) {
-              app.log.error(err);
-            }
-            await prisma.subscription.update({ where: { id: existingSubscription.id }, data: { status: 'canceled' } });
-          }
-
-          const trial = await resolveTrial(user, plan);
-          trialEndsAt = trial.trialEndsAt;
-          const trialDays = trial.trialDays;
-          // Sem trial, a cobrança já sai imediata na criação - 'past_due' até
-          // o webhook confirmar o pagamento, igual o fluxo de Pix já faz.
-          nextStatus = trialDays > 0 ? 'trialing' : 'past_due';
-          const cardAmount = couponPercentOff
-            ? applyPercentOff(Number(plan.priceCurrent), couponPercentOff)
-            : Number(plan.priceCurrent);
-          const preapproval = await mercadopago.createPreapproval({
-            reason: description,
-            payerEmail: user.email,
-            value: cardAmount,
-            trialDays,
-            externalReference: user.id,
-            backUrl: `${BACK_URL}/planos`,
-            frequencyMonths: plan.billingPeriod === 'annual' ? 12 : 1,
-          });
-          checkoutUrl = preapproval.init_point;
-
-          await prisma.subscription.create({
-            data: {
-              userId: user.id,
-              provider: 'mercado_pago',
-              providerSubscriptionId: preapproval.id,
-              status: nextStatus,
-              currentPeriodEnd: trialEndsAt,
-              lastInvoiceUrl: checkoutUrl,
-            },
-          });
-
-          // Trava o código só aqui, numa assinatura de verdade criada com
-          // sucesso na Mercado Pago - mesmo raciocínio do fix de Pix (ver
-          // commit anterior): escolher o plano sozinho (ex: elegível pro
-          // teste grátis) nunca deveria gastar o cupom.
-          if (couponId) {
-            await prisma.coupon.update({ where: { id: couponId }, data: { redeemedCount: { increment: 1 } } });
-            await prisma.couponRedemption.create({ data: { couponId, userId: user.id } });
-          }
-
-          if (trialDays > 0) {
-            await markShopsTrialConsumed(user.id);
-          }
-        }
-      } catch (err) {
-        app.log.error(err);
-        // Achado ao vivo (14/10): a conta da Mercado Pago ficou sem permissão
-        // pra criar assinatura recorrente ("At least one policy returned
-        // UNAUTHORIZED") e ninguém soube até um cliente tentar pagar e eu
-        // precisar investigar na mão. Mesmo padrão de alerta que o webhook já
-        // usa - não trava a resposta no envio do e-mail.
-        sendOpsAlertEmail(
-          app,
-          'Falha ao criar cobrança de cartão (Mercado Pago)',
-          `userId: ${request.user.sub}\nplano: ${plan.key}\nerro: ${err instanceof Error ? err.message : String(err)}`
-        ).catch(() => {});
-        return reply.status(502).send({ message: 'Não foi possível configurar a cobrança agora. Tente novamente em instantes.' });
-      }
-
-      const updated = await prisma.user.update({
-        where: { id: user.id },
-        data: { planId: plan.id, subscriptionStatus: nextStatus ?? user.subscriptionStatus, trialEndsAt },
-        include: userWithPlan,
-      });
-
-      return reply.send({ ...await serializeUser(updated), checkoutUrl });
-    }
-  );
-
-  app.post<{ Body: SelectPixPlanBody }>(
-    '/plans/select-pix',
-    { onRequest: [app.authenticate], schema: { body: selectPixPlanSchema } },
-    async (request, reply) => {
-      const plan = await prisma.plan.findUnique({ where: { key: request.body.key } });
-      if (!plan) {
-        return reply.status(404).send({ message: 'Plano não encontrado.' });
-      }
-      if (plan.priceCurrent === null) {
-        return reply.status(400).send({ message: 'Este plano é sob consulta. Fale com nosso time de vendas.' });
-      }
-
-      // Validado de novo aqui (não só confia no /coupons/validate anterior) -
-      // o código pode ter expirado ou batido o limite de usos entre a
-      // prévia e o clique de fato em "Pix".
-      let couponPercentOff: number | null = null;
-      let couponId: string | null = null;
-      if (request.body.couponCode) {
-        const validation = await validateCoupon(request.body.couponCode, request.user.sub);
-        if (!validation.ok) {
-          return reply.status(400).send({ message: validation.message });
-        }
-        couponPercentOff = validation.coupon.percentOff;
-        couponId = validation.coupon.id;
-      }
-
-      const user = await prisma.user.findUniqueOrThrow({ where: { id: request.user.sub }, include: { plan: true } });
-
-      // Cliente já DENTRO de um teste grátis em andamento, escolhendo pagar
-      // por conta própria - diferente de alguém clicando Pix pela primeira
-      // vez (que ainda deve só começar o teste grátis, sem cobrar nada).
-      // Calculado em cima do "user" como veio do banco, antes de qualquer
-      // escrita desta requisição - ver uso mais abaixo.
-      const alreadyMidTrial =
-        user.subscriptionStatus === 'trialing' && user.trialEndsAt !== null && user.trialEndsAt > new Date();
-
-      try {
-        const upgradeCharge = await createProratedUpgradeCharge(user, plan);
-        if (upgradeCharge) {
-          return reply.send({ ...await serializeUser(user), pix: upgradeCharge });
-        }
-      } catch (err) {
-        app.log.error(err);
-        return reply.status(502).send({ message: 'Não foi possível calcular o upgrade agora. Tente novamente em instantes.' });
-      }
-
-      if (user.plan && user.plan.id !== plan.id) {
-        const activeCycle = await findActivePaidCycle(user);
-        if (activeCycle) {
-          return reply.status(400).send({
-            message: `Seu plano atual já está pago até ${new Intl.DateTimeFormat('pt-BR').format(activeCycle.currentPeriodEnd)}. Pra não perder esse período, a troca para um plano de valor igual ou menor via Pix só é possível depois da renovação.`,
-          });
-        }
-      }
-
-      // Trocar pro Pix com uma assinatura de cartão ainda ativa continuaria
-      // cobrando no cartão automaticamente enquanto o Pix também cobra.
-      try {
-        await cancelOtherProviderSubscription(app, user.id, 'mercado_pago_pix');
-      } catch (err) {
-        app.log.error(err);
-        return reply.status(502).send({ message: 'Não foi possível cancelar sua assinatura anterior. Tente novamente em instantes.' });
-      }
-
-      const existingPixSubscription = await prisma.subscription.findFirst({
-        where: { userId: user.id, provider: 'mercado_pago_pix', status: { not: 'canceled' } },
-        orderBy: { createdAt: 'desc' },
-      });
-
-      let subscription = existingPixSubscription;
       let trialEndsAt = user.trialEndsAt;
 
-      // Reaproveita a assinatura Pix já existente se for pro MESMO plano
-      // (retry depois de um timeout, duplo toque em "Pix") - assim a chave
-      // de idempotência (baseada no id da assinatura) protege de verdade
-      // contra duplicar a cobrança. Pedir um plano DIFERENTE cancela a
-      // anterior, senão ela fica solta com uma cobrança pendente que
-      // poderia reativar sozinha se fosse paga depois.
-      if (!subscription || user.plan?.id !== plan.id) {
-        if (subscription) {
-          await prisma.subscription.update({ where: { id: subscription.id }, data: { status: 'canceled' } });
+      // Plano diferente do que a assinatura existente cobre - desativa o
+      // link antigo (se já tinha algum gerado) e cancela a assinatura local,
+      // começando do zero pro plano novo. Mesmo plano = reaproveita (retry,
+      // duplo toque, ou voltando a pagar depois de past_due).
+      if (subscription && user.plan?.id !== plan.id) {
+        if (subscription.providerSubscriptionId) {
+          try {
+            await deactivatePaymentLink(subscription.providerSubscriptionId);
+          } catch (err) {
+            app.log.error(err);
+          }
         }
+        await prisma.subscription.update({ where: { id: subscription.id }, data: { status: 'canceled' } });
+        subscription = null;
+      }
 
+      if (!subscription) {
         const trial = await resolveTrial(user, plan);
         trialEndsAt = trial.trialEndsAt;
+
         subscription = await prisma.subscription.create({
           data: {
             userId: user.id,
-            provider: 'mercado_pago_pix',
+            provider: 'hypercash',
             status: trial.eligibleForTrial ? 'trialing' : 'past_due',
-            currentPeriodEnd: trial.trialEndsAt,
+            currentPeriodEnd: trial.eligibleForTrial ? trial.trialEndsAt : null,
             pendingCouponPercentOff: couponPercentOff,
           },
         });
@@ -380,82 +199,88 @@ export async function plansRoutes(app: FastifyInstance) {
 
       // Só entra em "teste grátis, sem cobrar nada" quando NÃO é alguém já
       // em teste escolhendo pagar - essa pessoa cai direto pra geração do
-      // Pix de verdade logo abaixo, com o status continuando 'trialing' até
-      // o pagamento confirmar (ver reply.send no fim da função).
+      // link de pagamento de verdade logo abaixo, com o status continuando
+      // 'trialing' até o pagamento confirmar via webhook.
       if (subscription.status === 'trialing' && !alreadyMidTrial) {
         const updated = await prisma.user.update({
           where: { id: user.id },
           data: { planId: plan.id, subscriptionStatus: 'trialing', trialEndsAt },
           include: userWithPlan,
         });
-        return reply.send({ ...await serializeUser(updated), pix: null });
+        return reply.send({ ...(await serializeUser(updated)), checkoutUrl: null });
       }
 
-      const periodStart = new Date();
-      const periodEnd = addDays(periodStart, CYCLE_DAYS_BY_PERIOD[plan.billingPeriod]);
-      const amount = subscription.pendingCouponPercentOff
-        ? applyPercentOff(Number(plan.priceCurrent), subscription.pendingCouponPercentOff)
-        : Number(plan.priceCurrent);
-      let charge;
-      try {
-        charge = await createOrGetPixCharge({
-          subscriptionId: subscription.id,
-          amount,
-          description: `Lucrei - Plano ${plan.name}`,
-          payerEmail: user.email,
-          periodStart,
-          periodEnd,
-          idempotencyKey: mercadopago.pixIdempotencyKey(subscription.id, 'initial'),
+      // Reaproveita o link já gerado numa tentativa anterior pro MESMO plano
+      // (retry/duplo toque) - exceto quando um cupom está sendo aplicado
+      // AGORA, que precisa de um link novo com o valor certo (o antigo não
+      // tem como ter o desconto aplicado retroativamente).
+      const needsNewLink = !subscription.providerSubscriptionId || !subscription.lastInvoiceUrl || couponId !== null;
+
+      let checkoutUrl: string | null;
+      if (!needsNewLink) {
+        checkoutUrl = subscription.lastInvoiceUrl;
+      } else {
+        if (subscription.providerSubscriptionId && couponId !== null) {
+          try {
+            await deactivatePaymentLink(subscription.providerSubscriptionId);
+          } catch (err) {
+            app.log.error(err);
+          }
+        }
+
+        const effectivePercentOff = couponPercentOff ?? subscription.pendingCouponPercentOff;
+        const amount = effectivePercentOff != null ? applyPercentOff(Number(plan.priceCurrent), effectivePercentOff) : Number(plan.priceCurrent);
+
+        let link;
+        try {
+          link = await createPaymentLink({
+            name: `Lucrei - Plano ${plan.name}`,
+            priceCents: priceToCents(amount),
+            isRecurring: true,
+            frequency: plan.billingPeriod === 'annual' ? 'annual' : 'monthly',
+            successRedirectUrl: `${BACK_URL}/planos`,
+          });
+          checkoutUrl = link.checkoutUrl;
+        } catch (err) {
+          app.log.error(err);
+          // Achado ao vivo (14-15/10): a Mercado Pago ficou sem permissão de
+          // cobrar e ninguém soube até um cliente tentar pagar - mesmo
+          // alerta aqui, pro mesmo nunca acontecer de novo em silêncio com a
+          // HyperCash.
+          sendOpsAlertEmail(
+            app,
+            'Falha ao criar cobrança (HyperCash)',
+            `userId: ${request.user.sub}\nplano: ${plan.key}\nerro: ${err instanceof Error ? err.message : String(err)}`
+          ).catch(() => {});
+          return reply.status(502).send({ message: 'Não foi possível configurar a cobrança agora. Tente novamente em instantes.' });
+        }
+
+        subscription = await prisma.subscription.update({
+          where: { id: subscription.id },
+          data: { providerSubscriptionId: link.id, lastInvoiceUrl: checkoutUrl, pendingCouponPercentOff: effectivePercentOff },
         });
-        // Decisão explícita do Filipe: o desconto do Pix passou a valer em
-        // TODOS os ciclos futuros também (igual o cartão já faz), não só a
-        // 1ª cobrança - por isso NÃO zera pendingCouponPercentOff aqui.
-        // ensureCurrentPixCharge (pix-billing.ts) usa esse mesmo campo pra
-        // aplicar o desconto de novo em cada renovação de ciclo.
-        // Trava o código só AQUI, numa cobrança de verdade gerada com
-        // sucesso - não na hora de só escolher o plano (ver comentário
-        // antigo removido acima). Quem está elegível pro teste grátis nunca
-        // chega até aqui (early return mais acima) e por isso nunca gastava
-        // nada de verdade, mas o cupom já saía queimado mesmo assim - um
-        // cliente em trial clicando Pix perdia o desconto sem nunca ter sido
-        // cobrado (caso real, resolvido na mão duas vezes antes desse fix).
+
+        // Trava o cupom só numa cobrança de verdade gerada com sucesso -
+        // nunca em só escolher o plano (cliente elegível pro teste grátis
+        // nunca deveria gastar cupom nenhum).
         if (couponId) {
           await prisma.coupon.update({ where: { id: couponId }, data: { redeemedCount: { increment: 1 } } });
           await prisma.couponRedemption.create({ data: { couponId, userId: user.id } });
         }
-      } catch (err) {
-        app.log.error(err);
-        // Mesmo caso real do cartão acima, só que pro Pix ("Collector user
-        // without key enabled for QR render") - as duas descobertas só
-        // porque um cliente de verdade esbarrou nelas, sem nenhum aviso
-        // antes disso.
-        sendOpsAlertEmail(
-          app,
-          'Falha ao gerar cobrança Pix (Mercado Pago)',
-          `userId: ${request.user.sub}\nplano: ${plan.key}\nerro: ${err instanceof Error ? err.message : String(err)}`
-        ).catch(() => {});
-        return reply.status(502).send({ message: 'Não foi possível gerar o Pix agora. Tente novamente em instantes.' });
       }
 
-      // Quem já estava em teste e decidiu pagar continua 'trialing' até o
-      // webhook confirmar o Pix de verdade - só a confirmação do pagamento
-      // deve encerrar o teste grátis, nunca o clique em si (bug anterior:
-      // clicar em Pix/Cartão durante o teste cortava ele na hora, mesmo sem
-      // ninguém ter pago nada ainda). O handler de webhook já trata
-      // qualquer status anterior -> 'active' de forma genérica, então não
-      // precisa de nenhuma lógica nova lá.
       const updated = await prisma.user.update({
         where: { id: user.id },
         data: { planId: plan.id, subscriptionStatus: alreadyMidTrial ? 'trialing' : 'past_due', trialEndsAt },
         include: userWithPlan,
       });
 
-      return reply.send({ ...await serializeUser(updated), pix: charge });
+      return reply.send({ ...(await serializeUser(updated)), checkoutUrl });
     }
   );
 
-  // Prévia do desconto antes do usuário confirmar o Pix - não reserva nem
-  // gasta o cupom (só /plans/select-pix faz isso), é só validação/exibição.
+  // Prévia do desconto antes do usuário confirmar - não reserva nem gasta o
+  // cupom (só /plans/select faz isso), é só validação/exibição.
   app.post<{ Body: ValidateCouponBody }>(
     '/coupons/validate',
     { onRequest: [app.authenticate], schema: { body: validateCouponSchema } },
@@ -476,7 +301,7 @@ export async function plansRoutes(app: FastifyInstance) {
 
   app.get('/plans/checkout-url', { onRequest: [app.authenticate] }, async (request, reply) => {
     const subscription = await prisma.subscription.findFirst({
-      where: { userId: request.user.sub, provider: 'mercado_pago' },
+      where: { userId: request.user.sub, provider: 'hypercash' },
       orderBy: { createdAt: 'desc' },
     });
     return reply.send({ checkoutUrl: subscription?.lastInvoiceUrl ?? null });
@@ -484,25 +309,25 @@ export async function plansRoutes(app: FastifyInstance) {
 
   app.post('/plans/cancel', { onRequest: [app.authenticate] }, async (request, reply) => {
     const subscription = await prisma.subscription.findFirst({
-      where: { userId: request.user.sub, provider: 'mercado_pago', status: { not: 'canceled' } },
+      where: { userId: request.user.sub, provider: 'hypercash', status: { not: 'canceled' } },
       orderBy: { createdAt: 'desc' },
     });
 
     if (subscription?.providerSubscriptionId) {
       try {
-        await mercadopago.cancelPreapproval(subscription.providerSubscriptionId);
+        const hcSubscription = await getSubscriptionByPaymentLinkId(subscription.providerSubscriptionId);
+        if (hcSubscription) {
+          await cancelHypercashSubscription(hcSubscription.id);
+        }
+        await deactivatePaymentLink(subscription.providerSubscriptionId);
       } catch (err) {
         app.log.error(err);
       }
       await prisma.subscription.update({ where: { id: subscription.id }, data: { status: 'canceled' } });
+    } else if (subscription) {
+      // Em teste grátis (nunca gerou link de pagamento) - só cancela local.
+      await prisma.subscription.update({ where: { id: subscription.id }, data: { status: 'canceled' } });
     }
-
-    // Pix não tem nada pra cancelar do lado do Mercado Pago (cada cobrança já
-    // é avulsa) - só para de gerar novo QR code no próximo ciclo.
-    await prisma.subscription.updateMany({
-      where: { userId: request.user.sub, provider: 'mercado_pago_pix', status: { not: 'canceled' } },
-      data: { status: 'canceled' },
-    });
 
     const user = await prisma.user.update({
       where: { id: request.user.sub },

@@ -7,7 +7,7 @@ import { verifyHypercashSignature } from '../../lib/hypercash-webhook';
 import { prisma } from '../../lib/prisma';
 import { ensureCurrentPixCharge } from '../../lib/pix-billing';
 import { formatBRL, sendPushNotification } from '../../lib/push-notifications';
-import { mapMercadoPagoStatus } from '../../lib/subscription-sync';
+import { mapHypercashStatus, mapMercadoPagoStatus } from '../../lib/subscription-sync';
 import { getPayment, getPreapproval, updatePreapprovalValue } from '../../mercadopago-client';
 
 type WebhookBody = {
@@ -173,6 +173,70 @@ async function handlePaymentEvent(app: FastifyInstance, dataId: string) {
   }
 }
 
+type HypercashSubscriptionEventData = {
+  subscription?: {
+    paymentLinkId?: string | null;
+    status?: 'active' | 'paused' | 'cancelled' | 'expired' | 'payment_failed';
+    currentPeriodEnd?: string | null;
+  };
+};
+
+/**
+ * Em vez de decidir o que fazer a partir do NOME do evento ("type") - que a
+ * HyperCash não documenta em lugar nenhum público, só confirmamos o evento
+ * de teste ("subscription.test") - usa o campo "status" da assinatura
+ * (esse sim documentado no OpenAPI deles) como fonte da verdade e sincroniza
+ * pra ele, qualquer que seja o evento que disparou o webhook. Mesmo
+ * princípio de reconcileHypercashSubscription (subscription-sync.ts), só que
+ * reagindo ao payload do webhook em vez de consultar a API de novo.
+ * Devolve false quando o payload não tem o formato esperado (deixa quem
+ * chamou decidir se alerta).
+ */
+async function handleHypercashSubscriptionEvent(app: FastifyInstance, data: HypercashSubscriptionEventData) {
+  const subData = data.subscription;
+  if (!subData?.paymentLinkId || !subData?.status) return false;
+
+  const subscription = await prisma.subscription.findFirst({
+    where: { provider: 'hypercash', providerSubscriptionId: subData.paymentLinkId },
+  });
+  // Já cancelamos essa assinatura por aqui - um webhook atrasado ou
+  // reenviado não deve reativar ela sozinho (mesmo princípio do handler da
+  // Mercado Pago).
+  if (!subscription || subscription.status === 'canceled') return true;
+
+  const status = mapHypercashStatus(subData.status);
+  const nextPeriodEnd = subData.currentPeriodEnd ? new Date(subData.currentPeriodEnd) : undefined;
+
+  const statusChanged = status !== subscription.status;
+  const periodChanged =
+    nextPeriodEnd !== undefined && nextPeriodEnd.getTime() !== (subscription.currentPeriodEnd?.getTime() ?? -1);
+  // Reentrega do mesmo evento (a HyperCash pode reenviar, como a Mercado
+  // Pago já faz) vira um no-op aqui - idempotente sem precisar de guarda
+  // explícita, já que só grava quando algo de fato mudou.
+  if (!statusChanged && !periodChanged) return true;
+
+  await prisma.$transaction([
+    prisma.subscription.update({
+      where: { id: subscription.id },
+      data: { ...(statusChanged ? { status } : {}), ...(periodChanged ? { currentPeriodEnd: nextPeriodEnd } : {}) },
+    }),
+    ...(statusChanged ? [prisma.user.update({ where: { id: subscription.userId }, data: { subscriptionStatus: status } })] : []),
+  ]);
+
+  if (statusChanged && status === 'active') {
+    const user = await prisma.user.findUnique({ where: { id: subscription.userId } });
+    if (user?.pushToken) {
+      await sendPushNotification(
+        user.pushToken,
+        'Pagamento confirmado! 🎉',
+        'Sua assinatura Lucrei está ativa.'
+      ).catch((err) => app.log.error(err));
+    }
+  }
+
+  return true;
+}
+
 export async function billingRoutes(app: FastifyInstance) {
   app.post<{ Body: WebhookBody; Querystring: Record<string, string> }>(
     '/billing/mercadopago/webhook',
@@ -266,36 +330,53 @@ export async function billingRoutes(app: FastifyInstance) {
   app.addContentTypeParser('application/json', { parseAs: 'string' }, captureRawBody);
   app.addContentTypeParser('*', { parseAs: 'string' }, captureRawBody);
 
-  app.post<{ Body: { type?: string; data?: unknown } }>('/billing/hypercash/webhook', async (request, reply) => {
-    const rawBody = (request as typeof request & { rawBody?: string }).rawBody ?? '';
-    const secret = process.env.HYPERCASH_WEBHOOK_SECRET;
-    if (!secret) {
-      app.log.error('HYPERCASH_WEBHOOK_SECRET não configurada — recusando webhook da HyperCash.');
-      return reply.status(500).send({ message: 'Servidor não configurado para validar webhooks.' });
+  app.post<{ Body: { type?: string; data?: HypercashSubscriptionEventData } }>(
+    '/billing/hypercash/webhook',
+    async (request, reply) => {
+      const rawBody = (request as typeof request & { rawBody?: string }).rawBody ?? '';
+      const secret = process.env.HYPERCASH_WEBHOOK_SECRET;
+      if (!secret) {
+        app.log.error('HYPERCASH_WEBHOOK_SECRET não configurada — recusando webhook da HyperCash.');
+        return reply.status(500).send({ message: 'Servidor não configurado para validar webhooks.' });
+      }
+
+      const sigHeader = request.headers['x-hypercash-signature'] as string | undefined;
+      if (!verifyHypercashSignature(sigHeader, rawBody, secret)) {
+        return reply.status(401).send({ message: 'Assinatura inválida.' });
+      }
+
+      const type = request.body?.type;
+      if (type === 'subscription.test') {
+        return reply.send({ received: true });
+      }
+
+      try {
+        const processed = await handleHypercashSubscriptionEvent(app, request.body?.data ?? {});
+        if (!processed) {
+          // Formato que não reconhecemos (nem "subscription.test" nem um
+          // payload com data.subscription.paymentLinkId+status) - alerta em
+          // vez de ignorar silenciosamente, igual já fazíamos antes de
+          // processar de verdade.
+          sendOpsAlertEmail(
+            app,
+            `[HyperCash] Webhook com formato não reconhecido: ${type}`,
+            `raw body: ${rawBody}`
+          ).catch(() => {});
+        }
+      } catch (err) {
+        app.log.error(err);
+        sendOpsAlertEmail(
+          app,
+          `[HyperCash] Falha ao processar webhook: ${type}`,
+          `erro: ${err instanceof Error ? err.message : String(err)}\n\nraw body: ${rawBody}`
+        ).catch(() => {});
+        // 500 pra HyperCash reentregar depois (mesmo princípio do handler da
+        // Mercado Pago) em vez de considerar entregue um evento que não foi
+        // processado de verdade.
+        return reply.status(500).send({ message: 'Falha ao processar o webhook.' });
+      }
+
+      return reply.send({ received: true });
     }
-
-    const sigHeader = request.headers['x-hypercash-signature'] as string | undefined;
-    if (!verifyHypercashSignature(sigHeader, rawBody, secret)) {
-      return reply.status(401).send({ message: 'Assinatura inválida.' });
-    }
-
-    const type = request.body?.type;
-
-    // Integração ainda em teste (ver conversa) - nenhum evento real de
-    // assinatura (criada/cobrança/cancelada) foi recebido ainda, só o botão
-    // "Testar webhook" com type "subscription.test". Os nomes de evento de
-    // verdade não estão documentados em lugar nenhum - loga tudo que chegar
-    // em vez de ignorar silenciosamente, até o primeiro evento real definir
-    // o que cada "type" realmente é.
-    if (type !== 'subscription.test') {
-      sendOpsAlertEmail(
-        app,
-        `[HyperCash] Evento não reconhecido recebido: ${type}`,
-        `Ainda não sabemos processar esse evento - ver código em billing/routes.ts.\n\nraw body: ${rawBody}`
-      ).catch(() => {});
-    }
-    app.log.info({ type, rawBody }, 'Webhook HyperCash recebido');
-
-    return reply.send({ received: true });
-  });
+  );
 }

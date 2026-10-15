@@ -7,7 +7,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { prisma } from '../../lib/prisma';
 import { sendPushNotification } from '../../lib/push-notifications';
 import { getOrdersThisMonth } from '../../lib/sales-usage';
-import { reconcileMercadoPagoSubscription } from '../../lib/subscription-sync';
+import { reconcileHypercashSubscription, reconcileMercadoPagoSubscription } from '../../lib/subscription-sync';
 import { warnIfTrialEndingSoon } from '../../lib/trial-warning';
 import * as mercadopago from '../../mercadopago-client';
 import { serializeUser, userWithPlan } from '../plans/serialize-user';
@@ -216,7 +216,11 @@ export async function authRoutes(app: FastifyInstance) {
   );
 
   app.get('/auth/me', { onRequest: [app.authenticate] }, async (request, reply) => {
+    // Mercado Pago aposentada pra assinatura nova (ver conversa), mas
+    // reconciliar ainda importa pra quem tiver ficado com uma assinatura
+    // antiga não migrada.
     await reconcileMercadoPagoSubscription(request.user.sub, request.log);
+    await reconcileHypercashSubscription(request.user.sub, request.log);
     const user = await prisma.user.findUnique({ where: { id: request.user.sub }, include: userWithPlan });
     if (!user) {
       return reply.status(404).send({ message: 'Usuário não encontrado.' });
