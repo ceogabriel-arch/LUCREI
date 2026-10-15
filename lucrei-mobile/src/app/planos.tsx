@@ -107,7 +107,7 @@ function PlanCard({ plan, appliedCoupon }: { plan: Plan; appliedCoupon: CouponPr
             ? 'Testar 15 dias grátis'
             : 'Assinar agora';
 
-  async function handlePressSubscribe() {
+  async function doSubscribe() {
     const pendingTab = openPendingTab();
     setSaving(true);
     const result = await selectPlan(plan.key, appliedCoupon?.code);
@@ -133,6 +133,29 @@ function PlanCard({ plan, appliedCoupon }: { plan: Plan; appliedCoupon: CouponPr
       pendingTab?.close();
       showAlert('Não foi possível assinar', result.message);
     }
+  }
+
+  function handlePressSubscribe() {
+    // Trocar de plano no MEIO de um teste grátis encerra ele na hora (o
+    // plano novo não é elegível a teste - só o Start é) e já manda cobrar -
+    // reportado ao vivo: clicar em "Fazer upgrade" só pra ver o preço
+    // encerrava o teste sem aviso nenhum. Confirma antes nesse caso
+    // específico; nos outros (assinar pela 1ª vez, pagar o próprio plano
+    // atual pra sair do teste, trocar entre planos já pagos) segue direto,
+    // sem perguntar de novo.
+    const wouldEndTrial = user?.subscriptionStatus === 'trialing' && user?.plan?.key !== plan.key;
+    if (wouldEndTrial) {
+      showAlert(
+        'Encerrar teste grátis?',
+        `Você ainda está no período de teste grátis do plano ${user?.plan?.name}. Trocar para o plano ${plan.name} encerra esse teste agora e já vai pedir o pagamento.`,
+        [
+          { text: 'Voltar', style: 'cancel' },
+          { text: 'Encerrar e pagar', style: 'destructive', onPress: doSubscribe },
+        ]
+      );
+      return;
+    }
+    doSubscribe();
   }
 
   async function handleViewInvoice() {
