@@ -65,6 +65,7 @@ export type PaymentLink = {
   id: string;
   checkoutUrl: string | null;
   active: boolean;
+  productId: string | null;
 };
 
 export type HypercashFrequency = 'monthly' | 'annual';
@@ -73,14 +74,36 @@ function toHypercashFrequency(frequency: HypercashFrequency) {
   return frequency === 'annual' ? 'annual' : 'monthly';
 }
 
-export function createPaymentLink(params: {
+// Logo oficial (fundo escuro, igual o app) - já pública (usada nos
+// e-mails), reaproveitada aqui pra não deixar a página de checkout da
+// HyperCash sem nenhuma imagem (reportado ao vivo: aparecia em branco).
+const LOGO_URL = 'https://app.lucreiapp.com/email/logo.png';
+
+// Criar um payment-link gera um Produto por trás automaticamente (sem
+// imagem nenhuma, por isso a página de checkout aparecia sem foto) - não
+// tem como mandar a imagem já na criação do link (campo não existe nesse
+// endpoint), só depois, direto no Produto que ele mesmo gerou.
+async function setProductImage(productId: string | null) {
+  if (!productId) return;
+  try {
+    await hcRequest(`/v1/products/${productId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ image: LOGO_URL }),
+    });
+  } catch {
+    // Não falha a criação do link por causa disso - checkout funciona
+    // igual, só sem a imagem.
+  }
+}
+
+export async function createPaymentLink(params: {
   name: string;
   priceCents: number;
   isRecurring: boolean;
   frequency?: HypercashFrequency;
   successRedirectUrl: string;
 }) {
-  return hcRequest<PaymentLink>('/v1/payment-links', {
+  const link = await hcRequest<PaymentLink>('/v1/payment-links', {
     method: 'POST',
     body: JSON.stringify({
       name: params.name,
@@ -93,6 +116,8 @@ export function createPaymentLink(params: {
       successRedirectUrl: params.successRedirectUrl,
     }),
   });
+  await setProductImage(link.productId);
+  return link;
 }
 
 // Usado só pro upgrade proporcional (cobrança avulsa, não recorrente) - ver
