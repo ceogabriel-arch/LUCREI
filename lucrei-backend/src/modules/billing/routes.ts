@@ -247,4 +247,28 @@ export async function billingRoutes(app: FastifyInstance) {
       return reply.status(502).send({ message: 'Não foi possível verificar o Pix agora. Tente novamente em instantes.' });
     }
   });
+
+  // TEMPORÁRIO - só pra capturar um evento real de teste da HyperCash (botão
+  // "Testar webhook" no painel deles) e descobrir o formato exato da
+  // assinatura (header X-Hypercash-Signature), que não está documentado
+  // publicamente. Não valida nada ainda, não deve ficar assim em produção -
+  // substituir pelo handler de verdade assim que o formato for confirmado.
+  app.addContentTypeParser('*', { parseAs: 'string' }, (req, body, done) => {
+    (req as typeof req & { rawBody?: string }).rawBody = body as string;
+    try {
+      done(null, (body as string).length > 0 ? JSON.parse(body as string) : {});
+    } catch {
+      done(null, {});
+    }
+  });
+  app.post('/billing/hypercash/webhook', async (request, reply) => {
+    const rawBody = (request as typeof request & { rawBody?: string }).rawBody ?? '';
+    sendOpsAlertEmail(
+      app,
+      '[diagnóstico] Webhook de teste da HyperCash recebido',
+      `headers: ${JSON.stringify(request.headers, null, 2)}\n\nraw body: ${rawBody}`
+    ).catch(() => {});
+    app.log.info({ headers: request.headers, rawBody }, 'HyperCash webhook de teste recebido');
+    return reply.send({ received: true });
+  });
 }
