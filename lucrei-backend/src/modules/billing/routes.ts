@@ -253,14 +253,20 @@ export async function billingRoutes(app: FastifyInstance) {
   // assinatura (header X-Hypercash-Signature), que não está documentado
   // publicamente. Não valida nada ainda, não deve ficar assim em produção -
   // substituir pelo handler de verdade assim que o formato for confirmado.
-  app.addContentTypeParser('*', { parseAs: 'string' }, (req, body, done) => {
-    (req as typeof req & { rawBody?: string }).rawBody = body as string;
+  const captureRawBody = (req: unknown, body: unknown, done: (err: Error | null, body?: unknown) => void) => {
+    (req as { rawBody?: string }).rawBody = body as string;
     try {
       done(null, (body as string).length > 0 ? JSON.parse(body as string) : {});
     } catch {
       done(null, {});
     }
-  });
+  };
+  // "application/json" precisa ser registrado explicitamente além do "*" - o
+  // Fastify já tem um parser padrão pra esse tipo específico, que tem
+  // prioridade sobre um catch-all e não preenche o rawBody (mesma pegadinha
+  // documentada em shops/routes.ts pro push da Shopee).
+  app.addContentTypeParser('application/json', { parseAs: 'string' }, captureRawBody);
+  app.addContentTypeParser('*', { parseAs: 'string' }, captureRawBody);
   app.post('/billing/hypercash/webhook', async (request, reply) => {
     const rawBody = (request as typeof request & { rawBody?: string }).rawBody ?? '';
     sendOpsAlertEmail(
