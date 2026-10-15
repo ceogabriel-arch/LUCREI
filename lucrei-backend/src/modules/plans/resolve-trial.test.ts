@@ -58,9 +58,12 @@ describe('resolveTrial', () => {
     vi.clearAllMocks();
   });
 
-  it('preserva um teste já em andamento em vez de encerrar na hora (bug ao vivo: escolher Pix/Cartão durante o teste)', async () => {
+  it('preserva um teste já em andamento ao pedir o MESMO plano de novo (bug ao vivo: escolher Pix/Cartão durante o teste)', async () => {
     const trialEndsAt = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000); // 10 dias restantes
-    const user = buildUser({ subscriptionStatus: 'trialing', trialEndsAt });
+    // planId precisa bater com o plano pedido - é exatamente essa
+    // combinação (mesmo plano, meio do teste) que esse caminho existe pra
+    // preservar. Ver teste abaixo pro caso de plano DIFERENTE.
+    const user = buildUser({ subscriptionStatus: 'trialing', trialEndsAt, planId: 'plan_start' });
 
     const result = await resolveTrial(user, buildPlan());
 
@@ -70,6 +73,21 @@ describe('resolveTrial', () => {
     // Não deveria nem consultar loja "tainted" nesse caminho - o teste em
     // andamento já resolve sozinho, sem depender do histórico de lojas.
     expect(prismaMock.shop.findFirst).not.toHaveBeenCalled();
+  });
+
+  // Bug reportado ao vivo: Start em teste grátis -> clicar "Fazer upgrade"
+  // pro Pro preservava a elegibilidade de teste grátis pro Pro também,
+  // mesmo ele não sendo elegível - porque o branch acima não conferia pra
+  // qual plano a troca era, só que o usuário estava "trialing" em algo.
+  it('NÃO preserva o teste em andamento ao pedir um plano DIFERENTE', async () => {
+    const trialEndsAt = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
+    const user = buildUser({ subscriptionStatus: 'trialing', trialEndsAt, planId: 'plan_start' });
+    const proPlan = buildPlan({ id: 'plan_pro', key: 'pro', trialEligible: false });
+
+    const result = await resolveTrial(user, proPlan);
+
+    expect(result.eligibleForTrial).toBe(false);
+    expect(result.trialDays).toBe(0);
   });
 
   it('concede um teste novo completo pra quem nunca teve trialEndsAt', async () => {

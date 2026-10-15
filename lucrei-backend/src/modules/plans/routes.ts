@@ -48,13 +48,19 @@ export async function resolveTrial(user: User, plan: Plan) {
   const now = new Date();
 
   // Teste grátis já em andamento (trialEndsAt preenchido e no futuro) -
-  // trocar de plano NO MEIO do teste não pode encerrar nem reiniciar ele, só
+  // escolher o MESMO plano de novo NO MEIO do teste (ex: pagar agora pra
+  // sair do teste antes do prazo) não pode encerrar nem reiniciar ele, só
   // reservar o que vai cobrar quando o prazo ORIGINAL acabar. Bug reportado
-  // ao vivo: escolher um plano durante o teste virava 'past_due' na hora,
-  // cortando o teste antes do prazo - porque trialEndsAt já preenchido
-  // também dispara "alreadyUsedTrial" abaixo, uma regra pensada só pra
-  // impedir REINICIAR um teste já encerrado, não pra isso.
-  if (user.subscriptionStatus === 'trialing' && user.trialEndsAt && user.trialEndsAt > now) {
+  // ao vivo (1): escolher o mesmo plano durante o teste virava 'past_due' na
+  // hora, cortando o teste antes do prazo - porque trialEndsAt já
+  // preenchido também dispara "alreadyUsedTrial" abaixo, uma regra pensada
+  // só pra impedir REINICIAR um teste já encerrado, não pra isso.
+  // "user.planId === plan.id" é essencial aqui - bug reportado ao vivo (2):
+  // sem essa checagem, migrar de plano (ex: Start em teste -> "Fazer
+  // upgrade" pro Pro) preservava a elegibilidade de teste grátis pro Pro
+  // também, mesmo ele não sendo elegível (plan.trialEligible=false) -
+  // porque esse branch nem olhava pra qual plano estava sendo pedido.
+  if (user.subscriptionStatus === 'trialing' && user.trialEndsAt && user.trialEndsAt > now && user.planId === plan.id) {
     const remainingDays = Math.max(1, Math.ceil((user.trialEndsAt.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)));
     return { eligibleForTrial: true, trialEndsAt: user.trialEndsAt, trialDays: remainingDays };
   }
