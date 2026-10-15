@@ -414,6 +414,11 @@ export default function PlanosScreen() {
           formulário (TextInput + botão Aplicar) continua largura cheia
           embaixo - esse sim precisa do espaço. */}
       {(appliedCoupon || pendingCouponPercentOff) && (
+        // webCapWidth() aqui fora alinha a coluna com o resto (toggle,
+        // cards) - sem isso o flex-start abaixo abraça o próprio conteúdo
+        // em relação à largura TOTAL da tela, não à coluna centralizada,
+        // ficando desalinhado à esquerda do resto em telas largas.
+        <View style={webCapWidth()}>
         <GlassCard className="mt-4 p-3.5" borderRadius={16} style={{ alignSelf: 'flex-start', maxWidth: '100%' }}>
           {appliedCoupon ? (
             <View className="flex-row items-center gap-2.5">
@@ -444,6 +449,7 @@ export default function PlanosScreen() {
             </View>
           )}
         </GlassCard>
+        </View>
       )}
 
       {!appliedCoupon && !pendingCouponPercentOff && (
