@@ -42,10 +42,25 @@ function formatIntegrationsLimit(limit: number | null) {
 // "Ver fatura", que só lê do nosso banco, mas não em "Assinar", que espera
 // a HyperCash responder). Abre uma aba em branco JÁ no clique (ainda síncrono,
 // sem bloqueio) e só troca a URL dela depois que o link estiver pronto.
+// Fica em branco por alguns segundos (tempo da HyperCash criar o link) sem
+// isso - parece que travou/quebrou. Uma tela de carregamento simples (sem
+// depender de nenhum bundle, é HTML puro escrito direto na aba nova) deixa
+// claro que algo está acontecendo.
+const PENDING_TAB_HTML = `<!doctype html><html><head><meta charset="utf-8"><title>Lucrei</title>
+<style>
+  body { margin:0; height:100vh; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:16px; background:#0A0A0B; font-family:system-ui,-apple-system,sans-serif; }
+  .spinner { width:32px; height:32px; border:3px solid rgba(245,197,24,0.25); border-top-color:#F5C518; border-radius:50%; animation:spin 0.8s linear infinite; }
+  p { color:#9B9BA1; font-size:14px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+</style></head>
+<body><div class="spinner"></div><p>Preparando pagamento…</p></body></html>`;
+
 function openPendingTab(): Window | null {
   if (Platform.OS !== 'web' || typeof window === 'undefined') return null;
   try {
-    return window.open('', '_blank');
+    const tab = window.open('', '_blank');
+    tab?.document.write(PENDING_TAB_HTML);
+    return tab;
   } catch {
     return null;
   }
