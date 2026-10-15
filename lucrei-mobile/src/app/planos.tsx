@@ -382,7 +382,7 @@ export default function PlanosScreen() {
         O plano Start inclui 15 dias grátis para testar. Escolha o plano ideal para o volume de vendas da sua loja.
       </Text>
 
-      <View className="mt-5 flex-row rounded-2xl border border-lucrei-border bg-lucrei-surface p-1.5">
+      <View className="mt-5 flex-row rounded-2xl border border-lucrei-border bg-lucrei-surface p-1.5" style={webCapWidth()}>
         {BILLING_PERIOD_OPTIONS.map((option) => {
           const active = option.key === billingPeriod;
           return (
@@ -447,7 +447,7 @@ export default function PlanosScreen() {
       )}
 
       {!appliedCoupon && !pendingCouponPercentOff && (
-        <GlassCard className="mt-4 p-4" borderRadius={16}>
+        <GlassCard className="mt-4 p-4" borderRadius={16} style={webCapWidth()}>
           <View className="flex-row items-center gap-2">
             <Ionicons name="pricetag-outline" size={16} color={Colors.textMuted} />
             <Text className="text-sm font-medium text-lucrei-text">Tem um cupom de desconto?</Text>
