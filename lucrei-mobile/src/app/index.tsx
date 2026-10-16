@@ -660,7 +660,11 @@ export default function InicioScreen() {
 
                   {!stillLoading && !isDesktop && (
                     <View className="mt-5">
-                      <Sparkline data={summary!.trend.map((t) => t.profit)} />
+                      {subscriptionAccess.isPastDue ? (
+                        <BlurredValue width={296} height={56} />
+                      ) : (
+                        <Sparkline data={summary!.trend.map((t) => t.profit)} />
+                      )}
                     </View>
                   )}
 
@@ -669,21 +673,40 @@ export default function InicioScreen() {
                       fica empilhado abaixo do sparkline por falta de espaço. */}
                   {!stillLoading && !isDesktop && summary && (
                     <View className="mt-5 flex-row items-center justify-center gap-4">
-                      <RevenueRing revenue={summary.revenue} size={84} strokeWidth={12} />
-                      <ProfitBreakdownDonut summary={summary} size={84} strokeWidth={12} />
+                      {subscriptionAccess.isPastDue ? (
+                        <>
+                          <BlurredValue width={84} height={84} />
+                          <BlurredValue width={84} height={84} />
+                        </>
+                      ) : (
+                        <>
+                          <RevenueRing revenue={summary.revenue} size={84} strokeWidth={12} />
+                          <ProfitBreakdownDonut summary={summary} size={84} strokeWidth={12} />
+                        </>
+                      )}
                     </View>
                   )}
                 </View>
 
                 {!stillLoading && isDesktop && (
                   <View className="flex-row items-center gap-6">
-                    {summary && (
+                    {subscriptionAccess.isPastDue ? (
                       <>
-                        <RevenueRing revenue={summary.revenue} size={84} strokeWidth={13} />
-                        <ProfitBreakdownDonut summary={summary} size={84} strokeWidth={13} />
+                        <BlurredValue width={84} height={84} />
+                        <BlurredValue width={84} height={84} />
+                        <BlurredValue width={260} height={110} />
+                      </>
+                    ) : (
+                      <>
+                        {summary && (
+                          <>
+                            <RevenueRing revenue={summary.revenue} size={84} strokeWidth={13} />
+                            <ProfitBreakdownDonut summary={summary} size={84} strokeWidth={13} />
+                          </>
+                        )}
+                        <Sparkline data={summary!.trend.map((t) => t.profit)} width={260} height={110} />
                       </>
                     )}
-                    <Sparkline data={summary!.trend.map((t) => t.profit)} width={260} height={110} />
                   </View>
                 )}
               </View>
