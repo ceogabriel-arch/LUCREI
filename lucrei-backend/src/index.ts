@@ -14,6 +14,7 @@ import Fastify, { type FastifyError } from 'fastify';
 import { prisma } from './lib/prisma';
 import { startHypercashExpiryWatchdog } from './lib/hypercash-expiry-watchdog';
 import { startSyncWatchdog } from './lib/sync-watchdog';
+import { startTrialExpiryWatchdog } from './lib/trial-expiry-watchdog';
 import { adminRoutes } from './modules/admin/routes';
 import { authRoutes } from './modules/auth/routes';
 import { billingRoutes } from './modules/billing/routes';
@@ -213,6 +214,12 @@ async function main() {
   // 24h - evita um link abandonado continuar valendo pra sempre com o
   // preço de quando foi gerado. Ver hypercash-expiry-watchdog.ts.
   startHypercashExpiryWatchdog(app.log);
+
+  // Marca sozinho como 'past_due' quem o teste grátis já acabou e nunca
+  // chegou a assinar de verdade - sem isso o acesso ficava liberado pra
+  // sempre, já que nada mais troca subscriptionStatus fora de
+  // /plans/select. Ver trial-expiry-watchdog.ts.
+  startTrialExpiryWatchdog(app.log);
 }
 
 main().catch((err) => {
