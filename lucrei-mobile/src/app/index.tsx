@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 
 import { AchievementsCard } from '@/components/achievements-card';
 import { BlurredValue } from '@/components/blurred-value';
@@ -111,8 +111,15 @@ export default function InicioScreen() {
         // nenhum dos dois volta pro nosso callback), então a mensagem cobre
         // ambos sem soar como erro forçado.
         showAlert(
-          'Conexão não concluída',
-          'Se a Shopee ficou travada pedindo login, faça login direto em shopee.com.br pelo navegador antes de conectar, ou tente por outro navegador/computador.'
+          'Dificuldade para conectar',
+          'Se a janela da Shopee travou ou fechou sem conectar, veja o passo a passo de como conectar.',
+          [
+            {
+              text: 'Ver como conectar',
+              onPress: () => Linking.openURL(`${process.env.EXPO_PUBLIC_API_URL}/como-conectar-shopee`),
+            },
+            { text: 'OK', style: 'cancel' },
+          ]
         );
       }
     } catch (err) {
