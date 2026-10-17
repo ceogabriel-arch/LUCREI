@@ -675,24 +675,6 @@ export default function InicioScreen() {
                     </View>
                   )}
 
-                  {/* Anel "pra onde foi o dinheiro" ao lado do lucro, estilo
-                      UpSeller - pedido explicitamente pelo usuário. No celular
-                      fica empilhado abaixo do sparkline por falta de espaço. */}
-                  {!stillLoading && !isDesktop && summary && (
-                    <View className="mt-5 flex-row items-center justify-center gap-4">
-                      {subscriptionAccess.isPastDue ? (
-                        <>
-                          <BlurredValue width={84} height={84} />
-                          <BlurredValue width={84} height={84} />
-                        </>
-                      ) : (
-                        <>
-                          <RevenueRing revenue={summary.revenue} size={84} strokeWidth={12} />
-                          <ProfitBreakdownDonut summary={summary} size={84} strokeWidth={12} />
-                        </>
-                      )}
-                    </View>
-                  )}
                 </View>
 
                 {!stillLoading && isDesktop && (
