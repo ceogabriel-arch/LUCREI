@@ -32,6 +32,29 @@ set +a
 : "${UPLOAD_KEYSTORE_PATH:?defina UPLOAD_KEYSTORE_PATH em $ENV_FILE}"
 : "${UPLOAD_KEYSTORE_ALIAS:?defina UPLOAD_KEYSTORE_ALIAS em $ENV_FILE}"
 : "${UPLOAD_KEYSTORE_PASSWORD:?defina UPLOAD_KEYSTORE_PASSWORD em $ENV_FILE}"
+
+# Trava de segurança: a chave de upload já foi perdida uma vez neste projeto
+# (gerada por engano num `expo prebuild --clean`, sem ninguém perceber até o
+# Play Console rejeitar o envio) - isso custou dias de processo de
+# recuperação pelo Google. Falha alto e claro aqui em vez de deixar o Gradle
+# assinar silenciosamente com uma chave errada (ou inexistente).
+if [[ "$TARGET" == "aab" ]]; then
+  if [[ ! -f "$UPLOAD_KEYSTORE_PATH" ]]; then
+    echo "" >&2
+    echo "‼️  UPLOAD_KEYSTORE_PATH não existe: $UPLOAD_KEYSTORE_PATH" >&2
+    echo "‼️  NÃO gere uma chave nova sem ter certeza - isso é a identidade" >&2
+    echo "‼️  de assinatura permanente do app na Play Store. Veja" >&2
+    echo "‼️  C:/Android/keystore/LEIA-ANTES-DE-MEXER.txt antes de continuar." >&2
+    echo "" >&2
+    exit 1
+  fi
+  echo "== keystore de upload: $UPLOAD_KEYSTORE_PATH (confira o SHA-1 abaixo bate com o esperado) =="
+  JAVA_BIN_DIR=$(ls -d "/c/Program Files/Eclipse Adoptium"/jdk-17*-hotspot 2>/dev/null | sort -V | tail -1)
+  if [[ -n "$JAVA_BIN_DIR" ]]; then
+    "$JAVA_BIN_DIR/bin/keytool" -list -keystore "$UPLOAD_KEYSTORE_PATH" -storepass "$UPLOAD_KEYSTORE_PASSWORD" -alias "$UPLOAD_KEYSTORE_ALIAS" 2>&1 | grep -i "SHA1\|SHA256" || true
+  fi
+  echo ""
+fi
 # Senha da chave em si, separada da senha do arquivo da keystore - uma
 # keystore baixada do EAS (`eas credentials` → Download existing keystore)
 # normalmente vem com as duas diferentes. Cai pra UPLOAD_KEYSTORE_PASSWORD se
