@@ -58,7 +58,7 @@ export default function InicioScreen() {
   const isDesktop = useIsDesktopWeb();
   const { shops, selectedShop, viewingAll, loaded: shopsLoaded, refresh: refreshShops } = useSelectedShop();
   const { period, setPeriod } = usePeriod();
-  const { refreshSignal } = useDataRefresh();
+  const { refreshSignal, triggerRefresh } = useDataRefresh();
   const subscriptionAccess = useSubscriptionAccess();
   const [backendStatus, setBackendStatus] = useState<BackendStatus>('checking');
   const [connecting, setConnecting] = useState<'shopee' | 'mercado_livre' | null>(null);
@@ -173,7 +173,15 @@ export default function InicioScreen() {
     useCallback(() => {
       refreshShops();
       refreshUser();
-    }, [refreshShops, refreshUser])
+      // Notificação de pedido novo só atualiza o resumo sozinha quando o
+      // app já estava aberto na hora que ela chegou (addNotificationReceivedListener
+      // só dispara em primeiro plano, ver _layout.tsx) - reabrir o app
+      // depois de várias notificações em segundo plano deixava o resumo
+      // parado até alguém tocar em "Sincronizar". Reaproveita o mesmo sinal
+      // de refresh que a notificação já usa, só que disparado também ao
+      // reabrir/voltar pra essa tela.
+      triggerRefresh();
+    }, [refreshShops, refreshUser, triggerRefresh])
   );
 
   // Token em vez do objeto "state" inteiro: refreshUser() troca "state" por
