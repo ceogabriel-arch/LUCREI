@@ -57,12 +57,19 @@ function pendingWhereForShop(shop: Shop) {
 }
 
 // Pedido já pago/confirmado (está na tabela Order, não mais no estimado
-// acima) mas ainda não despachado - só a Shopee expõe esse status
-// granular (READY_TO_SHIP); o Mercado Livre guarda o status dele mesmo
-// (ex: "paid") em orderStatus, nunca bate com isso, então conta 0 pra loja
-// de ML sem precisar de um caso à parte.
+// acima) mas ainda não despachado de verdade - READY_TO_SHIP (ainda não
+// embalado) e PROCESSED (embalado/etiqueta gerada, esperando a
+// transportadora buscar) são os dois status antes de SHIPPED. Achado ao
+// vivo: uma loja que embala rápido (fulfillment automatizado) quase nunca é
+// flagrada em READY_TO_SHIP pelo sync periódico, só em PROCESSED - contar
+// só o primeiro deixava o card sempre vazio pra essas lojas. Só a Shopee
+// expõe esse status granular; o Mercado Livre guarda o status dele mesmo
+// (ex: "paid") em orderStatus, nunca bate com nenhum dos dois, então conta
+// 0 pra loja de ML sem precisar de um caso à parte.
+const AWAITING_SHIPMENT_STATUSES = ['READY_TO_SHIP', 'PROCESSED'];
+
 async function computeReadyToShipCount(shop: Shop): Promise<number> {
-  return prisma.order.count({ where: { shopId: shop.id, orderStatus: 'READY_TO_SHIP' } });
+  return prisma.order.count({ where: { shopId: shop.id, orderStatus: { in: AWAITING_SHIPMENT_STATUSES } } });
 }
 
 async function computeShopForecast(shop: Shop): Promise<ShopForecast> {
