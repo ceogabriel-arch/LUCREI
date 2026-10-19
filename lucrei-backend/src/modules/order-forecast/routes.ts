@@ -18,7 +18,7 @@ import { computeShopSummary } from '../summary/routes';
 // inflar a contagem pra sempre com pedido "fantasma".
 const PENDING_WINDOW_START = () => rangeStart('30d');
 
-type ShopForecast = { pendingCount: number; projectedProfit: number; projectedRevenue: number };
+type ShopForecast = { pendingCount: number; projectedProfit: number; projectedRevenue: number; readyToShipCount: number };
 type PendingEvent = {
   shopeeOrderSn: string | null;
   mercadoLivreOrderId: string | null;
@@ -56,15 +56,27 @@ function pendingWhereForShop(shop: Shop) {
     : { shopId: shop.id, shopeeOrderSn: { not: null }, orderStatus: { in: [...SHOPEE_PENDING_STATUSES] } };
 }
 
-async function computeShopForecast(shop: Shop): Promise<ShopForecast> {
-  const pendingCount = await prisma.recentOrderEvent.count({
-    where: { ...pendingWhereForShop(shop), orderDate: { gte: PENDING_WINDOW_START() } },
-  });
+// Pedido já pago/confirmado (está na tabela Order, não mais no estimado
+// acima) mas ainda não despachado - só a Shopee expõe esse status
+// granular (READY_TO_SHIP); o Mercado Livre guarda o status dele mesmo
+// (ex: "paid") em orderStatus, nunca bate com isso, então conta 0 pra loja
+// de ML sem precisar de um caso à parte.
+async function computeReadyToShipCount(shop: Shop): Promise<number> {
+  return prisma.order.count({ where: { shopId: shop.id, orderStatus: 'READY_TO_SHIP' } });
+}
 
-  if (pendingCount === 0) return { pendingCount: 0, projectedProfit: 0, projectedRevenue: 0 };
+async function computeShopForecast(shop: Shop): Promise<ShopForecast> {
+  const [pendingCount, readyToShipCount] = await Promise.all([
+    prisma.recentOrderEvent.count({
+      where: { ...pendingWhereForShop(shop), orderDate: { gte: PENDING_WINDOW_START() } },
+    }),
+    computeReadyToShipCount(shop),
+  ]);
+
+  if (pendingCount === 0) return { pendingCount: 0, projectedProfit: 0, projectedRevenue: 0, readyToShipCount };
 
   const { avgProfit, avgRevenue } = await computeRecentAverages(shop);
-  return { pendingCount, projectedProfit: pendingCount * avgProfit, projectedRevenue: pendingCount * avgRevenue };
+  return { pendingCount, projectedProfit: pendingCount * avgProfit, projectedRevenue: pendingCount * avgRevenue, readyToShipCount };
 }
 
 // Lista (não só conta) os pedidos pendentes - usado pelo detalhe que abre ao
@@ -182,13 +194,14 @@ export async function orderForecastRoutes(app: FastifyInstance) {
   // lojas" no Início, igual /summary.
   app.get('/order-forecast', { onRequest: [app.authenticate] }, async (request) => {
     const shops = await prisma.shop.findMany({ where: { userId: request.user.sub, status: 'active' } });
-    if (shops.length === 0) return { pendingCount: 0, projectedProfit: 0, projectedRevenue: 0 };
+    if (shops.length === 0) return { pendingCount: 0, projectedProfit: 0, projectedRevenue: 0, readyToShipCount: 0 };
 
     const forecasts = await Promise.all(shops.map((shop) => computeShopForecast(shop)));
     return {
       pendingCount: forecasts.reduce((sum, f) => sum + f.pendingCount, 0),
       projectedProfit: forecasts.reduce((sum, f) => sum + f.projectedProfit, 0),
       projectedRevenue: forecasts.reduce((sum, f) => sum + f.projectedRevenue, 0),
+      readyToShipCount: forecasts.reduce((sum, f) => sum + f.readyToShipCount, 0),
     };
   });
 

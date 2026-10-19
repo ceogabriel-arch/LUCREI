@@ -823,6 +823,28 @@ export default function InicioScreen() {
               </Pressable>
             )}
 
+            {/* Pedido já pago/confirmado (não é estimativa, já está no
+                "Você lucrou" acima) mas ainda não despachado - pedido ao
+                vivo ("tem como colocar os pedidos aguardando envio em algum
+                lugar?"). Só Shopee expõe esse status granular hoje. */}
+            {!stillLoading && forecast !== null && forecast.readyToShipCount > 0 && (
+              <Pressable
+                onPress={() => router.push('/pedidos')}
+                hitSlop={4}
+                style={({ pressed }) => [
+                  { borderColor: Colors.goldDim, backgroundColor: Colors.surfaceAlt, opacity: pressed ? 0.7 : 1 },
+                ]}
+                className="mt-3 flex-row items-center justify-between rounded-2xl border border-dashed p-4">
+                <View className="flex-row items-center gap-3">
+                  <Ionicons name="cube-outline" size={20} color={Colors.gold} />
+                  <Text className="text-sm font-medium text-lucrei-text">
+                    {forecast.readyToShipCount} {forecast.readyToShipCount === 1 ? 'pedido aguardando' : 'pedidos aguardando'} envio
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+              </Pressable>
+            )}
+
             <PendingOrdersModal
               visible={pendingOrdersOpen}
               onClose={() => setPendingOrdersOpen(false)}
