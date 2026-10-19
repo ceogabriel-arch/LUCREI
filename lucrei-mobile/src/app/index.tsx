@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 
 import { AchievementsCard } from '@/components/achievements-card';
@@ -70,6 +70,7 @@ export default function InicioScreen() {
   // novo. Comparar contra "period" direto no render (sem esperar um efeito)
   // evita esse flash.
   const [summaryPeriod, setSummaryPeriod] = useState<PeriodLabel | null>(null);
+  const summaryRequestIdRef = useRef(0);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [perShopProfit, setPerShopProfit] = useState<
     { shopId: string; shopName: string; provider: 'shopee' | 'mercado_livre'; profit: number }[]
@@ -198,6 +199,15 @@ export default function InicioScreen() {
   const token = state.status === 'authenticated' ? state.token : null;
 
   const loadSummary = useCallback(async () => {
+    // Achado ao vivo: trocar de período rápido (ou uma resposta antiga
+    // simplesmente demorar mais que a nova) deixava uma busca velha
+    // terminar DEPOIS da nova e sobrescrever o resultado certo com o
+    // errado - o número ficava "piscando" entre os dois períodos conforme
+    // cada resposta chegava fora de ordem. Só a busca mais recente (esse id)
+    // tem permissão de gravar no estado quando termina.
+    const requestId = ++summaryRequestIdRef.current;
+    const isStale = () => summaryRequestIdRef.current !== requestId;
+
     if (!token || (!viewingAll && !selectedShop)) {
       setSummary(null);
       setSummaryPeriod(null);
@@ -222,21 +232,24 @@ export default function InicioScreen() {
             )
           ),
         ]);
+        if (isStale()) return;
         setSummary(combined);
         setSummaryPeriod(period);
         setPerShopProfit(perShop);
       } else {
         const s = await getSummary(token, selectedShop!.id, PERIOD_TO_API[period]);
+        if (isStale()) return;
         setSummary(s);
         setSummaryPeriod(period);
         setPerShopProfit([]);
       }
     } catch {
+      if (isStale()) return;
       setSummary(null);
       setSummaryPeriod(null);
       setPerShopProfit([]);
     } finally {
-      setSummaryLoading(false);
+      if (!isStale()) setSummaryLoading(false);
     }
   }, [token, selectedShop, period, viewingAll, shops]);
 
