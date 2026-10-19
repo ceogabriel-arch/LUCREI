@@ -463,6 +463,15 @@ export function getPlans() {
   return request<{ plans: Plan[] }>('/plans');
 }
 
+// Valor proporcional (upgrade no meio do ciclo) de cada plano - mapa por
+// "key" do plano, só com os que têm valor aplicável agora (ver
+// computeUpgradePreview no backend). Não cria cobrança nenhuma, só calcula.
+export function getUpgradePreview(token: string) {
+  return request<Record<string, number>>('/plans/upgrade-preview', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 export function selectPlan(token: string, key: string, couponCode?: string) {
   // checkoutUrl vem preenchido quando precisa pagar agora (abre no
   // navegador - o cliente escolhe Pix ou cartão na página da HyperCash);

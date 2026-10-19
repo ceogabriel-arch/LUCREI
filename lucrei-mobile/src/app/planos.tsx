@@ -9,6 +9,7 @@ import { Screen } from '@/components/screen';
 import {
   getCheckoutUrl,
   getPlans,
+  getUpgradePreview,
   validateCoupon,
   ApiError,
   type BillingPeriod,
@@ -78,7 +79,15 @@ function resolvePendingTab(pendingTab: Window | null, url: string | null) {
   }
 }
 
-function PlanCard({ plan, appliedCoupon }: { plan: Plan; appliedCoupon: CouponPreview | null }) {
+function PlanCard({
+  plan,
+  appliedCoupon,
+  upgradeAmount,
+}: {
+  plan: Plan;
+  appliedCoupon: CouponPreview | null;
+  upgradeAmount: number | null;
+}) {
   const { state, selectPlan } = useAuth();
   const Colors = useColors();
   const [saving, setSaving] = useState(false);
@@ -256,6 +265,20 @@ function PlanCard({ plan, appliedCoupon }: { plan: Plan; appliedCoupon: CouponPr
               </Text>
             </View>
           )}
+          {/* Quem já tem plano pago com ciclo em andamento paga só a
+              diferença proporcional ao trocar pra esse plano agora, não o
+              valor cheio acima - pedido ao vivo: card mostrava um preço,
+              checkout abria em outro, sem explicação nenhuma do motivo. */}
+          {upgradeAmount !== null && (
+            <View className="mt-1.5 flex-row items-center gap-1.5">
+              <Ionicons name="flash" size={12} color={Colors.gold} />
+              <Text className="text-xs text-lucrei-textMuted">
+                Trocar agora:{' '}
+                <Text style={{ fontWeight: '700', color: Colors.gold }}>{formatBRL(upgradeAmount)}</Text> (proporcional ao
+                ciclo atual)
+              </Text>
+            </View>
+          )}
         </>
       )}
 
@@ -336,6 +359,11 @@ export default function PlanosScreen() {
   const pendingCouponPercentOff = authState.status === 'authenticated' ? authState.user.pendingCouponPercentOff : null;
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [plans, setPlans] = useState<Plan[]>([]);
+  // Valor proporcional do upgrade por plano (key -> R$) - só preenchido pra
+  // quem já tem plano pago com ciclo em andamento, calculado uma vez ao
+  // carregar a tela (não recalcula a cada render, o valor só muda mesmo com
+  // o passar do tempo).
+  const [upgradePreview, setUpgradePreview] = useState<Record<string, number>>({});
   // Se a pessoa já tem um plano, abre o seletor já no período que ela paga
   // hoje - evita ela ver preço mensal por engano estando no anual (ou vice-versa).
   const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>(
@@ -395,6 +423,22 @@ export default function PlanosScreen() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (authState.status !== 'authenticated') return;
+    let cancelled = false;
+    getUpgradePreview(authState.token)
+      .then((preview) => {
+        if (!cancelled) setUpgradePreview(preview);
+      })
+      .catch(() => {
+        // Só um complemento visual do preço - sem o preview, o card
+        // simplesmente mostra o preço cheio normal, sem travar nada.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [authState.status, authState.status === 'authenticated' ? authState.token : null]);
 
   return (
     <Screen>
@@ -533,7 +577,7 @@ export default function PlanosScreen() {
       {loadState === 'ready' && (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="pb-8" contentContainerStyle={webCapWidth()}>
           {visiblePlans.map((plan) => (
-            <PlanCard key={plan.key} plan={plan} appliedCoupon={appliedCoupon} />
+            <PlanCard key={plan.key} plan={plan} appliedCoupon={appliedCoupon} upgradeAmount={upgradePreview[plan.key] ?? null} />
           ))}
         </ScrollView>
       )}

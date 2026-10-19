@@ -13,7 +13,7 @@ import { applyPercentOff, validateCoupon } from '../../lib/coupons';
 import { sendOpsAlertEmail } from '../../lib/email';
 import { prisma } from '../../lib/prisma';
 import { addDays } from '../../lib/pix-billing';
-import { createProratedUpgradeCharge, findActivePaidCycle } from '../../lib/plan-upgrade';
+import { computeUpgradePreview, createProratedUpgradeCharge, findActivePaidCycle } from '../../lib/plan-upgrade';
 import { getSalesLimitStatus } from '../../lib/sales-usage';
 import { serializeUser, userWithPlan } from './serialize-user';
 
@@ -98,6 +98,28 @@ export async function plansRoutes(app: FastifyInstance) {
         priceCurrent: plan.priceCurrent !== null ? Number(plan.priceCurrent) : null,
       })),
     };
+  });
+
+  // Valor proporcional de cada plano mais caro, SE a conta pedisse upgrade
+  // agora - só pra mostrar no card antes de qualquer clique (pedido ao
+  // vivo: card mostrava o preço cheio, só a confirmação depois do toque
+  // mostrava o valor de verdade, sem contexto nenhum). Não cria cobrança
+  // nenhuma, só calcula (ver computeUpgradePreview) - plano sem valor
+  // proporcional aplicável (já é o atual, downgrade, sem ciclo pago, etc)
+  // simplesmente não entra no mapa devolvido.
+  app.get('/plans/upgrade-preview', { onRequest: [app.authenticate] }, async (request, reply) => {
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: request.user.sub }, include: { plan: true } });
+    const plans = await prisma.plan.findMany();
+
+    const preview: Record<string, number> = {};
+    await Promise.all(
+      plans.map(async (plan) => {
+        const amount = await computeUpgradePreview(user, plan);
+        if (amount !== null) preview[plan.key] = amount;
+      })
+    );
+
+    return reply.send(preview);
   });
 
   app.post<{ Body: SelectPlanBody }>(

@@ -19,25 +19,12 @@ async function findLatestPaidSubscription(userId: string) {
   });
 }
 
-/**
- * Plano trocado no meio do ciclo por um mais caro precisa de uma cobrança
- * avulsa agora (proporcional ao tempo restante) - sem isso, a pessoa ficaria
- * no plano novo de graça até a renovação. Essa cobrança fica presa à
- * assinatura ATUAL (não cria/cancela nada) e o plano só é aplicado de
- * verdade quando o pagamento é confirmado via webhook (ver
- * handleUpgradeChargePaid em billing/routes.ts, correlacionado por
- * HypercashUpgradeCharge.paymentLinkId) - a assinatura antiga, já paga,
- * continua intacta se a pessoa abandonar esse pagamento. Não mexe em
- * downgrade (sem reembolso automático - ver findActivePaidCycle, que
- * bloqueia até a renovação), em troca de período de cobrança (mensal<->anual
- * muda a frequência de cobrança, não é só valor), nem em assinatura ainda em
- * teste grátis (nada foi pago ainda, não tem "proporcional" a cobrar).
- * Retorna null quando a troca não precisa de cobrança (caminho normal segue).
- */
-export async function createProratedUpgradeCharge(
-  user: User & { plan: Plan | null },
-  newPlan: Plan
-): Promise<ProrationCharge> {
+// Mesma conta usada pra criar a cobrança de verdade (createProratedUpgradeCharge)
+// e pra só MOSTRAR o valor antes de qualquer cobrança (computeUpgradePreview,
+// usado pelo card de planos) - extraído separado pra nunca os dois caminhos
+// calcularem o valor de um jeito ligeiramente diferente. Sem efeito colateral
+// nenhum (não mexe no banco nem chama a HyperCash).
+async function computeProratedAmount(user: User & { plan: Plan | null }, newPlan: Plan): Promise<number | null> {
   if (!user.plan || user.plan.id === newPlan.id) return null;
   if (user.plan.billingPeriod !== newPlan.billingPeriod) return null;
   if (user.plan.priceCurrent === null || newPlan.priceCurrent === null) return null;
@@ -63,7 +50,46 @@ export async function createProratedUpgradeCharge(
     subscription.pendingCouponPercentOff != null
       ? applyPercentOff(rawProratedAmount, subscription.pendingCouponPercentOff)
       : rawProratedAmount;
-  if (proratedAmount <= 0) return null;
+  return proratedAmount > 0 ? proratedAmount : null;
+}
+
+/**
+ * Só CALCULA o valor proporcional, sem criar cobrança nenhuma - usado pelo
+ * card de planos pra mostrar "hoje: R$X" antes da pessoa tocar em "Fazer
+ * upgrade" (pedido ao vivo: card mostrava o preço cheio, só o aviso depois
+ * do toque mostrava o valor de verdade, confuso sem contexto nenhum).
+ */
+export async function computeUpgradePreview(user: User & { plan: Plan | null }, newPlan: Plan): Promise<number | null> {
+  return computeProratedAmount(user, newPlan);
+}
+
+/**
+ * Plano trocado no meio do ciclo por um mais caro precisa de uma cobrança
+ * avulsa agora (proporcional ao tempo restante) - sem isso, a pessoa ficaria
+ * no plano novo de graça até a renovação. Essa cobrança fica presa à
+ * assinatura ATUAL (não cria/cancela nada) e o plano só é aplicado de
+ * verdade quando o pagamento é confirmado via webhook (ver
+ * handleUpgradeChargePaid em billing/routes.ts, correlacionado por
+ * HypercashUpgradeCharge.paymentLinkId) - a assinatura antiga, já paga,
+ * continua intacta se a pessoa abandonar esse pagamento. Não mexe em
+ * downgrade (sem reembolso automático - ver findActivePaidCycle, que
+ * bloqueia até a renovação), em troca de período de cobrança (mensal<->anual
+ * muda a frequência de cobrança, não é só valor), nem em assinatura ainda em
+ * teste grátis (nada foi pago ainda, não tem "proporcional" a cobrar).
+ * Retorna null quando a troca não precisa de cobrança (caminho normal segue).
+ */
+export async function createProratedUpgradeCharge(
+  user: User & { plan: Plan | null },
+  newPlan: Plan
+): Promise<ProrationCharge> {
+  const proratedAmount = await computeProratedAmount(user, newPlan);
+  if (proratedAmount === null) return null;
+
+  // Já confirmada como não-nula pela mesma checagem dentro de
+  // computeProratedAmount acima - buscada de novo aqui só porque o id da
+  // assinatura (pra linkar a HypercashUpgradeCharge) não sai de lá.
+  const subscription = await findLatestPaidSubscription(user.id);
+  if (!subscription) return null;
 
   // Sempre gera um link novo (não tenta reaproveitar um pendente de uma
   // tentativa anterior) - mais simples, e inofensivo mesmo que a pessoa
