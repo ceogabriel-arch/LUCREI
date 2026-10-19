@@ -74,7 +74,7 @@ export function Sparkline({ data, width = 296, height = 56 }: SparklineProps) {
   // vivo: a dica nascia por cima do pico).
   const tooltipWidth = 120;
   const tooltipHeight = 56;
-  const tooltipGap = 10;
+  const tooltipGap = 22;
   const tooltipLeft = hovered ? Math.min(Math.max(hovered.x - tooltipWidth / 2, 0), width - tooltipWidth) : 0;
   const fitsAbove = hovered ? hovered.y - tooltipHeight - tooltipGap >= 0 : true;
   const tooltipTop = hovered ? (fitsAbove ? hovered.y - tooltipHeight - tooltipGap : hovered.y + tooltipGap) : 0;
