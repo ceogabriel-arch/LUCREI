@@ -402,6 +402,11 @@ export default function InicioScreen() {
   const salesUsed = state.status === 'authenticated' ? state.user.salesUsedThisMonth ?? null : null;
   const salesUsageRatio = salesLimit && salesUsed !== null ? salesUsed / salesLimit : null;
   const showSalesLimitWarning = salesUsageRatio !== null && salesUsageRatio >= 0.8;
+  // Achado ao vivo: passado de 300/300 ainda mostrava "está perto do
+  // limite" - mesmo aviso amarelo de quando falta pouco. Acima do limite é
+  // mais grave (carência rodando, ver sales-usage.ts), merece cor e texto
+  // diferentes.
+  const overSalesLimit = salesUsed !== null && salesLimit !== null && salesUsed >= salesLimit;
 
   const trialDaysLeft =
     state.status === 'authenticated' && state.user.subscriptionStatus === 'trialing' && state.user.trialEndsAt
@@ -514,14 +519,17 @@ export default function InicioScreen() {
         {showSalesLimitWarning && (
           <Pressable
             onPress={() => router.push('/planos')}
-            className="mt-4 flex-row items-center gap-3 rounded-2xl border border-lucrei-gold bg-lucrei-surface p-4">
-            <Ionicons name="warning-outline" size={20} color={Colors.gold} />
+            className="mt-4 flex-row items-center gap-3 rounded-2xl border bg-lucrei-surface p-4"
+            style={{ borderColor: overSalesLimit ? Colors.danger : Colors.gold }}>
+            <Ionicons name="warning-outline" size={20} color={overSalesLimit ? Colors.danger : Colors.gold} />
             <View className="flex-1">
               <Text className="text-sm font-semibold text-lucrei-text">
                 {salesUsed} de {salesLimit} vendas usadas esse mês
               </Text>
               <Text className="mt-0.5 text-xs text-lucrei-textMuted">
-                Você está perto do limite do seu plano. Toque para ver planos maiores.
+                {overSalesLimit
+                  ? 'Você excedeu o limite do seu plano. Toque para ver planos maiores.'
+                  : 'Você está perto do limite do seu plano. Toque para ver planos maiores.'}
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
