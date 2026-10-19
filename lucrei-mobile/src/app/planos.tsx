@@ -121,9 +121,9 @@ function PlanCard({ plan, appliedCoupon }: { plan: Plan; appliedCoupon: CouponPr
       // do webhook confirmar), e mostrava a mensagem errada pra quem
       // estava saindo do teste pra pagar.
       showAlert(
-        'Plano atualizado',
+        result.checkoutUrl ? 'Confirme o pagamento' : 'Plano atualizado',
         result.checkoutUrl
-          ? `Abrindo o checkout pra confirmar o pagamento do plano ${plan.name}.`
+          ? `Abrindo o checkout pra confirmar o pagamento do plano ${plan.name}. O plano só muda de verdade depois que o pagamento for confirmado.`
           : result.trialEndsAt
             ? `Você agora está no plano ${plan.name}. Seu teste grátis de 15 dias começou.`
             : `Você agora está no plano ${plan.name}.`
