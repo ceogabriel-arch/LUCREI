@@ -599,7 +599,7 @@ export default function InicioScreen() {
                 );
               })}
             </View>
-            {!stillLoading && summaryLoading && <ActivityIndicator size="small" color={Colors.gold} />}
+            {summaryLoading && <ActivityIndicator size="small" color={Colors.gold} />}
           </View>
 
           {!viewingAll && selectedShop && (
