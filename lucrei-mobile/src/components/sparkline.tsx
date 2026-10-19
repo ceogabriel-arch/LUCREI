@@ -67,10 +67,17 @@ export function Sparkline({ data, width = 296, height = 56 }: SparklineProps) {
   const last = points[points.length - 1];
   const hovered = hoveredIndex !== null ? points[hoveredIndex] : null;
 
-  // Caixa de ~120px, grudada acima do ponto - perto das bordas inverte pra
-  // não cortar fora da área do gráfico.
+  // Caixa de ~120px, grudada acima do ponto - perto das bordas horizontais
+  // inverte a posição pra não cortar fora da área do gráfico. Quando o
+  // ponto está perto do topo (pico do gráfico), não cabe acima sem
+  // sobrepor a própria curva - vira embaixo do ponto nesse caso (achado ao
+  // vivo: a dica nascia por cima do pico).
   const tooltipWidth = 120;
+  const tooltipHeight = 56;
+  const tooltipGap = 10;
   const tooltipLeft = hovered ? Math.min(Math.max(hovered.x - tooltipWidth / 2, 0), width - tooltipWidth) : 0;
+  const fitsAbove = hovered ? hovered.y - tooltipHeight - tooltipGap >= 0 : true;
+  const tooltipTop = hovered ? (fitsAbove ? hovered.y - tooltipHeight - tooltipGap : hovered.y + tooltipGap) : 0;
 
   return (
     <View style={{ width, height }}>
@@ -114,7 +121,7 @@ export function Sparkline({ data, width = 296, height = 56 }: SparklineProps) {
           style={{
             width: tooltipWidth,
             left: tooltipLeft,
-            top: Math.max(hovered.y - 58, 0),
+            top: tooltipTop,
             shadowColor: '#000',
             shadowOpacity: 0.35,
             shadowRadius: 8,

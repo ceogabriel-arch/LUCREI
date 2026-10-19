@@ -34,7 +34,7 @@ import { showAlert } from '@/lib/alert';
 import { useAuth } from '@/lib/auth';
 import { useDataRefresh } from '@/lib/data-refresh';
 import { formatBRL } from '@/lib/format';
-import { PERIOD_TO_API, PERIODS, usePeriod } from '@/lib/period';
+import { PERIOD_TO_API, PERIODS, type PeriodLabel, usePeriod } from '@/lib/period';
 import { useIsDesktopWeb, webCapWidth } from '@/lib/responsive';
 import { connectMercadoLivreStore } from '@/lib/mercado-livre';
 import { useSelectedShop } from '@/lib/selected-shop';
@@ -63,6 +63,13 @@ export default function InicioScreen() {
   const [backendStatus, setBackendStatus] = useState<BackendStatus>('checking');
   const [connecting, setConnecting] = useState<'shopee' | 'mercado_livre' | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
+  // Qual período o "summary" guardado acima pertence de verdade - achado ao
+  // vivo: trocar de "Hoje" pra "30 dias" pintava o botão novo na hora, mas
+  // os números de "Hoje" ficavam piscando até a troca real de período
+  // (efeito separado, roda só depois desse 1º paint) limpar e buscar de
+  // novo. Comparar contra "period" direto no render (sem esperar um efeito)
+  // evita esse flash.
+  const [summaryPeriod, setSummaryPeriod] = useState<PeriodLabel | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [perShopProfit, setPerShopProfit] = useState<
     { shopId: string; shopName: string; provider: 'shopee' | 'mercado_livre'; profit: number }[]
@@ -193,6 +200,7 @@ export default function InicioScreen() {
   const loadSummary = useCallback(async () => {
     if (!token || (!viewingAll && !selectedShop)) {
       setSummary(null);
+      setSummaryPeriod(null);
       setPerShopProfit([]);
       setSummaryLoading(false);
       return;
@@ -215,14 +223,17 @@ export default function InicioScreen() {
           ),
         ]);
         setSummary(combined);
+        setSummaryPeriod(period);
         setPerShopProfit(perShop);
       } else {
         const s = await getSummary(token, selectedShop!.id, PERIOD_TO_API[period]);
         setSummary(s);
+        setSummaryPeriod(period);
         setPerShopProfit([]);
       }
     } catch {
       setSummary(null);
+      setSummaryPeriod(null);
       setPerShopProfit([]);
     } finally {
       setSummaryLoading(false);
@@ -396,7 +407,7 @@ export default function InicioScreen() {
   // desconectada).
   const hasShop = shops.some((s) => s.status === 'active');
   const showingRealData = hasShop && summary !== null;
-  const stillLoading = !shopsLoaded || (hasShop && summaryLoading && summary === null);
+  const stillLoading = !shopsLoaded || (hasShop && summaryLoading && (summary === null || summaryPeriod !== period));
 
   // A sincronização automática (dispara sozinha ao conectar) pode ainda
   // estar rodando quando o resumo já veio zerado do banco - sem isso, loja
