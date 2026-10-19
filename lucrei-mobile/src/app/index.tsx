@@ -670,7 +670,7 @@ export default function InicioScreen() {
                       {subscriptionAccess.isPastDue ? (
                         <BlurredValue width={296} height={56} />
                       ) : (
-                        <Sparkline data={summary!.trend.map((t) => t.profit)} />
+                        <Sparkline data={summary!.trend} />
                       )}
                     </View>
                   )}
@@ -693,7 +693,7 @@ export default function InicioScreen() {
                             <ProfitBreakdownDonut summary={summary} size={84} strokeWidth={13} />
                           </>
                         )}
-                        <Sparkline data={summary!.trend.map((t) => t.profit)} width={260} height={110} />
+                        <Sparkline data={summary!.trend} width={260} height={110} />
                       </>
                     )}
                   </View>

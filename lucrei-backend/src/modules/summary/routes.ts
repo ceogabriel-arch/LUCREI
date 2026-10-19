@@ -22,7 +22,7 @@ type ShopSummary = {
   avgTicket: number;
   profitMargin: number;
   itemsMissingCost: number;
-  trend: { date: string; profit: number }[];
+  trend: { date: string; profit: number; ordersCount: number }[];
 };
 
 // Extraído pra ser chamado uma vez por loja tanto na rota de uma loja só
@@ -68,10 +68,14 @@ export async function computeShopSummary(shop: Shop, query: SummaryQuery): Promi
   let taxCost = 0;
   let itemsMissingCost = 0;
   const profitByDay = new Map<string, number>();
+  // Um incremento por PEDIDO (não por linha) - um pedido com 3 itens conta
+  // como 1 venda naquele dia, igual ordersCount já faz pro total do período.
+  const ordersCountByDay = new Map<string, number>();
 
   for (const order of orders) {
     const dayBasis = byOrderDate ? order.orderDate : (order.completedAt ?? order.orderDate);
     const day = dayBasis.toISOString().slice(0, 10);
+    ordersCountByDay.set(day, (ordersCountByDay.get(day) ?? 0) + 1);
     for (const li of order.lineItems) {
       const sale = Number(li.salePrice);
       revenue += sale;
@@ -102,7 +106,7 @@ export async function computeShopSummary(shop: Shop, query: SummaryQuery): Promi
   const profitMargin = revenueWithKnownCost > 0 ? (profit / revenueWithKnownCost) * 100 : 0;
   const trend = Array.from(profitByDay.entries())
     .sort(([a], [b]) => (a < b ? -1 : 1))
-    .map(([date, profit]) => ({ date, profit }));
+    .map(([date, profit]) => ({ date, profit, ordersCount: ordersCountByDay.get(date) ?? 0 }));
 
   return { revenue, revenueWithKnownCost, cost, shippingCost, shopeeFees, productCost, taxCost, profit, ordersCount, avgTicket, profitMargin, itemsMissingCost, trend };
 }
@@ -124,15 +128,19 @@ function combineSummaries(summaries: ShopSummary[]): ShopSummary {
   const avgTicket = ordersCount > 0 ? revenue / ordersCount : 0;
   const profitMargin = revenueWithKnownCost > 0 ? (profit / revenueWithKnownCost) * 100 : 0;
 
-  const trendByDay = new Map<string, number>();
+  const trendByDay = new Map<string, { profit: number; ordersCount: number }>();
   for (const s of summaries) {
     for (const point of s.trend) {
-      trendByDay.set(point.date, (trendByDay.get(point.date) ?? 0) + point.profit);
+      const existing = trendByDay.get(point.date) ?? { profit: 0, ordersCount: 0 };
+      trendByDay.set(point.date, {
+        profit: existing.profit + point.profit,
+        ordersCount: existing.ordersCount + point.ordersCount,
+      });
     }
   }
   const trend = Array.from(trendByDay.entries())
     .sort(([a], [b]) => (a < b ? -1 : 1))
-    .map(([date, profit]) => ({ date, profit }));
+    .map(([date, { profit, ordersCount }]) => ({ date, profit, ordersCount }));
 
   return { revenue, revenueWithKnownCost, cost, shippingCost, shopeeFees, productCost, taxCost, profit, ordersCount, avgTicket, profitMargin, itemsMissingCost, trend };
 }

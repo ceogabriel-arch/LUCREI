@@ -210,7 +210,7 @@ export type Summary = {
   avgTicket: number;
   profitMargin: number;
   itemsMissingCost: number;
-  trend: { date: string; profit: number }[];
+  trend: { date: string; profit: number; ordersCount: number }[];
 };
 
 export function getSummary(token: string, shopId: string, period: Period) {
