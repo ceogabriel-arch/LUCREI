@@ -467,7 +467,11 @@ export function selectPlan(token: string, key: string, couponCode?: string) {
   // checkoutUrl vem preenchido quando precisa pagar agora (abre no
   // navegador - o cliente escolhe Pix ou cartão na página da HyperCash);
   // null quando é um teste grátis recém-começado, sem nada a cobrar ainda.
-  return request<AuthUser & { checkoutUrl: string | null }>('/plans/select', {
+  // upgradeAmount só vem preenchido no caso específico de upgrade no meio
+  // do ciclo (cobrança proporcional) - é diferente do preço cheio do plano
+  // já mostrado no card, por isso precisa aparecer explícito (reportado ao
+  // vivo: card mostrava R$157,60, checkout abria em R$75,22 sem explicação).
+  return request<AuthUser & { checkoutUrl: string | null; upgradeAmount?: number | null }>('/plans/select', {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify({ key, couponCode }),

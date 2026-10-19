@@ -98,7 +98,7 @@ describe('createProratedUpgradeCharge', () => {
       makePlan({ id: 'plan_pro', priceCurrent: 197 })
     );
 
-    expect(result).toEqual({ checkoutUrl: 'https://pay.hypercash.com.br/x' });
+    expect(result).toEqual({ checkoutUrl: 'https://pay.hypercash.com.br/x', amount: 50 });
     // priceDiff 100 * 0.5 = 50
     expect(createOneTimePaymentLinkMock).toHaveBeenCalledWith(expect.objectContaining({ priceCents: 5000 }));
     expect(prismaMock.hypercashUpgradeCharge.create).toHaveBeenCalledWith({

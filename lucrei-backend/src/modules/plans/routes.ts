@@ -145,7 +145,11 @@ export async function plansRoutes(app: FastifyInstance) {
       try {
         const upgradeCharge = await createProratedUpgradeCharge(user, plan);
         if (upgradeCharge) {
-          return reply.send({ ...(await serializeUser(user)), checkoutUrl: upgradeCharge.checkoutUrl });
+          return reply.send({
+            ...(await serializeUser(user)),
+            checkoutUrl: upgradeCharge.checkoutUrl,
+            upgradeAmount: upgradeCharge.amount,
+          });
         }
       } catch (err) {
         app.log.error(err);

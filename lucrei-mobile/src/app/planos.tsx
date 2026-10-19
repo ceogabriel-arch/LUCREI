@@ -120,10 +120,17 @@ function PlanCard({ plan, appliedCoupon }: { plan: Plan; appliedCoupon: CouponPr
       // continua preenchido mesmo pagando (status só vira 'active' depois
       // do webhook confirmar), e mostrava a mensagem errada pra quem
       // estava saindo do teste pra pagar.
+      // upgradeAmount só vem preenchido no upgrade no meio do ciclo
+      // (cobrança proporcional) - valor diferente do preço cheio já
+      // mostrado no card, então precisa aparecer explícito aqui (reportado
+      // ao vivo: card mostrava um valor, checkout abria em outro, sem
+      // explicação nenhuma do motivo).
       showAlert(
         result.checkoutUrl ? 'Confirme o pagamento' : 'Plano atualizado',
         result.checkoutUrl
-          ? `Abrindo o checkout pra confirmar o pagamento do plano ${plan.name}. O plano só muda de verdade depois que o pagamento for confirmado.`
+          ? result.upgradeAmount
+            ? `Abrindo o checkout pra pagar ${formatBRL(result.upgradeAmount)} agora (proporcional ao tempo restante do seu ciclo atual). As próximas cobranças já saem no valor cheio do plano ${plan.name}.`
+            : `Abrindo o checkout pra confirmar o pagamento do plano ${plan.name}. O plano só muda de verdade depois que o pagamento for confirmado.`
           : result.trialEndsAt
             ? `Você agora está no plano ${plan.name}. Seu teste grátis de 15 dias começou.`
             : `Você agora está no plano ${plan.name}.`

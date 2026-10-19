@@ -5,7 +5,7 @@ import { createOneTimePaymentLink, priceToCents } from '../hypercash-client';
 import { CYCLE_DAYS_BY_PERIOD } from './pix-billing';
 import { prisma } from './prisma';
 
-export type ProrationCharge = { checkoutUrl: string } | null;
+export type ProrationCharge = { checkoutUrl: string; amount: number } | null;
 
 const BACK_URL = process.env.PUBLIC_APP_URL || 'https://lucrei-production-bce6.up.railway.app';
 
@@ -85,7 +85,7 @@ export async function createProratedUpgradeCharge(
     },
   });
 
-  return { checkoutUrl: link.checkoutUrl! };
+  return { checkoutUrl: link.checkoutUrl!, amount: proratedAmount };
 }
 
 /**

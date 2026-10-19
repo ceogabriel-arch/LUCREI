@@ -25,7 +25,7 @@ type AuthState =
 
 type AuthResult = { ok: true } | { ok: false; message: string };
 type SelectPlanResult =
-  | { ok: true; checkoutUrl: string | null; trialEndsAt: string | null; plan: UserPlan | null }
+  | { ok: true; checkoutUrl: string | null; upgradeAmount: number | null; trialEndsAt: string | null; plan: UserPlan | null }
   | { ok: false; message: string };
 
 type AuthContextValue = {
@@ -209,11 +209,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
     async (key: string, couponCode?: string): Promise<SelectPlanResult> => {
       if (!token) return { ok: false, message: 'Não autenticado.' };
       try {
-        const { checkoutUrl, ...user } = await apiSelectPlan(token, key, couponCode);
+        const { checkoutUrl, upgradeAmount, ...user } = await apiSelectPlan(token, key, couponCode);
         setState({ status: 'authenticated', token, user });
         return {
           ok: true,
           checkoutUrl: checkoutUrl ?? null,
+          upgradeAmount: upgradeAmount ?? null,
           trialEndsAt: user.trialEndsAt,
           plan: user.plan,
         };
