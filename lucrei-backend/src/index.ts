@@ -12,6 +12,7 @@ import staticFiles from '@fastify/static';
 import Fastify, { type FastifyError } from 'fastify';
 
 import { prisma } from './lib/prisma';
+import { startCanceledSubscriptionExpiryWatchdog } from './lib/canceled-subscription-expiry-watchdog';
 import { startHypercashExpiryWatchdog } from './lib/hypercash-expiry-watchdog';
 import { startShopSyncWatchdog } from './lib/shop-sync-watchdog';
 import { startSyncWatchdog } from './lib/sync-watchdog';
@@ -227,6 +228,12 @@ async function main() {
   // sempre, já que nada mais troca subscriptionStatus fora de
   // /plans/select. Ver trial-expiry-watchdog.ts.
   startTrialExpiryWatchdog(app.log);
+
+  // Marca sozinho como 'past_due' quem cancelou a assinatura E já passou do
+  // fim do período que tinha pago - sem isso, 'canceled' nunca bloqueava
+  // acesso (getSubscriptionAccessStatus só reage a 'past_due'), liberado pra
+  // sempre depois de cancelar. Ver canceled-subscription-expiry-watchdog.ts.
+  startCanceledSubscriptionExpiryWatchdog(app.log);
 }
 
 main().catch((err) => {
