@@ -1,4 +1,4 @@
-import { mapLimit } from '../../lib/concurrency';
+import { mapLimit, withTimeout } from '../../lib/concurrency';
 import { checkDailyGoalReached } from '../../lib/daily-goal-notifications';
 import { notifyOrderCompletedIfNeeded } from '../../lib/order-notifications';
 import { prisma } from '../../lib/prisma';
@@ -201,22 +201,6 @@ const MAX_PAGES_PER_WINDOW = 200;
 // get_escrow_detail, passa disso tranquilamente) - 10min dá bem mais folga
 // sem deixar de existir um teto.
 const WINDOW_TIMEOUT_MS = 10 * 60 * 1000;
-
-function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(message)), ms);
-    promise.then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (err) => {
-        clearTimeout(timer);
-        reject(err);
-      }
-    );
-  });
-}
 
 async function syncWindowUnbounded(
   shopId: string,
