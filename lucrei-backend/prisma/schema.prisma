@@ -390,7 +390,8 @@ model Plan {
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
-  users User[]
+  users                   User[]
+  hypercashUpgradeCharges HypercashUpgradeCharge[]
 
   @@unique([groupKey, billingPeriod])
 }
@@ -413,8 +414,9 @@ model Subscription {
   // seguinte.
   pendingCouponPercentOff Int?
 
-  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  pixCharges PixCharge[]
+  user                    User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pixCharges              PixCharge[]
+  hypercashUpgradeCharges HypercashUpgradeCharge[]
 
   @@index([userId])
 }
@@ -467,6 +469,27 @@ model PixCharge {
   createdAt            DateTime        @default(now())
 
   subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId])
+}
+
+// Cobrança avulsa (não recorrente) pra pagar a diferença proporcional de um
+// upgrade de plano no meio do ciclo - ao confirmar o pagamento (webhook
+// "purchase.approved" da HyperCash), aplica targetPlanId na assinatura.
+// Categoria de webhook própria ("Transação/Infração"), diferente da de
+// assinatura recorrente - ver billing/routes.ts.
+model HypercashUpgradeCharge {
+  id             String    @id @default(cuid())
+  subscriptionId String
+  targetPlanId   String
+  paymentLinkId  String    @unique
+  amount         Decimal   @db.Decimal(12, 2)
+  status         String    @default("pending") // pending | paid | canceled
+  createdAt      DateTime  @default(now())
+  paidAt         DateTime?
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  targetPlan   Plan         @relation(fields: [targetPlanId], references: [id])
 
   @@index([subscriptionId])
 }

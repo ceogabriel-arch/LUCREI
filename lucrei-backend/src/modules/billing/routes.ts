@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 
 import type { FastifyInstance } from 'fastify';
 
+import { applyPercentOff } from '../../lib/coupons';
 import { sendOpsAlertEmail } from '../../lib/email';
 import { verifyHypercashSignature } from '../../lib/hypercash-webhook';
 import { prisma } from '../../lib/prisma';
@@ -9,6 +10,15 @@ import { ensureCurrentPixCharge } from '../../lib/pix-billing';
 import { formatBRL, sendPushNotification } from '../../lib/push-notifications';
 import { mapHypercashStatus, mapMercadoPagoStatus } from '../../lib/subscription-sync';
 import { getPayment, getPreapproval, updatePreapprovalValue } from '../../mercadopago-client';
+import {
+  cancelSubscription as cancelHypercashSubscription,
+  createPaymentLink,
+  deactivatePaymentLink,
+  getSubscriptionByPaymentLinkId,
+  priceToCents,
+} from '../../hypercash-client';
+
+const BACK_URL = process.env.PUBLIC_APP_URL || 'https://lucrei-production-bce6.up.railway.app';
 
 type WebhookBody = {
   type?: string;
@@ -237,6 +247,138 @@ async function handleHypercashSubscriptionEvent(app: FastifyInstance, data: Hype
   return true;
 }
 
+// Mesmo valor pago "pra sempre" que já vale pra cada cobrança recorrente
+// nova (ver coupons.ts) - a assinatura nova criada aqui pro upgrade segue a
+// mesma regra.
+const PAID_UPGRADE_STATUSES = new Set(['paid', 'approved', 'completed', 'success']);
+
+/**
+ * Cobrança proporcional do upgrade confirmada - aplica o plano novo na hora
+ * (acesso liberado já) e troca a assinatura recorrente pelo valor cheio do
+ * plano novo (decisão já tomada: a HyperCash não deixa atualizar o valor de
+ * uma assinatura ativa, só cancelar+criar outra). A assinatura antiga, já
+ * paga até o fim do ciclo atual, é cancelada - a pessoa já está no plano novo
+ * agora, não faz sentido continuar cobrando pelo antigo depois. A conta
+ * entra em 'past_due' com o link da assinatura nova pronto pra pagar (mesmo
+ * fluxo/UI que já existe pra qualquer assinatura pendente) - não tem como
+ * evitar um 2º checkout aqui, HyperCash não aceita trocar valor de assinatura
+ * ativa nem reaproveitar cartão salvo.
+ */
+async function applyHypercashUpgrade(app: FastifyInstance, charge: { id: string; subscriptionId: string; targetPlanId: string }) {
+  const subscription = await prisma.subscription.findUniqueOrThrow({ where: { id: charge.subscriptionId } });
+  const targetPlan = await prisma.plan.findUnique({ where: { id: charge.targetPlanId } });
+  if (!targetPlan || targetPlan.priceCurrent === null) {
+    // Dinheiro já capturado mas não tem mais plano pra aplicar - precisa de
+    // reconciliação manual, não tenta de novo sozinho.
+    app.log.error(
+      { chargeId: charge.id, targetPlanId: charge.targetPlanId },
+      'Cobrança de upgrade (HyperCash) aprovada mas o plano de destino não existe mais - upgrade não aplicado.'
+    );
+    sendOpsAlertEmail(
+      app,
+      'Upgrade HyperCash pago sem plano de destino válido',
+      `chargeId: ${charge.id}\ntargetPlanId: ${charge.targetPlanId}`
+    ).catch(() => {});
+    return;
+  }
+
+  if (subscription.providerSubscriptionId) {
+    try {
+      const hcSubscription = await getSubscriptionByPaymentLinkId(subscription.providerSubscriptionId);
+      if (hcSubscription) await cancelHypercashSubscription(hcSubscription.id);
+      await deactivatePaymentLink(subscription.providerSubscriptionId);
+    } catch (err) {
+      // Não bloqueia o upgrade por falha ao cancelar a antiga - pior caso é
+      // cobrar 2 assinaturas até alguém notar, bem menos grave que travar o
+      // upgrade já pago.
+      app.log.error({ err, subscriptionId: subscription.id }, 'Falha ao cancelar a assinatura HyperCash antiga após upgrade pago.');
+    }
+  }
+
+  const effectivePercentOff = subscription.pendingCouponPercentOff;
+  const amount = effectivePercentOff != null ? applyPercentOff(Number(targetPlan.priceCurrent), effectivePercentOff) : Number(targetPlan.priceCurrent);
+
+  let link;
+  try {
+    link = await createPaymentLink({
+      name: `Lucrei - Plano ${targetPlan.name}`,
+      priceCents: priceToCents(amount),
+      isRecurring: true,
+      frequency: targetPlan.billingPeriod === 'annual' ? 'annual' : 'monthly',
+      successRedirectUrl: `${BACK_URL}/planos`,
+    });
+  } catch (err) {
+    // Upgrade já foi PAGO - não reverte o plano por causa disso, só fica sem
+    // o link da assinatura nova pra pagar (a próxima tentativa de
+    // /plans/select gera um na hora, igual já faz pra qualquer past_due sem
+    // link). Alerta pra alguém acompanhar de perto esse caso.
+    app.log.error({ err, chargeId: charge.id }, 'Falha ao criar a assinatura recorrente nova após upgrade pago.');
+    sendOpsAlertEmail(
+      app,
+      'Upgrade HyperCash pago mas falha ao criar a assinatura recorrente nova',
+      `chargeId: ${charge.id}\nsubscriptionId: ${subscription.id}\nerro: ${err instanceof Error ? err.message : String(err)}`
+    ).catch(() => {});
+    link = null;
+  }
+
+  await prisma.$transaction([
+    prisma.hypercashUpgradeCharge.update({ where: { id: charge.id }, data: { status: 'paid', paidAt: new Date() } }),
+    prisma.subscription.update({
+      where: { id: subscription.id },
+      data: {
+        status: 'past_due',
+        providerSubscriptionId: link?.id ?? null,
+        lastInvoiceUrl: link?.checkoutUrl ?? null,
+      },
+    }),
+    prisma.user.update({ where: { id: subscription.userId }, data: { planId: targetPlan.id, subscriptionStatus: 'past_due' } }),
+  ]);
+
+  const user = await prisma.user.findUnique({ where: { id: subscription.userId } });
+  if (user?.pushToken) {
+    await sendPushNotification(
+      user.pushToken,
+      'Upgrade confirmado! 🎉',
+      link
+        ? `Você já está no plano ${targetPlan.name}. Só falta finalizar a nova assinatura recorrente pra manter o acesso.`
+        : `Você já está no plano ${targetPlan.name}.`
+    ).catch((err) => app.log.error(err));
+  }
+}
+
+type HypercashTransactionEventData = {
+  transaction?: {
+    paymentLinkId?: string | null;
+    status?: string;
+  };
+};
+
+/**
+ * Mesmo princípio de handleHypercashSubscriptionEvent: formato do payload
+ * ainda NÃO confirmado contra um evento real (a HyperCash não tem um botão
+ * de teste pra essa categoria, diferente da Recorrência) - chute por
+ * simetria com o formato já confirmado de assinatura
+ * (data.subscription.paymentLinkId/.status vira
+ * data.transaction.paymentLinkId/.status aqui). Devolve false quando o
+ * payload não bate com esse formato OU quando o paymentLinkId não é de
+ * nenhum upgrade nosso (payment-link de assinatura normal, não de upgrade) -
+ * os dois casos deixam quem chamou decidir se alerta.
+ */
+async function handleHypercashUpgradeChargeEvent(app: FastifyInstance, data: HypercashTransactionEventData) {
+  const txData = data.transaction;
+  if (!txData?.paymentLinkId || !txData?.status) return false;
+
+  const charge = await prisma.hypercashUpgradeCharge.findUnique({ where: { paymentLinkId: txData.paymentLinkId } });
+  if (!charge) return false;
+
+  if (charge.status === 'paid') return true; // reentrega - idempotente
+
+  if (!PAID_UPGRADE_STATUSES.has(txData.status.toLowerCase())) return true; // pendente/falhou - nada a fazer ainda
+
+  await applyHypercashUpgrade(app, charge);
+  return true;
+}
+
 export async function billingRoutes(app: FastifyInstance) {
   app.post<{ Body: WebhookBody; Querystring: Record<string, string> }>(
     '/billing/mercadopago/webhook',
@@ -330,7 +472,7 @@ export async function billingRoutes(app: FastifyInstance) {
   app.addContentTypeParser('application/json', { parseAs: 'string' }, captureRawBody);
   app.addContentTypeParser('*', { parseAs: 'string' }, captureRawBody);
 
-  app.post<{ Body: { type?: string; data?: HypercashSubscriptionEventData } }>(
+  app.post<{ Body: { type?: string; data?: HypercashSubscriptionEventData & HypercashTransactionEventData } }>(
     '/billing/hypercash/webhook',
     async (request, reply) => {
       const rawBody = (request as typeof request & { rawBody?: string }).rawBody ?? '';
@@ -351,12 +493,15 @@ export async function billingRoutes(app: FastifyInstance) {
       }
 
       try {
-        const processed = await handleHypercashSubscriptionEvent(app, request.body?.data ?? {});
+        const data = request.body?.data ?? {};
+        // Tenta assinatura primeiro, depois cobrança avulsa de upgrade - os
+        // dois formatos são mutuamente exclusivos (um evento nunca tem os
+        // dois), então só um dos dois reconhece o payload de cada vez.
+        const processed = (await handleHypercashSubscriptionEvent(app, data)) || (await handleHypercashUpgradeChargeEvent(app, data));
         if (!processed) {
-          // Formato que não reconhecemos (nem "subscription.test" nem um
-          // payload com data.subscription.paymentLinkId+status) - alerta em
-          // vez de ignorar silenciosamente, igual já fazíamos antes de
-          // processar de verdade.
+          // Formato que não reconhecemos (nem "subscription.test", nem
+          // assinatura, nem cobrança de upgrade) - alerta em vez de ignorar
+          // silenciosamente, igual já fazíamos antes de processar de verdade.
           sendOpsAlertEmail(
             app,
             `[HyperCash] Webhook com formato não reconhecido: ${type}`,
