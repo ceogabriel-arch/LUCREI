@@ -13,6 +13,7 @@ import Fastify, { type FastifyError } from 'fastify';
 
 import { prisma } from './lib/prisma';
 import { startHypercashExpiryWatchdog } from './lib/hypercash-expiry-watchdog';
+import { startShopSyncWatchdog } from './lib/shop-sync-watchdog';
 import { startSyncWatchdog } from './lib/sync-watchdog';
 import { startTrialExpiryWatchdog } from './lib/trial-expiry-watchdog';
 import { adminRoutes } from './modules/admin/routes';
@@ -209,6 +210,12 @@ async function main() {
   // uma sincronização (já vimos uma loja real travada 7 dias por isso, sem
   // ninguém notar). Ver sync-watchdog.ts.
   startSyncWatchdog(app.log);
+
+  // Rede de segurança contra o push da Shopee/Mercado Livre falhar sem
+  // ninguém perceber (achado ao vivo: 3 dias sem pedido novo pra uma loja
+  // real) - sincroniza sozinho qualquer loja ativa parada há tempo demais,
+  // sem depender do push nem de a pessoa abrir o app. Ver shop-sync-watchdog.ts.
+  startShopSyncWatchdog(app.log);
 
   // Expira sozinho link de pagamento da HyperCash pendente havia mais de
   // 24h - evita um link abandonado continuar valendo pra sempre com o
