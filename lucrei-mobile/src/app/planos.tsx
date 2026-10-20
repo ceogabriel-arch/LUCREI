@@ -268,14 +268,21 @@ function PlanCard({
           {/* Quem já tem plano pago com ciclo em andamento paga só a
               diferença proporcional ao trocar pra esse plano agora, não o
               valor cheio acima - pedido ao vivo: card mostrava um preço,
-              checkout abria em outro, sem explicação nenhuma do motivo. */}
+              checkout abria em outro, sem explicação nenhuma do motivo.
+              Banner com fundo (não só uma linha de texto) pra esse valor
+              não passar despercebido junto dos outros detalhes do card -
+              pedido ao vivo depois da 1ª versão, pequena e discreta demais. */}
           {upgradeAmount !== null && (
-            <View className="mt-1.5 flex-row items-center gap-1.5">
-              <Ionicons name="flash" size={12} color={Colors.gold} />
-              <Text className="text-xs text-lucrei-textMuted">
-                Trocar agora:{' '}
-                <Text style={{ fontWeight: '700', color: Colors.gold }}>{formatBRL(upgradeAmount)}</Text> (proporcional ao
-                ciclo atual)
+            <View
+              className="mt-2.5 flex-row items-center gap-2 rounded-xl px-3 py-2.5"
+              style={{ backgroundColor: `${Colors.gold}26`, borderWidth: 1, borderColor: Colors.gold }}>
+              <Ionicons name="flash" size={16} color={Colors.gold} />
+              <Text className="flex-1 text-sm text-lucrei-text">
+                Trocando agora, você paga só{' '}
+                <Text className="text-base font-bold" style={{ color: Colors.gold }}>
+                  {formatBRL(upgradeAmount)}
+                </Text>{' '}
+                (proporcional ao ciclo atual)
               </Text>
             </View>
           )}
