@@ -2,19 +2,10 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { BlurredValue } from '@/components/blurred-value';
 import { useAppTheme } from '@/lib/theme';
-
-// Toque em touchscreen dispara hover sintético (mouseenter/mouseleave) no
-// navegador, então misturar onPress (alternando) com onHoverIn/onHoverOut
-// (web) causava uma corrida: o toque abria pelo hover e fechava em seguida
-// pelo próprio toque, cancelando um ao outro - "toca e não acontece nada".
-// Detectando se o dispositivo tem hover de verdade, usa só um jeito de
-// interação por vez: hover no mouse, toque alternando em quem não tem mouse.
-const supportsHover =
-  Platform.OS === 'web' && typeof window !== 'undefined' && window.matchMedia?.('(hover: hover)').matches === true;
 
 type StatTileProps = {
   label: string;
@@ -82,9 +73,14 @@ export function StatTile({
         <>
           <Pressable
             className="absolute right-2.5 top-2.5 z-20"
-            onPress={supportsHover ? undefined : () => setShowTooltip((v) => !v)}
-            onHoverIn={supportsHover ? () => setShowTooltip(true) : undefined}
-            onHoverOut={supportsHover ? () => setShowTooltip(false) : undefined}
+            // Só onPress (sem hover) - reportado ao vivo que o "?" parava
+            // de funcionar num dispositivo híbrido (touchscreen com
+            // mouse/trackpad também disponível): o navegador reporta
+            // "hover: hover" nesse caso mesmo quando a pessoa está tocando
+            // na tela, então a versão anterior desligava o onPress achando
+            // que só tinha mouse. onPress sozinho funciona igual em
+            // qualquer entrada (toque ou clique), sem precisar adivinhar.
+            onPress={() => setShowTooltip((v) => !v)}
             hitSlop={8}>
             <Ionicons name="help-circle-outline" size={large ? 18 : 15} color={Colors.textMuted} />
           </Pressable>

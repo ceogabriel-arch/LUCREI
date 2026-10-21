@@ -1,15 +1,9 @@
 import { useState } from 'react';
-import { Platform, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 
 import { formatBRL } from '@/lib/format';
 import { useColors } from '@/lib/theme';
-
-// Mesma detecção usada no StatTile - mistura de onPress (alternando) com
-// onHoverIn/onHoverOut causaria a mesma corrida lá documentada (toque dispara
-// hover sintético no navegador), então só um modo de interação por vez.
-const supportsHover =
-  Platform.OS === 'web' && typeof window !== 'undefined' && window.matchMedia?.('(hover: hover)').matches === true;
 
 type TrendPoint = { date: string; profit: number; ordersCount: number };
 
@@ -111,9 +105,12 @@ export function Sparkline({ data, width = 296, height = 56 }: SparklineProps) {
               key={i}
               style={{ width: stepX, marginLeft: i === 0 ? padX - stepX / 2 : 0 }}
               className="h-full"
-              onPress={supportsHover ? undefined : () => setHoveredIndex((v) => (v === i ? null : i))}
-              onHoverIn={supportsHover ? () => setHoveredIndex(i) : undefined}
-              onHoverOut={supportsHover ? () => setHoveredIndex(null) : undefined}
+              // Só onPress (sem hover) - mesmo motivo do StatTile: num
+              // dispositivo híbrido (touchscreen com mouse também
+              // disponível) o navegador reporta suporte a hover mesmo
+              // tocando na tela, e a versão anterior desligava o toque
+              // errado por causa disso.
+              onPress={() => setHoveredIndex((v) => (v === i ? null : i))}
             />
           ))}
         </View>
