@@ -80,7 +80,12 @@ export function Sparkline({ data, width = 296, height = 56 }: SparklineProps) {
   const tooltipTop = hovered ? (fitsAbove ? hovered.y - tooltipHeight - tooltipGap : hovered.y + tooltipGap) : 0;
 
   return (
-    <View style={{ width, height }}>
+    // overflow visible + zIndex quando tem dica aberta - mesmo motivo do
+    // StatTile (ver lá): a dica é mais alta que o gráfico em si, e sem
+    // "subir" o container inteiro, a fileira seguinte do card (os anéis,
+    // desenhada depois, mesmo nível) pinta por cima e escondia a dica
+    // (reportado ao vivo no celular, onde o gráfico é bem baixinho).
+    <View style={{ width, height, overflow: 'visible', zIndex: hovered ? 20 : 1 }}>
       <Svg width={width} height={height}>
         <Path d={buildSmoothPath(points)} fill="none" stroke={Colors.gold} strokeWidth={2.5} strokeLinecap="round" />
 
@@ -127,6 +132,7 @@ export function Sparkline({ data, width = 296, height = 56 }: SparklineProps) {
             shadowRadius: 8,
             shadowOffset: { width: 0, height: 3 },
             elevation: 10,
+            zIndex: 40,
           }}>
           <Text className="text-[11px] text-lucrei-textMuted">{formatShortDate((data as TrendPoint[])[hoveredIndex!].date)}</Text>
           <Text className="text-xs font-semibold text-lucrei-text">{formatBRL((data as TrendPoint[])[hoveredIndex!].profit)}</Text>
