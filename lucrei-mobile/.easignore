@@ -1,0 +1,11 @@
+# EAS Build empacota a partir da raiz do monorepo (git), não só desta
+# pasta - sem isso, ele tentava varrer lucrei-backend/ e lucrei-desktop/
+# inteiros (node_modules, builds já compilados) junto, e travou numa vez
+# com um arquivo da pasta de build do lucrei-desktop (achado ao vivo:
+# "Failed to upload the project tarball... lstat
+# lucrei-desktop/dist/win-unpacked/locales/bn.pak"). Só o que está aqui
+# dentro (lucrei-mobile/) importa pro build do app.
+../lucrei-backend
+../lucrei-desktop
+../.claude
+../docs
