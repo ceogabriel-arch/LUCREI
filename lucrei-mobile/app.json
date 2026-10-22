@@ -9,7 +9,8 @@
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#0A0A0B",
     "ios": {
-      "icon": "./assets/images/icon.png"
+      "icon": "./assets/images/icon.png",
+      "bundleIdentifier": "com.lucreiapp.mobile"
     },
     "android": {
       "versionCode": 16,
