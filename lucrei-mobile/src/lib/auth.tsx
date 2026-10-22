@@ -4,6 +4,7 @@ import {
   ApiError,
   type AuthUser,
   type UserPlan,
+  appleAuth as apiAppleAuth,
   cancelPlan as apiCancelPlan,
   changePassword as apiChangePassword,
   deleteAccount as apiDeleteAccount,
@@ -32,6 +33,7 @@ type AuthContextValue = {
   state: AuthState;
   login: (email: string, password: string, rememberMe?: boolean) => Promise<AuthResult>;
   loginWithGoogle: (idToken: string) => Promise<AuthResult>;
+  loginWithApple: (identityToken: string, fullName?: string) => Promise<AuthResult>;
   signup: (name: string, email: string, password: string) => Promise<AuthResult>;
   logout: () => Promise<void>;
   updateName: (name: string) => Promise<AuthResult>;
@@ -112,6 +114,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const loginWithGoogle = useCallback(async (idToken: string): Promise<AuthResult> => {
     try {
       const { token, user } = await apiGoogleAuth(idToken);
+      await setToken(token);
+      setState({ status: 'authenticated', token, user });
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, message: err instanceof ApiError ? err.message : 'Algo deu errado.' };
+    }
+  }, []);
+
+  const loginWithApple = useCallback(async (identityToken: string, fullName?: string): Promise<AuthResult> => {
+    try {
+      const { token, user } = await apiAppleAuth(identityToken, fullName);
       await setToken(token);
       setState({ status: 'authenticated', token, user });
       return { ok: true };
@@ -252,6 +265,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       state,
       login,
       loginWithGoogle,
+      loginWithApple,
       signup,
       logout,
       updateName,
@@ -266,6 +280,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       state,
       login,
       loginWithGoogle,
+      loginWithApple,
       signup,
       logout,
       updateName,

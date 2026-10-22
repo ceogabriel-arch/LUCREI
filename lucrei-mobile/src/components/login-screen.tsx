@@ -6,6 +6,7 @@ import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AuthBrandPanel } from '@/components/auth-brand-panel';
+import { AppleSignInButton } from '@/components/apple-signin-button';
 import { GoogleSignInButton } from '@/components/google-signin-button';
 import { PasswordField } from '@/components/password-field';
 import { Sparkline } from '@/components/sparkline';
@@ -121,7 +122,7 @@ function ForgotPasswordModal({ visible, onClose }: { visible: boolean; onClose: 
 }
 
 export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
-  const { login, loginWithGoogle } = useAuth();
+  const { login, loginWithGoogle, loginWithApple } = useAuth();
   const { scheme, colors: Colors } = useAppTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -149,6 +150,12 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
   async function handleGoogleIdToken(idToken: string) {
     setError(null);
     const result = await loginWithGoogle(idToken);
+    if (!result.ok) setError(result.message);
+  }
+
+  async function handleAppleCredential(identityToken: string, fullName: string | undefined) {
+    setError(null);
+    const result = await loginWithApple(identityToken, fullName);
     if (!result.ok) setError(result.message);
   }
 
@@ -244,6 +251,7 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
           </View>
 
           <GoogleSignInButton onIdToken={handleGoogleIdToken} onError={setError} />
+          <AppleSignInButton onCredential={handleAppleCredential} onError={setError} />
 
           <View className="mt-8 flex-row justify-center gap-1">
             <Text className="text-base text-lucrei-textMuted">Ainda não tem conta?</Text>

@@ -91,6 +91,15 @@ export function googleAuth(idToken: string) {
   });
 }
 
+// fullName só vem preenchido na 1ª autorização de cada conta (a Apple não
+// manda de novo em logins seguintes) - ver /auth/apple no backend.
+export function appleAuth(identityToken: string, fullName?: string) {
+  return request<AuthResponse>('/auth/apple', {
+    method: 'POST',
+    body: JSON.stringify({ identityToken, fullName }),
+  });
+}
+
 export function me(token: string) {
   return request<AuthUser>('/auth/me', {
     headers: { Authorization: `Bearer ${token}` },
