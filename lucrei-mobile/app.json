@@ -10,7 +10,10 @@
     "backgroundColor": "#0A0A0B",
     "ios": {
       "icon": "./assets/images/icon.png",
-      "bundleIdentifier": "com.lucreiapp.mobile"
+      "bundleIdentifier": "com.lucreiapp.mobile",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "versionCode": 16,

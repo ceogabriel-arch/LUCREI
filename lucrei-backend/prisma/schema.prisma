@@ -84,6 +84,9 @@ model User {
   pushToken                   String?
   // "sub" do Google quando a conta foi criada ou vinculada via login Google.
   googleId                    String?            @unique
+  // "sub" da Apple quando a conta foi criada ou vinculada via Sign in with
+  // Apple - mesmo papel do googleId acima.
+  appleId                     String?            @unique
   // Marca quando o aviso de "perto do limite de vendas" foi enviado - impede
   // reenviar toda sincronização depois de passar de 80%. Comparado sempre
   // contra o início do mês atual, então reseta sozinho todo mês.

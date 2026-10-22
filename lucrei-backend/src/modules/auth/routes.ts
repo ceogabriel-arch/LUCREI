@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { OAuth2Client } from 'google-auth-library';
+import type { JWTVerifyGetKey } from 'jose' with { 'resolution-mode': 'import' };
 
 import { prisma } from '../../lib/prisma';
 import { sendPushNotification } from '../../lib/push-notifications';
@@ -39,6 +40,34 @@ const GOOGLE_AUDIENCES = [
   process.env.GOOGLE_IOS_CLIENT_ID,
   process.env.GOOGLE_WEB_CLIENT_ID,
 ].filter((id): id is string => Boolean(id));
+
+const appleAuthSchema = {
+  type: 'object',
+  required: ['identityToken'],
+  properties: {
+    identityToken: { type: 'string', minLength: 1 },
+    // A Apple só devolve o nome na resposta do app, na primeira autorização
+    // de cada conta - não vem de novo no token em logins seguintes (ao
+    // contrário do e-mail, que o token sempre traz). Por isso o cliente
+    // manda separado, só quando tiver.
+    fullName: { type: 'string' },
+  },
+} as const;
+
+type AppleAuthBody = { identityToken: string; fullName?: string };
+
+// "jose" é ESM-only (não dá pra importar estático num projeto CommonJS como
+// esse, ver package.json "type") - import() dinâmico carregado uma vez só e
+// reaproveitado, mesmo princípio do googleClient acima. createRemoteJWKSet já
+// cuida de buscar e cachear as chaves públicas da Apple sozinho.
+const APPLE_AUDIENCE = 'com.lucreiapp.mobile';
+let appleJwksPromise: Promise<JWTVerifyGetKey> | null = null;
+function getAppleJWKS(): Promise<JWTVerifyGetKey> {
+  appleJwksPromise ??= import('jose').then(({ createRemoteJWKSet }) =>
+    createRemoteJWKSet(new URL('https://appleid.apple.com/auth/keys'))
+  );
+  return appleJwksPromise;
+}
 
 const credentialsSchema = {
   type: 'object',
@@ -205,6 +234,59 @@ export async function authRoutes(app: FastifyInstance) {
           const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
           user = await prisma.user.create({
             data: { email, name: payload.name || email, passwordHash, googleId, hasPassword: false },
+            include: userWithPlan,
+          });
+        }
+      }
+
+      const token = app.jwt.sign({ sub: user.id, tv: user.tokenVersion });
+      return reply.send({ token, user: await serializeUser(user) });
+    }
+  );
+
+  app.post<{ Body: AppleAuthBody }>(
+    '/auth/apple',
+    { schema: { body: appleAuthSchema }, config: { rateLimit: { max: 20, timeWindow: '10 minutes' } } },
+    async (request, reply) => {
+      let payload;
+      try {
+        const { jwtVerify } = await import('jose');
+        const jwks = await getAppleJWKS();
+        const { payload: verified } = await jwtVerify(request.body.identityToken, jwks, {
+          issuer: 'https://appleid.apple.com',
+          audience: APPLE_AUDIENCE,
+        });
+        payload = verified;
+      } catch (err) {
+        app.log.error(err);
+        return reply.status(401).send({ message: 'Token da Apple inválido.' });
+      }
+
+      if (!payload.sub) {
+        return reply.status(401).send({ message: 'Token da Apple inválido.' });
+      }
+      // Mesmo requisito do Google: e-mail precisa vir no token (a Apple
+      // sempre inclui, mesmo com "Esconder meu e-mail" ativado - nesse caso
+      // é um endereço de repasse deles, mas ainda assim verificado).
+      const email = typeof payload.email === 'string' ? payload.email.trim().toLowerCase() : null;
+      if (!email) {
+        return reply.status(401).send({ message: 'Token da Apple sem e-mail.' });
+      }
+
+      const appleId = payload.sub;
+
+      let user = await prisma.user.findUnique({ where: { appleId }, include: userWithPlan });
+
+      if (!user) {
+        // Já existe conta com esse e-mail criada por senha ou Google - vincula
+        // em vez de criar duplicada (mesmo princípio do /auth/google acima).
+        const existing = await prisma.user.findUnique({ where: { email }, include: userWithPlan });
+        if (existing) {
+          user = await prisma.user.update({ where: { id: existing.id }, data: { appleId }, include: userWithPlan });
+        } else {
+          const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
+          user = await prisma.user.create({
+            data: { email, name: request.body.fullName?.trim() || email, passwordHash, appleId, hasPassword: false },
             include: userWithPlan,
           });
         }

@@ -21,6 +21,7 @@ function buildUser(overrides: Partial<UserWithPlan> = {}): UserWithPlan {
     tokenVersion: 0,
     pushToken: null,
     googleId: null,
+    appleId: null,
     salesLimitWarnedAt: null,
     salesLimitReachedAt: null,
     trialEndingWarnedAt: null,
