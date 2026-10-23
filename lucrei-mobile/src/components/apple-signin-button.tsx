@@ -4,11 +4,14 @@ import * as Sentry from '@sentry/react-native';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, Text } from 'react-native';
 
+import { signInWithAppleWeb } from '@/lib/apple-web-auth';
 import { useColors } from '@/lib/theme';
 
-// Só existe no app nativo iOS (API da Apple, nem renderiza em Android/web) -
-// exigido pela própria Apple pra aprovar o app na revisão, já que o Lucrei
-// oferece login social de terceiro (Google).
+// No app nativo iOS usa a API nativa da Apple (expo-apple-authentication);
+// na web usa o SDK "Sign in with Apple JS" (apple-web-auth.ts). Não existe
+// no Android (a Apple não oferece esse login lá). Exigido pela própria Apple
+// pra aprovar o app iOS na revisão, já que o Lucrei oferece login social de
+// terceiro (Google).
 export function AppleSignInButton({
   onCredential,
   onError,
@@ -18,16 +21,30 @@ export function AppleSignInButton({
 }) {
   const Colors = useColors();
   const [submitting, setSubmitting] = useState(false);
-  const [available, setAvailable] = useState(false);
+  const [available, setAvailable] = useState(Platform.OS === 'web');
 
   useEffect(() => {
     if (Platform.OS !== 'ios') return;
     AppleAuthentication.isAvailableAsync().then(setAvailable);
   }, []);
 
-  if (Platform.OS !== 'ios' || !available) return null;
+  if (Platform.OS === 'android' || !available) return null;
 
-  async function handlePress() {
+  async function handlePressWeb() {
+    setSubmitting(true);
+    try {
+      const credential = await signInWithAppleWeb();
+      if (!credential) return;
+      onCredential(credential.identityToken, credential.fullName);
+    } catch (err) {
+      Sentry.captureException(err, { tags: { flow: 'apple_sign_in_web' } });
+      onError('Não foi possível entrar com a Apple agora.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handlePressNative() {
     setSubmitting(true);
     try {
       const credential = await AppleAuthentication.signInAsync({
@@ -56,6 +73,8 @@ export function AppleSignInButton({
       setSubmitting(false);
     }
   }
+
+  const handlePress = Platform.OS === 'web' ? handlePressWeb : handlePressNative;
 
   return (
     <Pressable

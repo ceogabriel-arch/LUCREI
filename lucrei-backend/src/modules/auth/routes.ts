@@ -60,7 +60,9 @@ type AppleAuthBody = { identityToken: string; fullName?: string };
 // esse, ver package.json "type") - import() dinâmico carregado uma vez só e
 // reaproveitado, mesmo princípio do googleClient acima. createRemoteJWKSet já
 // cuida de buscar e cachear as chaves públicas da Apple sozinho.
-const APPLE_AUDIENCE = 'com.lucreiapp.mobile';
+// com.lucreiapp.mobile é o app nativo iOS; com.lucreiapp.web é o Services ID
+// usado pelo "Sign in with Apple JS" no login web (ver apple-signin-button-web.tsx).
+const APPLE_AUDIENCES = ['com.lucreiapp.mobile', 'com.lucreiapp.web'];
 let appleJwksPromise: Promise<JWTVerifyGetKey> | null = null;
 function getAppleJWKS(): Promise<JWTVerifyGetKey> {
   appleJwksPromise ??= import('jose').then(({ createRemoteJWKSet }) =>
@@ -254,7 +256,7 @@ export async function authRoutes(app: FastifyInstance) {
         const jwks = await getAppleJWKS();
         const { payload: verified } = await jwtVerify(request.body.identityToken, jwks, {
           issuer: 'https://appleid.apple.com',
-          audience: APPLE_AUDIENCE,
+          audience: APPLE_AUDIENCES,
         });
         payload = verified;
       } catch (err) {
