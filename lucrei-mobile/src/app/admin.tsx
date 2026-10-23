@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-nati
 import { Screen } from '@/components/screen';
 import { TextField } from '@/components/text-field';
 import {
+  ApiError,
   createAdminAnnouncement,
   deleteAdminAnnouncement,
   getAdminAnnouncements,
@@ -20,6 +21,7 @@ import {
   type Announcement,
   type AnnouncementInput,
 } from '@/lib/api';
+import { showAlert } from '@/lib/alert';
 import { useAuth } from '@/lib/auth';
 import { formatBRL } from '@/lib/format';
 import { webCapWidth } from '@/lib/responsive';
@@ -174,17 +176,29 @@ export default function AdminScreen() {
       .finally(() => setLoading(false));
   }, [token]);
 
+  function reportAnnouncementError(err: unknown) {
+    showAlert('Não deu certo', err instanceof ApiError ? err.message : 'Algo deu errado. Tente novamente.');
+  }
+
   async function handleCreateAnnouncement(input: AnnouncementInput) {
     if (!token) return;
-    const created = await createAdminAnnouncement(token, input);
-    setAnnouncements((prev) => [...prev, created].sort((a, b) => a.position - b.position));
+    try {
+      const created = await createAdminAnnouncement(token, input);
+      setAnnouncements((prev) => [...prev, created].sort((a, b) => a.position - b.position));
+    } catch (err) {
+      reportAnnouncementError(err);
+    }
   }
 
   async function handleUpdateAnnouncement(id: string, input: Partial<AnnouncementInput>) {
     if (!token) return;
-    const updated = await updateAdminAnnouncement(token, id, input);
-    setAnnouncements((prev) => prev.map((a) => (a.id === id ? updated : a)).sort((a, b) => a.position - b.position));
-    setEditingAnnouncement(null);
+    try {
+      const updated = await updateAdminAnnouncement(token, id, input);
+      setAnnouncements((prev) => prev.map((a) => (a.id === id ? updated : a)).sort((a, b) => a.position - b.position));
+      setEditingAnnouncement(null);
+    } catch (err) {
+      reportAnnouncementError(err);
+    }
   }
 
   async function handleToggleAnnouncementActive(announcement: Announcement) {
@@ -193,8 +207,9 @@ export default function AdminScreen() {
     setAnnouncements((prev) => prev.map((a) => (a.id === announcement.id ? { ...a, active: next } : a)));
     try {
       await updateAdminAnnouncement(token, announcement.id, { active: next });
-    } catch {
+    } catch (err) {
       setAnnouncements((prev) => prev.map((a) => (a.id === announcement.id ? announcement : a)));
+      reportAnnouncementError(err);
     }
   }
 
@@ -204,8 +219,9 @@ export default function AdminScreen() {
     setAnnouncements((p) => p.filter((a) => a.id !== id));
     try {
       await deleteAdminAnnouncement(token, id);
-    } catch {
+    } catch (err) {
       setAnnouncements(prev);
+      reportAnnouncementError(err);
     }
   }
 
