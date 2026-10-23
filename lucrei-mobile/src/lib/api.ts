@@ -620,3 +620,56 @@ export type AdminMetrics = {
 export function getAdminMetrics(token: string) {
   return request<AdminMetrics>('/admin/metrics', { headers: { Authorization: `Bearer ${token}` } });
 }
+
+export type Announcement = {
+  id: string;
+  title: string;
+  body: string;
+  imageUrl: string | null;
+  linkUrl: string | null;
+  active: boolean;
+  position: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AnnouncementInput = {
+  title: string;
+  body: string;
+  imageUrl?: string | null;
+  linkUrl?: string | null;
+  active?: boolean;
+  position?: number;
+};
+
+// Painel "Novidades" na Início - só os ativos.
+export function getAnnouncements(token: string) {
+  return request<Announcement[]>('/announcements', { headers: { Authorization: `Bearer ${token}` } });
+}
+
+export function getAdminAnnouncements(token: string) {
+  return request<Announcement[]>('/admin/announcements', { headers: { Authorization: `Bearer ${token}` } });
+}
+
+export function createAdminAnnouncement(token: string, input: AnnouncementInput) {
+  return request<Announcement>('/admin/announcements', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateAdminAnnouncement(token: string, id: string, input: Partial<AnnouncementInput>) {
+  return request<Announcement>(`/admin/announcements/${id}`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteAdminAnnouncement(token: string, id: string) {
+  return request<void>(`/admin/announcements/${id}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}

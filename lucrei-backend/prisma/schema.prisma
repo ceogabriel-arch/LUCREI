@@ -500,3 +500,21 @@ model HypercashUpgradeCharge {
 
   @@index([subscriptionId])
 }
+
+// Avisos do painel "Novidades" no topo do app (atualizações, eventos, blog
+// etc) - cadastrados pelo próprio fundador em /admin, sem precisar de
+// deploy pra cada novo aviso. Visível pra todo mundo, não é por conta.
+model Announcement {
+  id        String   @id @default(cuid())
+  title     String
+  body      String
+  imageUrl  String?
+  linkUrl   String?
+  active    Boolean  @default(true)
+  // Ordem de exibição no carrossel - menor primeiro.
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active, position])
+}

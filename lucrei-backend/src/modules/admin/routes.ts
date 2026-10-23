@@ -1,28 +1,8 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 
 import { prisma } from '../../lib/prisma';
+import { requireAdmin } from '../../lib/require-admin';
 import { STUCK_SYNC_MINUTES, STUCK_BACKFILL_MINUTES } from '../../lib/sync-watchdog';
-
-// Sem tabela de "role" no banco - é só pra uma pessoa (o próprio fundador)
-// por enquanto, então uma lista de e-mails na variável de ambiente já
-// resolve sem precisar de migração nem de UI pra gerenciar permissão.
-function getAdminEmails(): string[] {
-  return (process.env.ADMIN_EMAILS || '')
-    .split(',')
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean);
-}
-
-async function requireAdmin(request: FastifyRequest, reply: FastifyReply) {
-  const adminEmails = getAdminEmails();
-  if (adminEmails.length === 0) {
-    return reply.status(403).send({ message: 'Admin não configurado.' });
-  }
-  const user = await prisma.user.findUnique({ where: { id: request.user.sub }, select: { email: true } });
-  if (!user || !adminEmails.includes(user.email.toLowerCase())) {
-    return reply.status(403).send({ message: 'Sem acesso.' });
-  }
-}
 
 // Sincronização "travada" não tem um erro pra pegar - é AUSÊNCIA de
 // conclusão. syncStartedAt/historyBackfillStartedAt funcionam como "último

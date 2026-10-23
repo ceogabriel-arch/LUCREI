@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 
 import { AchievementsCard } from '@/components/achievements-card';
+import { AnnouncementsBanner } from '@/components/announcements-banner';
 import { BlurredValue } from '@/components/blurred-value';
 import { GlassCard } from '@/components/glass-card';
 import { HistoryBackfillCard } from '@/components/history-backfill-card';
@@ -547,6 +548,8 @@ export default function InicioScreen() {
             }}
           />
         </View>
+
+        <AnnouncementsBanner />
 
         {showSalesLimitWarning && (
           <Pressable
