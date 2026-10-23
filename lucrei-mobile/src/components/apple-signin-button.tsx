@@ -80,8 +80,8 @@ export function AppleSignInButton({
     <Pressable
       onPress={handlePress}
       disabled={submitting}
-      className="mt-3 flex-row items-center justify-center gap-2 rounded-2xl border border-lucrei-border bg-lucrei-surface py-4"
-      style={{ opacity: submitting ? 0.6 : 1 }}>
+      className="mt-3 flex-row items-center justify-center gap-2 rounded-2xl border border-lucrei-border py-4"
+      style={{ opacity: submitting ? 0.6 : 1, backgroundColor: Colors.surface }}>
       {submitting ? (
         <ActivityIndicator color={Colors.text} />
       ) : (

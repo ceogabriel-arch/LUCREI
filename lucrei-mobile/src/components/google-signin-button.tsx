@@ -34,8 +34,12 @@ export function GoogleSignInButton({
     <Pressable
       onPress={handlePress}
       disabled={submitting}
-      className="mt-5 flex-row items-center justify-center gap-2 rounded-2xl border border-lucrei-border bg-lucrei-surface py-4"
-      style={{ opacity: submitting ? 0.6 : 1 }}>
+      className="mt-5 flex-row items-center justify-center gap-2 rounded-2xl border border-lucrei-border py-4"
+      // backgroundColor explícito (não só a classe bg-lucrei-surface) - na
+      // web esse Pressable renderiza como <button>, e o navegador às vezes
+      // aplica o fundo padrão do sistema por cima da cor do tema (relatado
+      // ao vivo: botão aparecia branco mesmo com o resto da tela escuro).
+      style={{ opacity: submitting ? 0.6 : 1, backgroundColor: Colors.surface }}>
       {submitting ? (
         <ActivityIndicator color={Colors.text} />
       ) : (
