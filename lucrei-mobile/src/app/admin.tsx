@@ -16,6 +16,7 @@ import {
 import { useAuth } from '@/lib/auth';
 import { formatBRL } from '@/lib/format';
 import { webCapWidth } from '@/lib/responsive';
+import { useHideTabBarWhile } from '@/lib/tab-bar-visibility';
 import { useColors } from '@/lib/theme';
 
 type Section = 'metrics' | 'users' | 'rewards' | 'sync';
@@ -53,6 +54,8 @@ export default function AdminScreen() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [claims, setClaims] = useState<AdminRewardClaim[]>([]);
   const [issues, setIssues] = useState<AdminSyncIssue[]>([]);
+
+  useHideTabBarWhile(true);
 
   useEffect(() => {
     if (!token) return;

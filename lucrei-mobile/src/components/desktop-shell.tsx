@@ -35,10 +35,32 @@ const NAV_ITEMS: { href: '/' | '/pedidos' | '/produtos' | '/relatorios' | '/etiq
 // qualquer janela estreita (celular nativo ou web estreito).
 export function DesktopShell({ children }: PropsWithChildren) {
   const isDesktop = useIsDesktopWeb();
+  const pathname = usePathname();
 
   if (!isDesktop) return <>{children}</>;
+  // Tela solta pro fundador (ver admin.tsx) - visual próprio, sem o menu
+  // normal do app, pra não parecer só mais uma aba do Lucrei.
+  if (pathname === '/admin') return <AdminShell>{children}</AdminShell>;
 
   return <DesktopShellInner>{children}</DesktopShellInner>;
+}
+
+function AdminShell({ children }: PropsWithChildren) {
+  const { colors: Colors } = useAppTheme();
+  const router = useRouter();
+
+  return (
+    <View className="flex-1 bg-lucrei-bg">
+      <View className="flex-row items-center justify-between border-b border-lucrei-border px-6 py-3.5">
+        <Text className="text-sm font-semibold text-lucrei-text">Lucrei · Admin</Text>
+        <Pressable onPress={() => router.push('/')} className="flex-row items-center gap-1.5">
+          <Ionicons name="arrow-back" size={14} color={Colors.textMuted} />
+          <Text className="text-xs text-lucrei-textMuted">Voltar pro app</Text>
+        </Pressable>
+      </View>
+      <View className="flex-1">{children}</View>
+    </View>
+  );
 }
 
 function DesktopShellInner({ children }: PropsWithChildren) {
