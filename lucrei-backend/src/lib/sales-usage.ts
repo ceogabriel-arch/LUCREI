@@ -34,7 +34,7 @@ export type SalesLimitStatus = {
 // sobre se a conta está ou não em carência.
 export async function getSalesLimitStatus(user: User & { plan: Plan | null }): Promise<SalesLimitStatus> {
   const ordersThisMonth = await getOrdersThisMonth(user.id);
-  const salesLimit = user.plan?.salesLimit ?? null;
+  const salesLimit = user.salesLimitOverride ?? user.plan?.salesLimit ?? null;
 
   if (salesLimit == null || ordersThisMonth < salesLimit) {
     return { ordersThisMonth, salesLimit, overLimit: false, blocked: false, graceDaysLeft: null };
@@ -66,7 +66,7 @@ export async function checkSalesLimitBlock(
   userId: string
 ): Promise<{ blocked: false } | { blocked: true; message: string }> {
   const user = await prisma.user.findUnique({ where: { id: userId }, include: { plan: true } });
-  if (!user || user.plan?.salesLimit == null) return { blocked: false };
+  if (!user || (user.salesLimitOverride ?? user.plan?.salesLimit) == null) return { blocked: false };
 
   const status = await getSalesLimitStatus(user);
   if (!status.overLimit) return { blocked: false };
@@ -74,7 +74,7 @@ export async function checkSalesLimitBlock(
   if (status.blocked) {
     return {
       blocked: true,
-      message: `Seu plano ${user.plan.name} permite até ${user.plan.salesLimit} vendas/mês e o prazo de carência já acabou. Faça upgrade pra continuar sincronizando pedidos.`,
+      message: `Seu plano ${user.plan?.name} permite até ${status.salesLimit} vendas/mês e o prazo de carência já acabou. Faça upgrade pra continuar sincronizando pedidos.`,
     };
   }
 

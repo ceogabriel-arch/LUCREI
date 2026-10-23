@@ -309,7 +309,8 @@ export async function authRoutes(app: FastifyInstance) {
     if (!user) {
       return reply.status(404).send({ message: 'Usuário não encontrado.' });
     }
-    const salesUsedThisMonth = user.plan?.salesLimit != null ? await getOrdersThisMonth(user.id) : null;
+    const salesUsedThisMonth =
+      (user.salesLimitOverride ?? user.plan?.salesLimit) != null ? await getOrdersThisMonth(user.id) : null;
     await warnIfTrialEndingSoon(app, user);
     return reply.send({ ...await serializeUser(user), salesUsedThisMonth });
   });

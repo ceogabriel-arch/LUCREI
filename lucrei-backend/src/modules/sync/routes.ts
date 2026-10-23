@@ -68,7 +68,8 @@ export async function syncRoutes(app: FastifyInstance) {
         return reply.status(403).send({ message: subscriptionBlock.message, code: 'subscription_past_due' });
       }
 
-      if (user?.plan?.salesLimit != null) {
+      const effectiveSalesLimit = user?.salesLimitOverride ?? user?.plan?.salesLimit;
+      if (user && effectiveSalesLimit != null) {
         const status = await getSalesLimitStatus(user);
 
         if (status.overLimit) {
@@ -79,13 +80,13 @@ export async function syncRoutes(app: FastifyInstance) {
         } else {
           const alreadyWarnedThisMonth =
             user.salesLimitWarnedAt != null && user.salesLimitWarnedAt >= startOfCurrentMonth();
-          if (!alreadyWarnedThisMonth && status.ordersThisMonth >= user.plan.salesLimit * WARNING_THRESHOLD) {
+          if (!alreadyWarnedThisMonth && status.ordersThisMonth >= effectiveSalesLimit * WARNING_THRESHOLD) {
             await prisma.user.update({ where: { id: user.id }, data: { salesLimitWarnedAt: new Date() } });
             if (user.pushToken) {
               await sendPushNotification(
                 user.pushToken,
                 'Quase no limite do plano ⚠️',
-                `Você já usou ${status.ordersThisMonth} das ${user.plan.salesLimit} vendas do plano ${user.plan.name} esse mês. Considere fazer upgrade pra não travar a sincronização.`
+                `Você já usou ${status.ordersThisMonth} das ${effectiveSalesLimit} vendas do plano ${user.plan?.name} esse mês. Considere fazer upgrade pra não travar a sincronização.`
               ).catch((err) => app.log.error(err));
             }
           }

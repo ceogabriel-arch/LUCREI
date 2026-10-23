@@ -42,7 +42,9 @@ export async function serializeUser(user: UserWithPlan) {
       ? {
           key: user.plan.key,
           name: user.plan.name,
-          salesLimit: user.plan.salesLimit,
+          // Limite efetivo da conta, não só o do plano - respeita
+          // salesLimitOverride quando preenchido (ver sales-usage.ts).
+          salesLimit: user.salesLimitOverride ?? user.plan.salesLimit,
           billingPeriod: user.plan.billingPeriod,
         }
       : null,
