@@ -1,4 +1,4 @@
-import { createContext, type PropsWithChildren, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, type PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   ApiError,
@@ -61,6 +61,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
   // parar.
   const token = state.status === 'authenticated' ? state.token : null;
   const email = state.status === 'authenticated' ? state.user.email : null;
+  // Sempre o token mais recente, pra refreshUser conferir depois de um
+  // await se ainda é válido aplicar o resultado (ver comentário lá).
+  const tokenRef = useRef(token);
+  tokenRef.current = token;
 
   useEffect(() => {
     (async () => {
@@ -242,6 +246,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
     if (!token) return;
     try {
       const user = await apiMe(token);
+      // Reportado ao vivo: apertar "Sair da conta" enquanto essa chamada
+      // (disparada em segundo plano pelo useFocusEffect da Início) ainda
+      // estava em voo fazia o resultado chegar DEPOIS do logout e
+      // sobrescrever o estado "deslogado" de volta pra "logado", usando o
+      // token antigo (o JWT em si continua válido até expirar - logout só
+      // limpa o storage local, não revoga o token no servidor). Sem isso
+      // persistir (localStorage já estava limpo), mas a tela ficava presa
+      // de volta no dashboard até atualizar a página. Confere se esse
+      // ainda é o token corrente antes de aplicar o resultado.
+      if (tokenRef.current !== token) return;
       setState({ status: 'authenticated', token, user });
     } catch {
       // Silencioso - só usado pra polling em segundo plano (ex: tela de Pix

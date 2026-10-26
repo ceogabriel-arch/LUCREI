@@ -80,7 +80,13 @@ export function AppleSignInButton({
     <Pressable
       onPress={handlePress}
       disabled={submitting}
-      className="mt-3 flex-row items-center justify-center gap-2 rounded-2xl border border-lucrei-border py-4"
+      // Na web o botão do Google é um iframe deles (ver
+      // google-signin-button.web.tsx), com altura fixa menor que o padding
+      // padrão daqui - reportado ao vivo como "ficou com altura muito
+      // grande" comparado ao do Google. Padding menor só na web pra ficar
+      // visualmente parecido; mobile mantém o alvo de toque maior de
+      // propósito.
+      className={`mt-3 flex-row items-center justify-center gap-2 rounded-2xl border border-lucrei-border ${Platform.OS === 'web' ? 'py-2.5' : 'py-4'}`}
       style={{ opacity: submitting ? 0.6 : 1, backgroundColor: Colors.surface }}>
       {submitting ? (
         <ActivityIndicator color={Colors.text} />
