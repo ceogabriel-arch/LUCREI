@@ -152,6 +152,21 @@ function PlanCard({
   }
 
   function handlePressSubscribe() {
+    // A Apple exige usar o In-App Purchase deles (e fica com 15-30%) pra
+    // qualquer compra iniciada de DENTRO do app iOS - abrir o checkout da
+    // HyperCash de lá violaria a regra 3.1.1 deles. Começar o teste grátis
+    // não conta (não gera cobrança nenhuma na hora - só actionLabel
+    // "Testar 15 dias grátis" nunca abre link de pagamento, ver doSubscribe
+    // acima), só os fluxos que realmente cobram ficam bloqueados aqui até
+    // implementarmos o IAP de verdade.
+    if (Platform.OS === 'ios' && actionLabel !== 'Testar 15 dias grátis') {
+      showAlert(
+        'Assine pelo site',
+        'Por enquanto, pra assinar ou trocar de plano, acesse app.lucreiapp.com pelo navegador do seu celular ou computador. Depois é só abrir o app de novo - sua assinatura aparece automaticamente.'
+      );
+      return;
+    }
+
     // Trocar de plano no MEIO de um teste grátis encerra ele na hora (o
     // plano novo não é elegível a teste - só o Start é) e já manda cobrar -
     // reportado ao vivo: clicar em "Fazer upgrade" só pra ver o preço
@@ -195,6 +210,15 @@ function PlanCard({
 
   async function handleViewInvoice() {
     if (state.status !== 'authenticated') return;
+    // Mesma restrição do handlePressSubscribe acima - essa fatura também é
+    // um link de pagamento da HyperCash.
+    if (Platform.OS === 'ios') {
+      showAlert(
+        'Pague pelo site',
+        'Por enquanto, pra pagar uma fatura em aberto, acesse app.lucreiapp.com pelo navegador. Depois é só abrir o app de novo.'
+      );
+      return;
+    }
     const pendingTab = openPendingTab();
     setCheckingInvoice(true);
     try {
