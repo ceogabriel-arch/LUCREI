@@ -18,6 +18,14 @@ const ELIGIBLE_STATUSES = new Set(['paid']);
 // RESOLVED_STATUSES cumpre pro lado Shopee em order-forecast/routes.ts.
 export const ML_RESOLVED_STATUSES = new Set(['paid', 'cancelled', 'invalid']);
 
+// Pedido que já foi "paid" e depois virou um desses - mesmo papel do
+// SHOPEE_CANCELLED_STATUSES em sync/service.ts: some do banco (deleteMany),
+// não fica só com o status desatualizado contando como venda à toa. Achado
+// ao vivo (26/10): diferente da Shopee, isso nunca era tratado - um pedido
+// cancelado depois de pago continuava contando pra sempre no total de
+// vendas/lucro.
+export const ML_CANCELLED_STATUSES = new Set(['cancelled', 'invalid']);
+
 // Usado pelo webhook (Fase 2 em tempo real) - mesmo papel do syncOneOrder da
 // Shopee: sincroniza UM pedido específico sem varrer a loja inteira.
 export async function syncOneMercadoLivreOrder(shopId: string, orderId: number) {
@@ -175,6 +183,14 @@ export async function syncOrdersSince(shopId: string, dateFrom: Date | null) {
     // precisa registrar TODO pedido visto (não só os já "paid"), senão a
     // previsão de lucro nunca saberia de um pedido ainda em processamento.
     await Promise.all(page.results.map((o) => trackRecentMercadoLivreOrderEvent(shopId, String(o.id), o.status)));
+
+    // Pedido que já tinha sido sincronizado como "paid" e virou cancelado/
+    // inválido desde então - remove do banco em vez de deixar contando como
+    // venda à toa (mesmo tratamento que a Shopee já faz).
+    const cancelledIds = page.results.filter((o) => ML_CANCELLED_STATUSES.has(o.status)).map((o) => String(o.id));
+    if (cancelledIds.length > 0) {
+      await prisma.order.deleteMany({ where: { shopId, mercadoLivreOrderId: { in: cancelledIds } } });
+    }
 
     // Mesmo paralelismo da Shopee (lá 15, aqui 10 - um pedido daqui pode
     // disparar 2 chamadas à API, não 1, então um teto um pouco mais

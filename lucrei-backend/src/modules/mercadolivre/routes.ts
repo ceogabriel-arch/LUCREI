@@ -6,7 +6,7 @@ import { getValidAccessToken as getValidMercadoLivreAccessToken } from '../../li
 import { prisma } from '../../lib/prisma';
 import { trackRecentMercadoLivreOrderEvent } from '../../lib/recent-order-events';
 import { exchangeCodeForToken, getAuthorizationUrl, getOrder, getUser } from '../../mercadolivre-client';
-import { runShopSync, syncOneMercadoLivreOrder } from '../sync/mercadolivre-service';
+import { ML_CANCELLED_STATUSES, runShopSync, syncOneMercadoLivreOrder } from '../sync/mercadolivre-service';
 
 type AuthorizeUrlQuery = {
   returnUrl?: string;
@@ -206,6 +206,11 @@ export async function mercadolivreRoutes(app: FastifyInstance) {
 
     if (order.status === 'paid') {
       await syncOneMercadoLivreOrder(shop.id, orderId);
+    } else if (ML_CANCELLED_STATUSES.has(order.status ?? '')) {
+      // Pedido já sincronizado como "paid" antes e cancelado/invalidado
+      // depois - some do banco em vez de ficar contando como venda à toa
+      // (mesmo tratamento que a Shopee já faz, ver sync/service.ts).
+      await prisma.order.deleteMany({ where: { shopId: shop.id, mercadoLivreOrderId: String(orderId) } });
     }
   }
 }
