@@ -270,13 +270,14 @@ export async function productRoutes(app: FastifyInstance) {
         const lineItems = await prisma.orderLineItem.findMany({
           where: { order: { shopId: shop.id, completedAt: { gte: rangeStart(period) } } },
         });
-        const statsByItemId = new Map<string, { profit: number; revenue: number; orders: number }>();
+        const statsByItemId = new Map<string, { profit: number; revenue: number; orders: number; quantitySold: number }>();
         for (const li of lineItems) {
           const itemId = isMercadoLivre ? li.mercadoLivreItemId : li.shopeeItemId;
           if (!itemId) continue;
-          const stat = statsByItemId.get(itemId) ?? { profit: 0, revenue: 0, orders: 0 };
+          const stat = statsByItemId.get(itemId) ?? { profit: 0, revenue: 0, orders: 0, quantitySold: 0 };
           stat.revenue += Number(li.salePrice);
           stat.orders += 1;
+          stat.quantitySold += li.quantity;
           if (li.profit !== null) stat.profit += Number(li.profit);
           statsByItemId.set(itemId, stat);
         }
@@ -294,6 +295,7 @@ export async function productRoutes(app: FastifyInstance) {
             profit: stat ? stat.profit : null,
             revenue: stat ? stat.revenue : null,
             orders: stat ? stat.orders : 0,
+            quantitySold: stat ? stat.quantitySold : 0,
           };
         });
 

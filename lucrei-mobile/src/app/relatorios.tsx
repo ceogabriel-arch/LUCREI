@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { BlurredValue } from '@/components/blurred-value';
 import { DailyProfitChart } from '@/components/daily-profit-chart';
@@ -148,6 +148,109 @@ function ProductRankRow({ product }: { product: ShopeeProduct }) {
         {formatBRL(product.profit ?? 0)}
       </Text>
     </View>
+  );
+}
+
+// Busca/seleciona 1 produto dentro da lista já carregada pro período atual
+// (mesma array que alimenta Curva ABC / rankings) - sem rota nova, os
+// totais de faturamento/lucro/quantidade já vêm calculados dali.
+function ProductReportCard({ products, blurred }: { products: ShopeeProduct[]; blurred: boolean }) {
+  const Colors = useColors();
+  const [query, setQuery] = useState('');
+  const [selected, setSelected] = useState<ShopeeProduct | null>(null);
+
+  const matches =
+    query.trim().length === 0
+      ? []
+      : products
+          .filter((p) => p.name.toLowerCase().includes(query.trim().toLowerCase()))
+          .slice(0, 8);
+
+  function handleSelect(product: ShopeeProduct) {
+    setSelected(product);
+    setQuery('');
+  }
+
+  function handleClear() {
+    setSelected(null);
+    setQuery('');
+  }
+
+  return (
+    <GlassCard className="p-4" borderRadius={16}>
+      <Text className="mb-3 text-sm font-medium text-lucrei-text">Relatório por produto</Text>
+
+      {selected ? (
+        <View>
+          <View className="flex-row items-center justify-between">
+            <Text className="flex-1 pr-3 text-sm font-medium text-lucrei-text" numberOfLines={2}>
+              {selected.name}
+              {selected.shopName ? ` · ${selected.shopName}` : ''}
+            </Text>
+            <Pressable onPress={handleClear} hitSlop={8}>
+              <Ionicons name="close-circle" size={20} color={Colors.textMuted} />
+            </Pressable>
+          </View>
+
+          <View className="mt-3 gap-1.5 border-t border-lucrei-border pt-3">
+            <View className="flex-row items-center justify-between">
+              <Text className="text-xs text-lucrei-textMuted">Faturamento no período</Text>
+              {blurred ? <BlurredValue width={70} /> : <Text className="text-sm text-lucrei-text">{formatBRL(selected.revenue ?? 0)}</Text>}
+            </View>
+            <View className="flex-row items-center justify-between">
+              <Text className="text-xs text-lucrei-textMuted">Lucro no período</Text>
+              {blurred ? (
+                <BlurredValue width={90} height={16} />
+              ) : (
+                <Text
+                  className="text-base font-bold"
+                  style={{ color: (selected.profit ?? 0) >= 0 ? Colors.success : Colors.danger }}>
+                  {formatBRL(selected.profit ?? 0)}
+                </Text>
+              )}
+            </View>
+            <View className="flex-row items-center justify-between">
+              <Text className="text-xs text-lucrei-textMuted">Quantidade vendida</Text>
+              <Text className="text-sm text-lucrei-text">{selected.quantitySold}</Text>
+            </View>
+          </View>
+          {selected.profit === null && (
+            <Text className="mt-2 text-xs text-lucrei-textMuted">
+              Esse produto ainda não tem custo cadastrado, por isso o lucro não aparece.
+            </Text>
+          )}
+        </View>
+      ) : (
+        <View>
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Buscar produto pelo nome..."
+            placeholderTextColor={Colors.textMuted}
+            autoCorrect={false}
+            className="rounded-xl border border-lucrei-border bg-lucrei-bg px-3.5 py-2.5 text-sm text-lucrei-text"
+          />
+          {matches.length > 0 && (
+            <View className="mt-2 gap-1.5">
+              {matches.map((product, index) => (
+                <Pressable
+                  key={`${product.shopId ?? ''}-${product.shopeeItemId}-${index}`}
+                  onPress={() => handleSelect(product)}
+                  className="rounded-xl border border-lucrei-border bg-lucrei-surface px-3.5 py-2.5">
+                  <Text className="text-sm text-lucrei-text" numberOfLines={1}>
+                    {product.name}
+                    {product.shopName ? ` · ${product.shopName}` : ''}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+          {query.trim().length > 0 && matches.length === 0 && (
+            <Text className="mt-2 text-xs text-lucrei-textMuted">Nenhum produto encontrado com esse nome.</Text>
+          )}
+        </View>
+      )}
+    </GlassCard>
   );
 }
 
@@ -703,6 +806,8 @@ export default function RelatoriosScreen() {
                   </View>
                 </GlassCard>
               )}
+
+              {products.length > 0 && <ProductReportCard products={products} blurred={subscriptionAccess.isPastDue} />}
 
               {topProfitable.length > 0 && (
                 <GlassCard className="p-4" borderRadius={16}>
