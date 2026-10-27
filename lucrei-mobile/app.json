@@ -60,7 +60,8 @@
           "iosUrlScheme": "com.googleusercontent.apps.15109145213-u26oi0ve72p0158s7749eknnm1ig3n6j"
         }
       ],
-      "@sentry/react-native/expo"
+      "@sentry/react-native/expo",
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true,

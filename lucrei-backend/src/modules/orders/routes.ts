@@ -1,3 +1,4 @@
+import ExcelJS from 'exceljs';
 import type { FastifyInstance } from 'fastify';
 
 import { prisma } from '../../lib/prisma';
@@ -27,6 +28,29 @@ function csvField(value: string) {
     return `"${value.replace(/"/g, '""')}"`;
   }
   return value;
+}
+
+// Mesmas colunas da planilha pros dois formatos - CSV formata número/data
+// como texto (vírgula decimal, dd/mm/aaaa) pra abrir certo num locale PT-BR,
+// enquanto o .xlsx guarda os valores nativos (Date/number) pra abrir já
+// filtrável/somável no Excel sem precisar converter nada.
+async function buildOrdersXlsx(header: string[], rows: (string | number | Date | null)[][], sheetName: string) {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet(sheetName);
+  sheet.addRow(header);
+  sheet.getRow(1).font = { bold: true };
+  for (const row of rows) sheet.addRow(row);
+
+  const dateColIndex = header.indexOf('Data do pedido') + 1;
+  if (dateColIndex > 0) sheet.getColumn(dateColIndex).numFmt = 'dd/mm/yyyy';
+  header.forEach((label, index) => {
+    if (label.includes('(R$)')) sheet.getColumn(index + 1).numFmt = '#,##0.00';
+  });
+  sheet.columns.forEach((col) => {
+    col.width = 18;
+  });
+
+  return workbook.xlsx.writeBuffer();
 }
 
 export async function orderRoutes(app: FastifyInstance) {
@@ -94,7 +118,7 @@ export async function orderRoutes(app: FastifyInstance) {
     }
   );
 
-  app.get<{ Params: { shopId: string }; Querystring: { from: string; to: string } }>(
+  app.get<{ Params: { shopId: string }; Querystring: { from: string; to: string; format?: 'csv' | 'xlsx' } }>(
     '/shops/:shopId/orders/export',
     { onRequest: [app.authenticate] },
     async (request, reply) => {
@@ -103,7 +127,7 @@ export async function orderRoutes(app: FastifyInstance) {
       });
       if (!shop) return reply.status(404).send({ message: 'Loja não encontrada.' });
 
-      const { from, to } = request.query;
+      const { from, to, format } = request.query;
       if (!from || !to) {
         return reply.status(400).send({ message: 'from e to são obrigatórios.' });
       }
@@ -128,6 +152,35 @@ export async function orderRoutes(app: FastifyInstance) {
         'Custo do produto (R$)',
         'Lucro (R$)',
       ].join(';');
+
+      const filenameBase = `pedidos-lucrei-${shop.shopName.replace(/[^a-zA-Z0-9]/g, '-')}`;
+
+      if (format === 'xlsx') {
+        const xlsxRows: (string | number | Date | null)[][] = [];
+        for (const order of orders) {
+          const statusStr = STATUS_LABELS[order.orderStatus] ?? order.orderStatus;
+          for (const li of order.lineItems) {
+            const productName = li.product?.name ?? li.itemName ?? `Item ${li.shopeeItemId ?? '?'}`;
+            xlsxRows.push([
+              order.orderDate,
+              order.shopeeOrderSn ?? order.mercadoLivreOrderId ?? '',
+              statusStr,
+              productName,
+              li.quantity,
+              Number(li.salePrice),
+              Number(li.shippingFeeAllocated),
+              Number(li.shopeeFeeAllocated),
+              Number(li.taxAllocated),
+              li.productCostSnapshot !== null ? Number(li.productCostSnapshot) : null,
+              li.profit !== null ? Number(li.profit) : null,
+            ]);
+          }
+        }
+        const buffer = await buildOrdersXlsx(header.split(';'), xlsxRows, 'Pedidos');
+        reply.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        reply.header('Content-Disposition', `attachment; filename="${filenameBase}.xlsx"`);
+        return reply.send(buffer);
+      }
 
       const rows: string[] = [header];
       for (const order of orders) {
@@ -159,7 +212,7 @@ export async function orderRoutes(app: FastifyInstance) {
       const csv = '﻿' + rows.join('\r\n');
 
       reply.header('Content-Type', 'text/csv; charset=utf-8');
-      reply.header('Content-Disposition', `attachment; filename="pedidos-lucrei-${shop.shopName.replace(/[^a-zA-Z0-9]/g, '-')}.csv"`);
+      reply.header('Content-Disposition', `attachment; filename="${filenameBase}.csv"`);
       return reply.send(csv);
     }
   );
@@ -169,11 +222,11 @@ export async function orderRoutes(app: FastifyInstance) {
   // aqui, já que mistura pedido de lojas/marketplaces diferentes) e o
   // rótulo da taxa fica genérico "Taxa marketplace" em vez de nomear uma
   // marketplace específica, que não seria verdade pra todo pedido do arquivo.
-  app.get<{ Querystring: { from: string; to: string } }>(
+  app.get<{ Querystring: { from: string; to: string; format?: 'csv' | 'xlsx' } }>(
     '/orders/export',
     { onRequest: [app.authenticate] },
     async (request, reply) => {
-      const { from, to } = request.query;
+      const { from, to, format } = request.query;
       if (!from || !to) {
         return reply.status(400).send({ message: 'from e to são obrigatórios.' });
       }
@@ -201,6 +254,34 @@ export async function orderRoutes(app: FastifyInstance) {
         'Custo do produto (R$)',
         'Lucro (R$)',
       ].join(';');
+
+      if (format === 'xlsx') {
+        const xlsxRows: (string | number | Date | null)[][] = [];
+        for (const order of orders) {
+          const statusStr = STATUS_LABELS[order.orderStatus] ?? order.orderStatus;
+          for (const li of order.lineItems) {
+            const productName = li.product?.name ?? li.itemName ?? `Item ${li.shopeeItemId ?? '?'}`;
+            xlsxRows.push([
+              order.orderDate,
+              order.shop.shopName,
+              order.shopeeOrderSn ?? order.mercadoLivreOrderId ?? '',
+              statusStr,
+              productName,
+              li.quantity,
+              Number(li.salePrice),
+              Number(li.shippingFeeAllocated),
+              Number(li.shopeeFeeAllocated),
+              Number(li.taxAllocated),
+              li.productCostSnapshot !== null ? Number(li.productCostSnapshot) : null,
+              li.profit !== null ? Number(li.profit) : null,
+            ]);
+          }
+        }
+        const buffer = await buildOrdersXlsx(header.split(';'), xlsxRows, 'Pedidos');
+        reply.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        reply.header('Content-Disposition', 'attachment; filename="pedidos-lucrei-todas-as-lojas.xlsx"');
+        return reply.send(buffer);
+      }
 
       const rows: string[] = [header];
       for (const order of orders) {

@@ -29,9 +29,8 @@ import {
 import { showAlert } from '@/lib/alert';
 import { useAuth } from '@/lib/auth';
 import { useDataRefresh } from '@/lib/data-refresh';
-import { exportOrdersCsv } from '@/lib/export-csv';
+import { exportOrdersCsv, exportOrdersExcel } from '@/lib/export-csv';
 import { formatBRL } from '@/lib/format';
-import { PERIOD_TO_API, PERIODS, usePeriod } from '@/lib/period';
 import { webCapWidth } from '@/lib/responsive';
 import { useSelectedShop } from '@/lib/selected-shop';
 import { useSubscriptionAccess } from '@/lib/subscription-access';
@@ -279,6 +278,7 @@ function ReportRangeCard({
   const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportingExcel, setExportingExcel] = useState(false);
   const [forecast, setForecast] = useState<OrderForecast | null>(null);
   const [pendingOrdersOpen, setPendingOrdersOpen] = useState(false);
   const prevShopIdRef = useRef<string | null>(shopId);
@@ -375,6 +375,17 @@ function ReportRangeCard({
       showAlert('Não foi possível exportar', err instanceof ApiError ? err.message : 'Tenta de novo em instantes.');
     } finally {
       setExporting(false);
+    }
+  }
+
+  async function handleExportExcel() {
+    setExportingExcel(true);
+    try {
+      await exportOrdersExcel(token, shopId, range.from, range.to);
+    } catch (err) {
+      showAlert('Não foi possível exportar', err instanceof ApiError ? err.message : 'Tenta de novo em instantes.');
+    } finally {
+      setExportingExcel(false);
     }
   }
 
@@ -486,18 +497,32 @@ function ReportRangeCard({
         shopId={shopId}
       />
 
-      <Pressable
-        onPress={handleExport}
-        disabled={exporting}
-        className="mt-4 flex-row items-center justify-center gap-2 rounded-xl bg-lucrei-surfaceAlt px-4 py-3"
-        style={{ opacity: exporting ? 0.6 : 1 }}>
-        {exporting ? (
-          <ActivityIndicator size="small" color={Colors.gold} />
-        ) : (
-          <Ionicons name="download-outline" size={16} color={Colors.gold} />
-        )}
-        <Text className="text-sm font-medium text-lucrei-gold">Exportar CSV</Text>
-      </Pressable>
+      <View className="mt-4 flex-row gap-2">
+        <Pressable
+          onPress={handleExport}
+          disabled={exporting}
+          className="flex-1 flex-row items-center justify-center gap-2 rounded-xl bg-lucrei-surfaceAlt px-4 py-3"
+          style={{ opacity: exporting ? 0.6 : 1 }}>
+          {exporting ? (
+            <ActivityIndicator size="small" color={Colors.gold} />
+          ) : (
+            <Ionicons name="download-outline" size={16} color={Colors.gold} />
+          )}
+          <Text className="text-sm font-medium text-lucrei-gold">Exportar CSV</Text>
+        </Pressable>
+        <Pressable
+          onPress={handleExportExcel}
+          disabled={exportingExcel}
+          className="flex-1 flex-row items-center justify-center gap-2 rounded-xl bg-lucrei-surfaceAlt px-4 py-3"
+          style={{ opacity: exportingExcel ? 0.6 : 1 }}>
+          {exportingExcel ? (
+            <ActivityIndicator size="small" color={Colors.gold} />
+          ) : (
+            <Ionicons name="grid-outline" size={16} color={Colors.gold} />
+          )}
+          <Text className="text-sm font-medium text-lucrei-gold">Exportar Excel</Text>
+        </Pressable>
+      </View>
 
       {/* Backfill de histórico continua sendo ação de uma loja Shopee só -
           com "Todas as lojas" (shopId null) não tem pra qual loja apontar. */}
@@ -519,7 +544,6 @@ export default function RelatoriosScreen() {
   const Colors = useColors();
   const { shops, selectedShop, viewingAll, loaded: shopsLoaded } = useSelectedShop();
   const activeShops = useMemo(() => shops.filter((s) => s.status === 'active'), [shops]);
-  const { period, setPeriod } = usePeriod();
   const { refreshSignal } = useDataRefresh();
   const subscriptionAccess = useSubscriptionAccess();
   const [loadState, setLoadState] = useState<LoadState>('loading');
@@ -552,7 +576,9 @@ export default function RelatoriosScreen() {
     }
     setReloading(true);
     try {
-      const apiPeriod = PERIOD_TO_API[period];
+      // Fixo em 30 dias - "Hoje"/"7 dias" não faziam sentido pra um
+      // relatório (ninguém olha Curva ABC/produto mais lucrativo do dia).
+      const apiPeriod = '30d';
       if (viewingAll) {
         const [summaryRes, productsPerShop] = await Promise.all([
           getCombinedSummary(token, apiPeriod),
@@ -580,7 +606,7 @@ export default function RelatoriosScreen() {
     } finally {
       setReloading(false);
     }
-  }, [token, shopsLoaded, selectedShop, viewingAll, activeShops, period]);
+  }, [token, shopsLoaded, selectedShop, viewingAll, activeShops]);
 
   useEffect(() => {
     load();
@@ -604,18 +630,6 @@ export default function RelatoriosScreen() {
   useEffect(() => {
     if (refreshSignal > 0) load();
   }, [refreshSignal, load]);
-
-  // Atualização automática tipo UpSeller ("vendas de hoje atualizado a cada
-  // 5 minutos") - a notificação push já cobre pedido concluído em apps
-  // nativos, mas no site (sem push) o número só mudava se a pessoa recarregar
-  // a página. Só faz sentido pra "Hoje" - Mês/Ano não mudam minuto a minuto.
-  useFocusEffect(
-    useCallback(() => {
-      if (period !== 'Hoje') return;
-      const interval = setInterval(() => load(), 60_000);
-      return () => clearInterval(interval);
-    }, [period, load])
-  );
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -660,25 +674,11 @@ export default function RelatoriosScreen() {
       <Text className="mt-1 text-sm text-lucrei-textMuted">Pra onde vai o seu lucro.</Text>
       {activeShops.length > 1 && <ShopPicker />}
 
-      <View className="mt-5 flex-row items-center gap-2">
-        <View className="flex-row self-start rounded-full bg-lucrei-surface p-1">
-          {PERIODS.map((p) => {
-            const active = p === period;
-            return (
-              <Pressable
-                key={p}
-                onPress={() => setPeriod(p)}
-                className="rounded-full px-3.5 py-1.5"
-                style={{ backgroundColor: active ? Colors.gold : 'transparent' }}>
-                <Text className="text-xs font-medium" style={{ color: active ? Colors.onGold : Colors.textMuted }}>
-                  {p}
-                </Text>
-              </Pressable>
-            );
-          })}
+      {loadState === 'ready' && reloading && (
+        <View className="mt-5 flex-row items-center">
+          <ActivityIndicator size="small" color={Colors.gold} />
         </View>
-        {loadState === 'ready' && reloading && <ActivityIndicator size="small" color={Colors.gold} />}
-      </View>
+      )}
 
       {loadState === 'loading' && (
         <View className="mt-10 items-center">
