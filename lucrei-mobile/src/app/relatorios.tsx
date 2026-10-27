@@ -19,10 +19,13 @@ import {
   getCombinedSummary,
   getCombinedSummaryRange,
   getOrderForecast,
+  getProductReport,
   getShopeeProducts,
   getSummary,
   getSummaryRange,
   type OrderForecast,
+  type Period,
+  type ProductReport,
   type ShopeeProduct,
   type Summary,
 } from '@/lib/api';
@@ -31,6 +34,7 @@ import { useAuth } from '@/lib/auth';
 import { useDataRefresh } from '@/lib/data-refresh';
 import { exportOrdersCsv, exportOrdersExcel, exportProductExcel } from '@/lib/export-csv';
 import { formatBRL } from '@/lib/format';
+import { MERCADO_LIVRE_ORDER_STATUS_LABELS, ORDER_STATUS_LABELS } from '@/lib/order-status-labels';
 import { webCapWidth } from '@/lib/responsive';
 import { useSelectedShop } from '@/lib/selected-shop';
 import { useSubscriptionAccess } from '@/lib/subscription-access';
@@ -150,9 +154,19 @@ function ProductRankRow({ product }: { product: ShopeeProduct }) {
   );
 }
 
-// Busca/seleciona 1 produto dentro da lista já carregada pro período atual
-// (mesma array que alimenta Curva ABC / rankings) - sem rota nova, os
-// totais de faturamento/lucro/quantidade já vêm calculados dali.
+type ProductReportPeriodLabel = 'Hoje' | '7 dias' | '30 dias' | '3 meses';
+const PRODUCT_REPORT_PERIODS: ProductReportPeriodLabel[] = ['Hoje', '7 dias', '30 dias', '3 meses'];
+const PRODUCT_REPORT_PERIOD_TO_API: Record<ProductReportPeriodLabel, Period> = {
+  Hoje: 'today',
+  '7 dias': '7d',
+  '30 dias': '30d',
+  '3 meses': '90d',
+};
+
+// Busca/seleciona 1 produto dentro da lista já carregada pro período fixo da
+// tela (só pra achar o produto pelo nome) - os totais mostrados aqui vêm de
+// uma chamada própria (getProductReport), já que esse card tem seu próprio
+// seletor de período, independente do resto de Relatórios.
 function ProductReportCard({
   token,
   fallbackShopId,
@@ -170,6 +184,9 @@ function ProductReportCard({
   const Colors = useColors();
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<ShopeeProduct | null>(null);
+  const [period, setPeriod] = useState<ProductReportPeriodLabel>('30 dias');
+  const [report, setReport] = useState<ProductReport | null>(null);
+  const [loadingReport, setLoadingReport] = useState(false);
   const [exporting, setExporting] = useState(false);
 
   const matches =
@@ -179,13 +196,42 @@ function ProductReportCard({
           .filter((p) => p.name.toLowerCase().includes(query.trim().toLowerCase()))
           .slice(0, 8);
 
+  useEffect(() => {
+    // Selecionar/limpar produto já zera "report" direto no handler (abaixo) -
+    // esse efeito só cuida de buscar o relatório pro produto/período atual.
+    if (!selected) return;
+    const shopId = selected.shopId ?? fallbackShopId;
+    if (!shopId) return;
+
+    let cancelled = false;
+    setLoadingReport(true);
+    getProductReport(token, shopId, selected.shopeeItemId, PRODUCT_REPORT_PERIOD_TO_API[period], selected.name)
+      .then((data) => {
+        if (!cancelled) setReport(data);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          showAlert('Não foi possível carregar', err instanceof ApiError ? err.message : 'Tenta de novo em instantes.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingReport(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selected, period, token, fallbackShopId]);
+
   function handleSelect(product: ShopeeProduct) {
     setSelected(product);
+    setReport(null);
     setQuery('');
   }
 
   function handleClear() {
     setSelected(null);
+    setReport(null);
     setQuery('');
   }
 
@@ -194,7 +240,7 @@ function ProductReportCard({
     if (!selected || !shopId) return;
     setExporting(true);
     try {
-      await exportProductExcel(token, shopId, selected.shopeeItemId);
+      await exportProductExcel(token, shopId, selected.shopeeItemId, PRODUCT_REPORT_PERIOD_TO_API[period], selected.name);
     } catch (err) {
       showAlert('Não foi possível exportar', err instanceof ApiError ? err.message : 'Tenta de novo em instantes.');
     } finally {
@@ -218,32 +264,77 @@ function ProductReportCard({
             </Pressable>
           </View>
 
+          <View className="mt-3 flex-row self-start rounded-full bg-lucrei-surfaceAlt p-1">
+            {PRODUCT_REPORT_PERIODS.map((p) => {
+              const active = p === period;
+              return (
+                <Pressable
+                  key={p}
+                  onPress={() => setPeriod(p)}
+                  className="rounded-full px-3 py-1.5"
+                  style={{ backgroundColor: active ? Colors.gold : 'transparent' }}>
+                  <Text className="text-xs font-medium" style={{ color: active ? Colors.onGold : Colors.textMuted }}>
+                    {p}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
           <View className="mt-3 gap-1.5 border-t border-lucrei-border pt-3">
             <View className="flex-row items-center justify-between">
               <Text className="text-xs text-lucrei-textMuted">Faturamento no período</Text>
-              {blurred ? <BlurredValue width={70} /> : <Text className="text-sm text-lucrei-text">{formatBRL(selected.revenue ?? 0)}</Text>}
+              {blurred ? (
+                <BlurredValue width={70} />
+              ) : loadingReport || !report ? (
+                <ActivityIndicator size="small" color={Colors.gold} />
+              ) : (
+                <Text className="text-sm text-lucrei-text">{formatBRL(report.revenue)}</Text>
+              )}
             </View>
             <View className="flex-row items-center justify-between">
               <Text className="text-xs text-lucrei-textMuted">Lucro no período</Text>
               {blurred ? (
                 <BlurredValue width={90} height={16} />
+              ) : loadingReport || !report ? (
+                <ActivityIndicator size="small" color={Colors.gold} />
               ) : (
                 <Text
                   className="text-base font-bold"
-                  style={{ color: (selected.profit ?? 0) >= 0 ? Colors.success : Colors.danger }}>
-                  {formatBRL(selected.profit ?? 0)}
+                  style={{ color: (report.profit ?? 0) >= 0 ? Colors.success : Colors.danger }}>
+                  {formatBRL(report.profit ?? 0)}
                 </Text>
               )}
             </View>
             <View className="flex-row items-center justify-between">
               <Text className="text-xs text-lucrei-textMuted">Quantidade vendida</Text>
-              <Text className="text-sm text-lucrei-text">{selected.quantitySold}</Text>
+              <Text className="text-sm text-lucrei-text">{loadingReport || !report ? '–' : report.quantitySold}</Text>
             </View>
           </View>
-          {selected.profit === null && (
+          {report && report.itemsMissingCost > 0 && (
             <Text className="mt-2 text-xs text-lucrei-textMuted">
               Esse produto ainda não tem custo cadastrado, por isso o lucro não aparece.
             </Text>
+          )}
+
+          {report && report.pendingOrders.length > 0 && (
+            <View className="mt-3 gap-1.5 border-t border-lucrei-border pt-3">
+              <Text className="text-xs text-lucrei-textMuted">
+                + {report.pendingOrders.length}{' '}
+                {report.pendingOrders.length === 1 ? 'pedido ainda não concluído' : 'pedidos ainda não concluídos'}
+              </Text>
+              {report.pendingOrders.map((order) => {
+                const statusLabels = order.provider === 'mercado_livre' ? MERCADO_LIVRE_ORDER_STATUS_LABELS : ORDER_STATUS_LABELS;
+                return (
+                  <View key={order.orderSn} className="flex-row items-center justify-between">
+                    <Text className="flex-1 pr-3 text-xs text-lucrei-text" numberOfLines={1}>
+                      {statusLabels[order.status] ?? order.status}
+                    </Text>
+                    <Text className="text-xs text-lucrei-textMuted">x{order.quantity}</Text>
+                  </View>
+                );
+              })}
+            </View>
           )}
 
           <Pressable

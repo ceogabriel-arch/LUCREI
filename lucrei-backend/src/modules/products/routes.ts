@@ -3,8 +3,9 @@ import { Prisma, type PrismaClient } from '@prisma/client';
 
 import { mapLimit } from '../../lib/concurrency';
 import { buildOrdersXlsx, STATUS_LABELS } from '../../lib/order-export';
-import { prisma } from '../../lib/prisma';
 import { rangeStart, type Period } from '../../lib/period';
+import { listPendingOrdersForProduct } from '../../lib/product-pending-orders';
+import { prisma } from '../../lib/prisma';
 import { getValidAccessToken } from '../../lib/shopee-token';
 import { getValidAccessToken as getValidMercadoLivreAccessToken } from '../../lib/mercadolivre-token';
 import { getItemBaseInfo, getItemList, getModelList } from '../../shopee-client';
@@ -310,10 +311,65 @@ export async function productRoutes(app: FastifyInstance) {
     }
   );
 
-  // Export do card "Relatório por produto" em Relatórios - mesmo recorte
-  // fixo de 30 dias que a tela mostra (não tem seletor de período ali), com
-  // o detalhamento pedido a pedido em vez de só o total já visível na tela.
-  app.get<{ Params: { shopId: string; itemId: string } }>(
+  // Totais do card "Relatório por produto" em Relatórios - period é só desse
+  // card (não afeta o resto da tela, que fica fixa em 30 dias). "Pendentes"
+  // nunca é filtrado por period - igual o card de previsão do Início, é
+  // sempre "quanto tem em aberto agora" pra esse produto.
+  app.get<{ Params: { shopId: string; itemId: string }; Querystring: { period?: Period; name?: string } }>(
+    '/shops/:shopId/products/:itemId/report',
+    { onRequest: [app.authenticate] },
+    async (request, reply) => {
+      const shop = await requireOwnedShop(request.user.sub, request.params.shopId);
+      if (!shop) return reply.status(404).send({ message: 'Loja não encontrada.' });
+
+      const isMercadoLivre = shop.provider === 'mercado_livre';
+      const { itemId } = request.params;
+      const period = request.query.period ?? '30d';
+      const itemIdFilter = isMercadoLivre ? { mercadoLivreItemId: itemId } : { shopeeItemId: itemId };
+
+      const lineItems = await prisma.orderLineItem.findMany({
+        where: { order: { shopId: shop.id, completedAt: { gte: rangeStart(period) } }, ...itemIdFilter },
+        include: { product: true },
+      });
+
+      let revenue = 0;
+      let profit = 0;
+      let quantitySold = 0;
+      let itemsMissingCost = 0;
+      for (const li of lineItems) {
+        revenue += Number(li.salePrice);
+        quantitySold += li.quantity;
+        if (li.profit !== null) profit += Number(li.profit);
+        else itemsMissingCost++;
+      }
+
+      const productRecord = await prisma.product.findFirst({ where: { shopId: shop.id, ...itemIdFilter } });
+      const productName = request.query.name ?? lineItems[0]?.product?.name ?? productRecord?.name ?? '';
+
+      const pendingOrders = await listPendingOrdersForProduct(shop, itemId, productName);
+
+      return {
+        revenue,
+        profit: lineItems.length === 0 || itemsMissingCost === lineItems.length ? null : profit,
+        quantitySold,
+        ordersCount: lineItems.length,
+        itemsMissingCost,
+        pendingOrders: pendingOrders.map((p) => ({
+          orderSn: p.orderSn,
+          status: p.status,
+          orderDate: p.orderDate,
+          quantity: p.quantity,
+          provider: shop.provider,
+        })),
+      };
+    }
+  );
+
+  // Export do card "Relatório por produto" em Relatórios - mesmo period
+  // escolhido no card, com o detalhamento pedido a pedido em vez de só o
+  // total já visível na tela, incluindo os pedidos ainda pendentes (previsão)
+  // desse produto com o status certo deles.
+  app.get<{ Params: { shopId: string; itemId: string }; Querystring: { period?: Period; name?: string } }>(
     '/shops/:shopId/products/:itemId/export',
     { onRequest: [app.authenticate] },
     async (request, reply) => {
@@ -322,10 +378,11 @@ export async function productRoutes(app: FastifyInstance) {
 
       const isMercadoLivre = shop.provider === 'mercado_livre';
       const { itemId } = request.params;
+      const period = request.query.period ?? '30d';
       const itemIdFilter = isMercadoLivre ? { mercadoLivreItemId: itemId } : { shopeeItemId: itemId };
 
       const lineItems = await prisma.orderLineItem.findMany({
-        where: { order: { shopId: shop.id, completedAt: { gte: rangeStart('30d') } }, ...itemIdFilter },
+        where: { order: { shopId: shop.id, completedAt: { gte: rangeStart(period) } }, ...itemIdFilter },
         include: { order: true, product: true },
         orderBy: { order: { orderDate: 'asc' } },
       });
@@ -357,7 +414,18 @@ export async function productRoutes(app: FastifyInstance) {
         li.profit !== null ? Number(li.profit) : null,
       ]);
 
-      const productName = lineItems[0]?.product?.name ?? lineItems[0]?.itemName ?? `Item ${itemId}`;
+      const productRecord = await prisma.product.findFirst({ where: { shopId: shop.id, ...itemIdFilter } });
+      const productName =
+        lineItems[0]?.product?.name ?? lineItems[0]?.itemName ?? productRecord?.name ?? request.query.name ?? `Item ${itemId}`;
+
+      // Pedido ainda não concluído (previsão) não tem valor/taxa/custo
+      // conhecido de verdade ainda - entra na planilha só com data, número,
+      // status e quantidade, pra não inventar número financeiro.
+      const pendingOrders = await listPendingOrdersForProduct(shop, itemId, request.query.name ?? productName);
+      for (const p of pendingOrders) {
+        rows.push([p.orderDate, p.orderSn, STATUS_LABELS[p.status] ?? p.status, p.quantity, null, null, null, null, null, null]);
+      }
+
       const buffer = await buildOrdersXlsx(header, rows, 'Produto');
 
       reply.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');

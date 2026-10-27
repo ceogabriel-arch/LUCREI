@@ -1,4 +1,4 @@
-export type Period = 'today' | '7d' | '30d' | 'all';
+export type Period = 'today' | '7d' | '30d' | '90d' | 'all';
 
 export function startOfCurrentMonth() {
   const now = new Date();
@@ -13,6 +13,6 @@ export function rangeStart(period: Period) {
   if (period === 'today') {
     return new Date(now.getFullYear(), now.getMonth(), now.getDate());
   }
-  const days = period === '7d' ? 7 : 30;
+  const days = period === '7d' ? 7 : period === '90d' ? 90 : 30;
   return new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 }

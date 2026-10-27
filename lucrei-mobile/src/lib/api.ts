@@ -1,6 +1,6 @@
 export const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
-export type Period = 'today' | '7d' | '30d' | 'all';
+export type Period = 'today' | '7d' | '30d' | '90d' | 'all';
 
 export type SubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'canceled';
 export type UserPlan = { key: string; name: string; salesLimit: number | null; billingPeriod: BillingPeriod };
@@ -323,6 +323,34 @@ export function getShopeeProducts(token: string, shopId: string, period: Period,
   });
 }
 
+// Totais do "Relatório por produto" (Relatórios) pro period escolhido ali
+// dentro - independente do period fixo do resto da tela. pendingOrders nunca
+// é filtrado por period, igual o card de previsão: é sempre o que está em
+// aberto agora pra esse produto.
+export type ProductReportPendingOrder = {
+  orderSn: string;
+  status: string;
+  orderDate: string;
+  quantity: number;
+  provider: 'shopee' | 'mercado_livre';
+};
+
+export type ProductReport = {
+  revenue: number;
+  profit: number | null;
+  quantitySold: number;
+  ordersCount: number;
+  itemsMissingCost: number;
+  pendingOrders: ProductReportPendingOrder[];
+};
+
+export function getProductReport(token: string, shopId: string, itemId: string, period: Period, name?: string) {
+  const query = `period=${period}${name ? `&name=${encodeURIComponent(name)}` : ''}`;
+  return request<ProductReport>(`/shops/${shopId}/products/${encodeURIComponent(itemId)}/report?${query}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 export function saveProductCost(token: string, shopId: string, shopeeItemId: string, name: string, costPrice: number) {
   return request(`/shops/${shopId}/products`, {
     method: 'POST',
@@ -515,6 +543,24 @@ export function validateCoupon(token: string, code: string) {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify({ code }),
+  });
+}
+
+// Chamado ANTES de iniciar a compra no StoreKit - o token devolvido aqui vai
+// como appAccountToken na compra, pra toda transação/notificação dessa
+// assinatura voltar sabendo de qual conta Lucrei se trata (ver
+// /billing/apple/webhook no backend).
+export function getAppleAppAccountToken(token: string) {
+  return request<{ token: string }>('/billing/apple/app-account-token', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function verifyApplePurchase(token: string, signedTransactionInfo: string) {
+  return request<AuthUser>('/billing/apple/verify-purchase', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ signedTransactionInfo }),
   });
 }
 

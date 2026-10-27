@@ -9,6 +9,16 @@ export const STATUS_LABELS: Record<string, string> = {
   IN_CANCEL: 'Cancelando',
   CANCELLED: 'Cancelado',
   TO_RETURN: 'Em devolução',
+  // Status do Mercado Livre (minúsculo, vocabulário próprio) - "paid" é o
+  // único que chega a entrar na tabela Order; os outros só aparecem em
+  // pedido ainda pendente (ver product-pending-orders.ts).
+  confirmed: 'Confirmado',
+  payment_required: 'Aguardando pagamento',
+  payment_in_process: 'Pagamento em análise',
+  partially_paid: 'Pago parcialmente',
+  paid: 'Pago',
+  cancelled: 'Cancelado',
+  invalid: 'Inválido',
 };
 
 // Excel/Sheets em PT-BR esperam vírgula decimal - ponto quebraria a leitura

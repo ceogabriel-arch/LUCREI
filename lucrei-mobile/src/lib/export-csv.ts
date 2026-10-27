@@ -2,7 +2,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { Platform, Share } from 'react-native';
 import * as Sharing from 'expo-sharing';
 
-import { API_URL, ApiError } from '@/lib/api';
+import { API_URL, ApiError, type Period } from '@/lib/api';
 
 type ExportFormat = 'csv' | 'xlsx';
 
@@ -84,12 +84,15 @@ export async function exportOrders(token: string, shopId: string | null, from: D
   await Share.share({ message: text, title: filename ?? 'pedidos-lucrei.csv' });
 }
 
-// Resumo (faturamento/lucro/quantidade) de 1 produto só, nos últimos 30 dias
-// - mesmo recorte que o card "Relatório por produto" em relatorios.tsx já
-// mostra na tela, só que como planilha pra baixar/compartilhar.
-export async function exportProductExcel(token: string, shopId: string, itemId: string) {
+// Resumo (faturamento/lucro/quantidade) de 1 produto só, no period escolhido
+// no card "Relatório por produto" em relatorios.tsx - mesmo period, só que
+// como planilha pra baixar/compartilhar. name identifica o produto pro
+// backend quando a loja é Shopee (get_order_detail não expõe item_id pra
+// bater com pedido ainda pendente, só o nome).
+export async function exportProductExcel(token: string, shopId: string, itemId: string, period: Period, name?: string) {
+  const query = `period=${period}${name ? `&name=${encodeURIComponent(name)}` : ''}`;
   const { response, filename } = await fetchExport(
-    `/shops/${shopId}/products/${encodeURIComponent(itemId)}/export`,
+    `/shops/${shopId}/products/${encodeURIComponent(itemId)}/export?${query}`,
     token,
     'Excel'
   );

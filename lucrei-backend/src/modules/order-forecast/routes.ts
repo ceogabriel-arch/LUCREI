@@ -3,20 +3,12 @@ import type { FastifyInstance } from 'fastify';
 
 import { formatOrderProductLabel } from '../../lib/order-product-label';
 import { getValidAccessToken as getValidMercadoLivreAccessToken } from '../../lib/mercadolivre-token';
-import { rangeStart } from '../../lib/period';
+import { pendingWhereForShop, pendingWindowStart } from '../../lib/pending-orders';
 import { prisma } from '../../lib/prisma';
 import { getValidAccessToken } from '../../lib/shopee-token';
 import { getOrder as getMercadoLivreOrder } from '../../mercadolivre-client';
 import { getOrderDetail } from '../../shopee-client';
-import { ML_RESOLVED_STATUSES } from '../sync/mercadolivre-service';
-import { SHOPEE_PENDING_STATUSES } from '../sync/service';
 import { computeShopSummary } from '../summary/routes';
-
-// Pedido pendente há mais tempo que isso provavelmente perdeu o rastro (push
-// da Shopee não garante entrega, e o sync periódico do ML só vê o que ainda
-// está nas primeiras páginas de busca) - não entra mais na previsão pra não
-// inflar a contagem pra sempre com pedido "fantasma".
-const PENDING_WINDOW_START = () => rangeStart('30d');
 
 type ShopForecast = { pendingCount: number; projectedProfit: number; projectedRevenue: number; readyToShipCount: number };
 type PendingEvent = {
@@ -44,18 +36,6 @@ async function computeRecentAverages(shop: Shop): Promise<{ avgProfit: number; a
   };
 }
 
-// Shopee agora sincroniza (e já calcula taxa/frete/lucro de verdade) assim
-// que o pedido é pago, não só quando conclui - ver isEligibleShopeeStatus em
-// sync/service.ts. Por isso "pendente" aqui encolheu: só sobra o pedido que
-// ainda nem foi pago de verdade (SHOPEE_PENDING_STATUSES), já que o resto já
-// tem número real no resumo. Sem isso o mesmo pedido contaria duas vezes -
-// uma no resumo de verdade, outra estimado aqui.
-function pendingWhereForShop(shop: Shop) {
-  return shop.provider === 'mercado_livre'
-    ? { shopId: shop.id, mercadoLivreOrderId: { not: null }, orderStatus: { notIn: [...ML_RESOLVED_STATUSES] } }
-    : { shopId: shop.id, shopeeOrderSn: { not: null }, orderStatus: { in: [...SHOPEE_PENDING_STATUSES] } };
-}
-
 // Pedido já pago/confirmado (está na tabela Order, não mais no estimado
 // acima) mas ainda não despachado de verdade - READY_TO_SHIP (ainda não
 // embalado) e PROCESSED (embalado/etiqueta gerada, esperando a
@@ -75,7 +55,7 @@ async function computeReadyToShipCount(shop: Shop): Promise<number> {
 async function computeShopForecast(shop: Shop): Promise<ShopForecast> {
   const [pendingCount, readyToShipCount] = await Promise.all([
     prisma.recentOrderEvent.count({
-      where: { ...pendingWhereForShop(shop), orderDate: { gte: PENDING_WINDOW_START() } },
+      where: { ...pendingWhereForShop(shop), orderDate: { gte: pendingWindowStart() } },
     }),
     computeReadyToShipCount(shop),
   ]);
@@ -92,7 +72,7 @@ async function computeShopForecast(shop: Shop): Promise<ShopForecast> {
 async function listPendingOrders(shops: Shop[]): Promise<PendingEvent[]> {
   if (shops.length === 0) return [];
   return prisma.recentOrderEvent.findMany({
-    where: { OR: shops.map((shop) => ({ ...pendingWhereForShop(shop), orderDate: { gte: PENDING_WINDOW_START() } })) },
+    where: { OR: shops.map((shop) => ({ ...pendingWhereForShop(shop), orderDate: { gte: pendingWindowStart() } })) },
     orderBy: { orderDate: 'asc' },
     select: { shopeeOrderSn: true, mercadoLivreOrderId: true, orderStatus: true, orderDate: true, shopId: true },
   });
