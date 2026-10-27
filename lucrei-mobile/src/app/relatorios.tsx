@@ -29,7 +29,7 @@ import {
 import { showAlert } from '@/lib/alert';
 import { useAuth } from '@/lib/auth';
 import { useDataRefresh } from '@/lib/data-refresh';
-import { exportOrdersCsv, exportOrdersExcel } from '@/lib/export-csv';
+import { exportOrdersCsv, exportOrdersExcel, exportProductExcel } from '@/lib/export-csv';
 import { formatBRL } from '@/lib/format';
 import { webCapWidth } from '@/lib/responsive';
 import { useSelectedShop } from '@/lib/selected-shop';
@@ -153,10 +153,24 @@ function ProductRankRow({ product }: { product: ShopeeProduct }) {
 // Busca/seleciona 1 produto dentro da lista já carregada pro período atual
 // (mesma array que alimenta Curva ABC / rankings) - sem rota nova, os
 // totais de faturamento/lucro/quantidade já vêm calculados dali.
-function ProductReportCard({ products, blurred }: { products: ShopeeProduct[]; blurred: boolean }) {
+function ProductReportCard({
+  token,
+  fallbackShopId,
+  products,
+  blurred,
+}: {
+  token: string;
+  // Produto em "Todas as lojas" já carrega o shopId dele (ver load() mais
+  // abaixo); numa loja só, o produto nunca tem isso preenchido (óbvio qual
+  // loja é), então cai nessa loja selecionada.
+  fallbackShopId: string | null;
+  products: ShopeeProduct[];
+  blurred: boolean;
+}) {
   const Colors = useColors();
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<ShopeeProduct | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const matches =
     query.trim().length === 0
@@ -173,6 +187,19 @@ function ProductReportCard({ products, blurred }: { products: ShopeeProduct[]; b
   function handleClear() {
     setSelected(null);
     setQuery('');
+  }
+
+  async function handleExport() {
+    const shopId = selected?.shopId ?? fallbackShopId;
+    if (!selected || !shopId) return;
+    setExporting(true);
+    try {
+      await exportProductExcel(token, shopId, selected.shopeeItemId);
+    } catch (err) {
+      showAlert('Não foi possível exportar', err instanceof ApiError ? err.message : 'Tenta de novo em instantes.');
+    } finally {
+      setExporting(false);
+    }
   }
 
   return (
@@ -218,6 +245,19 @@ function ProductReportCard({ products, blurred }: { products: ShopeeProduct[]; b
               Esse produto ainda não tem custo cadastrado, por isso o lucro não aparece.
             </Text>
           )}
+
+          <Pressable
+            onPress={handleExport}
+            disabled={exporting}
+            className="mt-3 flex-row items-center justify-center gap-2 rounded-xl bg-lucrei-surfaceAlt px-4 py-3"
+            style={{ opacity: exporting ? 0.6 : 1 }}>
+            {exporting ? (
+              <ActivityIndicator size="small" color={Colors.gold} />
+            ) : (
+              <Ionicons name="grid-outline" size={16} color={Colors.gold} />
+            )}
+            <Text className="text-sm font-medium text-lucrei-gold">Exportar Excel</Text>
+          </Pressable>
         </View>
       ) : (
         <View>
@@ -739,6 +779,15 @@ export default function RelatoriosScreen() {
                 <DailyProfitChart data={summary.trend} />
               </GlassCard>
 
+              {token && products.length > 0 && (
+                <ProductReportCard
+                  token={token}
+                  fallbackShopId={viewingAll ? null : (selectedShop?.id ?? null)}
+                  products={products}
+                  blurred={subscriptionAccess.isPastDue}
+                />
+              )}
+
               <GlassCard className="p-4" borderRadius={16}>
                 <Text className="mb-3 text-sm font-medium text-lucrei-text">Pra onde foi o dinheiro</Text>
                 {summary.revenue > 0 && (
@@ -806,8 +855,6 @@ export default function RelatoriosScreen() {
                   </View>
                 </GlassCard>
               )}
-
-              {products.length > 0 && <ProductReportCard products={products} blurred={subscriptionAccess.isPastDue} />}
 
               {topProfitable.length > 0 && (
                 <GlassCard className="p-4" borderRadius={16}>

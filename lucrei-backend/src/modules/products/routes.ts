@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { Prisma, type PrismaClient } from '@prisma/client';
 
 import { mapLimit } from '../../lib/concurrency';
+import { buildOrdersXlsx, STATUS_LABELS } from '../../lib/order-export';
 import { prisma } from '../../lib/prisma';
 import { rangeStart, type Period } from '../../lib/period';
 import { getValidAccessToken } from '../../lib/shopee-token';
@@ -306,6 +307,65 @@ export async function productRoutes(app: FastifyInstance) {
           .status(502)
           .send({ message: `Falha ao buscar catálogo ${isMercadoLivre ? 'no Mercado Livre' : 'na Shopee'}.` });
       }
+    }
+  );
+
+  // Export do card "Relatório por produto" em Relatórios - mesmo recorte
+  // fixo de 30 dias que a tela mostra (não tem seletor de período ali), com
+  // o detalhamento pedido a pedido em vez de só o total já visível na tela.
+  app.get<{ Params: { shopId: string; itemId: string } }>(
+    '/shops/:shopId/products/:itemId/export',
+    { onRequest: [app.authenticate] },
+    async (request, reply) => {
+      const shop = await requireOwnedShop(request.user.sub, request.params.shopId);
+      if (!shop) return reply.status(404).send({ message: 'Loja não encontrada.' });
+
+      const isMercadoLivre = shop.provider === 'mercado_livre';
+      const { itemId } = request.params;
+      const itemIdFilter = isMercadoLivre ? { mercadoLivreItemId: itemId } : { shopeeItemId: itemId };
+
+      const lineItems = await prisma.orderLineItem.findMany({
+        where: { order: { shopId: shop.id, completedAt: { gte: rangeStart('30d') } }, ...itemIdFilter },
+        include: { order: true, product: true },
+        orderBy: { order: { orderDate: 'asc' } },
+      });
+
+      const marketplaceLabel = isMercadoLivre ? 'Mercado Livre' : 'Shopee';
+      const header = [
+        'Data do pedido',
+        'Nº do pedido',
+        'Status',
+        'Quantidade',
+        'Valor de venda (R$)',
+        'Frete alocado (R$)',
+        `Taxa ${marketplaceLabel} (R$)`,
+        'Imposto (R$)',
+        'Custo do produto (R$)',
+        'Lucro (R$)',
+      ];
+
+      const rows: (string | number | Date | null)[][] = lineItems.map((li) => [
+        li.order.orderDate,
+        li.order.shopeeOrderSn ?? li.order.mercadoLivreOrderId ?? '',
+        STATUS_LABELS[li.order.orderStatus] ?? li.order.orderStatus,
+        li.quantity,
+        Number(li.salePrice),
+        Number(li.shippingFeeAllocated),
+        Number(li.shopeeFeeAllocated),
+        Number(li.taxAllocated),
+        li.productCostSnapshot !== null ? Number(li.productCostSnapshot) : null,
+        li.profit !== null ? Number(li.profit) : null,
+      ]);
+
+      const productName = lineItems[0]?.product?.name ?? lineItems[0]?.itemName ?? `Item ${itemId}`;
+      const buffer = await buildOrdersXlsx(header, rows, 'Produto');
+
+      reply.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      reply.header(
+        'Content-Disposition',
+        `attachment; filename="produto-lucrei-${productName.replace(/[^a-zA-Z0-9]/g, '-')}.xlsx"`
+      );
+      return reply.send(buffer);
     }
   );
 
