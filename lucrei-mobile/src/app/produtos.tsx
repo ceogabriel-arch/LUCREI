@@ -24,7 +24,7 @@ import { showAlert } from '@/lib/alert';
 import { useAuth } from '@/lib/auth';
 import { useDataRefresh } from '@/lib/data-refresh';
 import { formatBRL } from '@/lib/format';
-import { PERIOD_TO_API, PERIODS, type PeriodLabel, usePeriod } from '@/lib/period';
+import { PERIOD_TO_API, type PeriodLabel } from '@/lib/period';
 import { webCapWidth } from '@/lib/responsive';
 import { useSelectedShop } from '@/lib/selected-shop';
 import { useSubscriptionAccess } from '@/lib/subscription-access';
@@ -300,7 +300,9 @@ export default function ProdutosScreen() {
   // useMemo é essencial (não computar shops.filter direto) - ver o bug de
   // loop infinito corrigido em pedidos.tsx pelo mesmo motivo.
   const activeShops = useMemo(() => shops.filter((s) => s.status === 'active'), [shops]);
-  const { period, setPeriod } = usePeriod();
+  // Fixo em 30 dias - "Hoje"/"7 dias" não faziam sentido pra decidir custo de
+  // produto (o cadastro de custo não muda de um dia pro outro).
+  const period: PeriodLabel = '30 dias';
   const { refreshSignal } = useDataRefresh();
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [products, setProducts] = useState<ShopeeProduct[]>([]);
@@ -391,7 +393,7 @@ export default function ProdutosScreen() {
         setReloading(false);
       }
     },
-    [token, shopsLoaded, selectedShop, period, viewingAll, activeShops]
+    [token, shopsLoaded, selectedShop, viewingAll, activeShops]
   );
 
   useFocusEffect(
@@ -602,25 +604,11 @@ export default function ProdutosScreen() {
 
       {viewMode === 'catalog' && (
         <>
-      <View className="mt-5 flex-row items-center gap-2">
-        <View className="flex-row self-start rounded-full bg-lucrei-surface p-1">
-          {PERIODS.map((p) => {
-            const active = p === period;
-            return (
-              <Pressable
-                key={p}
-                onPress={() => setPeriod(p)}
-                className="rounded-full px-3.5 py-1.5"
-                style={{ backgroundColor: active ? Colors.gold : 'transparent' }}>
-                <Text className="text-xs font-medium" style={{ color: active ? Colors.onGold : Colors.textMuted }}>
-                  {p}
-                </Text>
-              </Pressable>
-            );
-          })}
+      {loadState === 'ready' && reloading && (
+        <View className="mt-5 flex-row items-center">
+          <ActivityIndicator size="small" color={Colors.gold} />
         </View>
-        {loadState === 'ready' && reloading && <ActivityIndicator size="small" color={Colors.gold} />}
-      </View>
+      )}
       <PastDueBanner />
 
       {loadState === 'loading' && (
