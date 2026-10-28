@@ -32,6 +32,35 @@ async function fetchExport(path: string, token: string, errorLabel: string) {
   return { response, filename: filenameMatch?.[1] ?? null };
 }
 
+// Export em lote (checkbox da lista em relatorios.tsx) manda a lista de itens
+// no corpo em vez de query string - os outros exports usam GET porque o
+// filtro cabe numa URL, mas aqui pode ter dezenas de produtos marcados.
+async function fetchExportPost(path: string, token: string, body: unknown, errorLabel: string) {
+  if (!API_URL) {
+    throw new ApiError('Servidor não configurado (EXPO_PUBLIC_API_URL ausente).');
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new ApiError('Não foi possível conectar ao servidor.');
+  }
+
+  if (!response.ok) {
+    const responseBody = await response.json().catch(() => null);
+    throw new ApiError(responseBody?.message ?? `Não foi possível gerar o ${errorLabel}.`);
+  }
+
+  const disposition = response.headers.get('content-disposition') ?? '';
+  const filenameMatch = disposition.match(/filename="([^"]+)"/);
+  return { response, filename: filenameMatch?.[1] ?? null };
+}
+
 // .xlsx é binário - no web basta um link de download, mas no nativo precisa
 // gravar em arquivo (base64) e abrir pelo share sheet, diferente do CSV que
 // dá pra compartilhar como texto puro direto.
@@ -97,6 +126,18 @@ export async function exportProductExcel(token: string, shopId: string, itemId: 
     'Excel'
   );
   await downloadBinaryFile(response, filename ?? 'produto-lucrei.xlsx', XLSX_CONTENT_TYPE);
+}
+
+// Export em lote dos produtos marcados no checkbox - uma planilha só com
+// todos juntos (coluna "Produto" identifica de qual item cada linha é),
+// podendo vir de lojas diferentes no modo "Todas as lojas".
+export async function exportProductsExcel(
+  token: string,
+  items: { shopId: string; itemId: string; name?: string }[],
+  period: Period
+) {
+  const { response, filename } = await fetchExportPost('/products/export', token, { items, period }, 'Excel');
+  await downloadBinaryFile(response, filename ?? 'produtos-lucrei.xlsx', XLSX_CONTENT_TYPE);
 }
 
 // Hermes (runtime nativo do RN) não garante `btoa` global - monta o base64

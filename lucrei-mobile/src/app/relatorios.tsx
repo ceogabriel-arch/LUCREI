@@ -32,7 +32,7 @@ import {
 import { showAlert } from '@/lib/alert';
 import { useAuth } from '@/lib/auth';
 import { useDataRefresh } from '@/lib/data-refresh';
-import { exportOrdersCsv, exportOrdersExcel, exportProductExcel } from '@/lib/export-csv';
+import { exportOrdersCsv, exportOrdersExcel, exportProductExcel, exportProductsExcel } from '@/lib/export-csv';
 import { formatBRL } from '@/lib/format';
 import { MERCADO_LIVRE_ORDER_STATUS_LABELS, ORDER_STATUS_LABELS } from '@/lib/order-status-labels';
 import { webCapWidth } from '@/lib/responsive';
@@ -189,18 +189,22 @@ function ProductReportCard({
   const [report, setReport] = useState<ProductReport | null>(null);
   const [loadingReport, setLoadingReport] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [exportingSelected, setExportingSelected] = useState(false);
+
+  const keyFor = (p: ShopeeProduct) => `${p.shopId ?? ''}-${p.shopeeItemId}`;
 
   // Dropdown abre no foco mesmo sem digitar nada (lista os produtos
   // ordenados por quem mais vendeu) - sem digitar nada antes, não dava pra
   // ver que existia mais de um anúncio com o nome quase igual (achado ao
   // vivo: dois produtos chamados exatamente igual, pedidos quase todos
-  // concentrados só num deles).
+  // concentrados só num deles). Sem corte em 8 - a lista rola dentro de uma
+  // altura fixa em vez de esconder o resto (outro problema achado ao vivo).
   const matches = !open
     ? []
-    : (query.trim().length === 0
-        ? [...products].sort((a, b) => b.orders - a.orders)
-        : products.filter((p) => p.name.toLowerCase().includes(query.trim().toLowerCase()))
-      ).slice(0, 8);
+    : query.trim().length === 0
+      ? [...products].sort((a, b) => b.orders - a.orders)
+      : products.filter((p) => p.name.toLowerCase().includes(query.trim().toLowerCase()));
 
   useEffect(() => {
     // Selecionar/limpar produto já zera "report" direto no handler (abaixo) -
@@ -255,9 +259,52 @@ function ProductReportCard({
     }
   }
 
+  function toggleChecked(key: string) {
+    setChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  async function handleExportSelected() {
+    const items = products
+      .filter((p) => checked.has(keyFor(p)))
+      .map((p) => ({ shopId: p.shopId ?? fallbackShopId ?? '', itemId: p.shopeeItemId, name: p.name }))
+      .filter((i) => i.shopId !== '');
+    if (items.length === 0) return;
+    setExportingSelected(true);
+    try {
+      await exportProductsExcel(token, items, PRODUCT_REPORT_PERIOD_TO_API[period]);
+      setChecked(new Set());
+    } catch (err) {
+      showAlert('Não foi possível exportar', err instanceof ApiError ? err.message : 'Tenta de novo em instantes.');
+    } finally {
+      setExportingSelected(false);
+    }
+  }
+
   return (
     <GlassCard className="p-4" borderRadius={16}>
       <Text className="mb-3 text-sm font-medium text-lucrei-text">Relatório por produto</Text>
+
+      <View className="mb-3 flex-row self-start rounded-full bg-lucrei-surfaceAlt p-1">
+        {PRODUCT_REPORT_PERIODS.map((p) => {
+          const active = p === period;
+          return (
+            <Pressable
+              key={p}
+              onPress={() => setPeriod(p)}
+              className="rounded-full px-3 py-1.5"
+              style={{ backgroundColor: active ? Colors.gold : 'transparent' }}>
+              <Text className="text-xs font-medium" style={{ color: active ? Colors.onGold : Colors.textMuted }}>
+                {p}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
 
       {selected ? (
         <View>
@@ -269,23 +316,6 @@ function ProductReportCard({
             <Pressable onPress={handleClear} hitSlop={8}>
               <Ionicons name="close-circle" size={20} color={Colors.textMuted} />
             </Pressable>
-          </View>
-
-          <View className="mt-3 flex-row self-start rounded-full bg-lucrei-surfaceAlt p-1">
-            {PRODUCT_REPORT_PERIODS.map((p) => {
-              const active = p === period;
-              return (
-                <Pressable
-                  key={p}
-                  onPress={() => setPeriod(p)}
-                  className="rounded-full px-3 py-1.5"
-                  style={{ backgroundColor: active ? Colors.gold : 'transparent' }}>
-                  <Text className="text-xs font-medium" style={{ color: active ? Colors.onGold : Colors.textMuted }}>
-                    {p}
-                  </Text>
-                </Pressable>
-              );
-            })}
           </View>
 
           <View className="mt-3 gap-1.5 border-t border-lucrei-border pt-3">
@@ -376,25 +406,59 @@ function ProductReportCard({
             <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={Colors.textMuted} />
           </View>
           {matches.length > 0 && (
-            <View className="mt-2 gap-1.5">
-              {matches.map((product, index) => (
-                <Pressable
-                  key={`${product.shopId ?? ''}-${product.shopeeItemId}-${index}`}
-                  onPress={() => handleSelect(product)}
-                  className="flex-row items-center justify-between rounded-xl border border-lucrei-border bg-lucrei-surface px-3.5 py-2.5">
-                  <Text className="flex-1 pr-3 text-sm text-lucrei-text" numberOfLines={1}>
-                    {product.name}
-                    {product.shopName ? ` · ${product.shopName}` : ''}
-                  </Text>
-                  <Text className="text-xs text-lucrei-textMuted">
-                    {product.orders} {product.orders === 1 ? 'pedido' : 'pedidos'}
-                  </Text>
-                </Pressable>
-              ))}
+            <View className="mt-2 overflow-hidden rounded-xl border border-lucrei-border">
+              <ScrollView style={{ maxHeight: 300 }} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                {matches.map((product, index) => {
+                  const key = keyFor(product);
+                  const isChecked = checked.has(key);
+                  return (
+                    <View
+                      key={`${key}-${index}`}
+                      className="flex-row items-center bg-lucrei-surface"
+                      style={index > 0 ? { borderTopWidth: 1, borderTopColor: Colors.border } : undefined}>
+                      <Pressable onPress={() => toggleChecked(key)} hitSlop={8} className="px-3 py-2.5">
+                        <Ionicons
+                          name={isChecked ? 'checkbox' : 'square-outline'}
+                          size={19}
+                          color={isChecked ? Colors.gold : Colors.textMuted}
+                        />
+                      </Pressable>
+                      <Pressable
+                        onPress={() => handleSelect(product)}
+                        className="flex-1 flex-row items-center justify-between py-2.5 pr-3.5">
+                        <Text className="flex-1 pr-3 text-sm text-lucrei-text" numberOfLines={1}>
+                          {product.name}
+                          {product.shopName ? ` · ${product.shopName}` : ''}
+                        </Text>
+                        <Text className="text-xs text-lucrei-textMuted">
+                          {product.orders} {product.orders === 1 ? 'pedido' : 'pedidos'}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  );
+                })}
+              </ScrollView>
             </View>
           )}
           {open && query.trim().length > 0 && matches.length === 0 && (
             <Text className="mt-2 text-xs text-lucrei-textMuted">Nenhum produto encontrado com esse nome.</Text>
+          )}
+
+          {checked.size > 0 && (
+            <Pressable
+              onPress={handleExportSelected}
+              disabled={exportingSelected}
+              className="mt-3 flex-row items-center justify-center gap-2 rounded-xl bg-lucrei-surfaceAlt px-4 py-3"
+              style={{ opacity: exportingSelected ? 0.6 : 1 }}>
+              {exportingSelected ? (
+                <ActivityIndicator size="small" color={Colors.gold} />
+              ) : (
+                <Ionicons name="grid-outline" size={16} color={Colors.gold} />
+              )}
+              <Text className="text-sm font-medium text-lucrei-gold">
+                Exportar {checked.size} {checked.size === 1 ? 'produto' : 'produtos'}
+              </Text>
+            </Pressable>
           )}
         </View>
       )}
