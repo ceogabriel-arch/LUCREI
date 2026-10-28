@@ -183,18 +183,24 @@ function ProductReportCard({
 }) {
   const Colors = useColors();
   const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<ShopeeProduct | null>(null);
   const [period, setPeriod] = useState<ProductReportPeriodLabel>('30 dias');
   const [report, setReport] = useState<ProductReport | null>(null);
   const [loadingReport, setLoadingReport] = useState(false);
   const [exporting, setExporting] = useState(false);
 
-  const matches =
-    query.trim().length === 0
-      ? []
-      : products
-          .filter((p) => p.name.toLowerCase().includes(query.trim().toLowerCase()))
-          .slice(0, 8);
+  // Dropdown abre no foco mesmo sem digitar nada (lista os produtos
+  // ordenados por quem mais vendeu) - sem digitar nada antes, não dava pra
+  // ver que existia mais de um anúncio com o nome quase igual (achado ao
+  // vivo: dois produtos chamados exatamente igual, pedidos quase todos
+  // concentrados só num deles).
+  const matches = !open
+    ? []
+    : (query.trim().length === 0
+        ? [...products].sort((a, b) => b.orders - a.orders)
+        : products.filter((p) => p.name.toLowerCase().includes(query.trim().toLowerCase()))
+      ).slice(0, 8);
 
   useEffect(() => {
     // Selecionar/limpar produto já zera "report" direto no handler (abaixo) -
@@ -227,6 +233,7 @@ function ProductReportCard({
     setSelected(product);
     setReport(null);
     setQuery('');
+    setOpen(false);
   }
 
   function handleClear() {
@@ -352,30 +359,41 @@ function ProductReportCard({
         </View>
       ) : (
         <View>
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Buscar produto pelo nome..."
-            placeholderTextColor={Colors.textMuted}
-            autoCorrect={false}
-            className="rounded-xl border border-lucrei-border bg-lucrei-bg px-3.5 py-2.5 text-sm text-lucrei-text"
-          />
+          <View className="flex-row items-center rounded-xl border border-lucrei-border bg-lucrei-bg px-3.5">
+            <TextInput
+              value={query}
+              onChangeText={setQuery}
+              onFocus={() => setOpen(true)}
+              // Delay pra deixar o onPress de um item da lista disparar antes
+              // (ele seleciona o produto e fecha sozinho) - sem isso o blur
+              // fecha a lista antes do toque registrar.
+              onBlur={() => setTimeout(() => setOpen(false), 150)}
+              placeholder="Buscar produto pelo nome..."
+              placeholderTextColor={Colors.textMuted}
+              autoCorrect={false}
+              className="flex-1 py-2.5 text-sm text-lucrei-text"
+            />
+            <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={Colors.textMuted} />
+          </View>
           {matches.length > 0 && (
             <View className="mt-2 gap-1.5">
               {matches.map((product, index) => (
                 <Pressable
                   key={`${product.shopId ?? ''}-${product.shopeeItemId}-${index}`}
                   onPress={() => handleSelect(product)}
-                  className="rounded-xl border border-lucrei-border bg-lucrei-surface px-3.5 py-2.5">
-                  <Text className="text-sm text-lucrei-text" numberOfLines={1}>
+                  className="flex-row items-center justify-between rounded-xl border border-lucrei-border bg-lucrei-surface px-3.5 py-2.5">
+                  <Text className="flex-1 pr-3 text-sm text-lucrei-text" numberOfLines={1}>
                     {product.name}
                     {product.shopName ? ` · ${product.shopName}` : ''}
+                  </Text>
+                  <Text className="text-xs text-lucrei-textMuted">
+                    {product.orders} {product.orders === 1 ? 'pedido' : 'pedidos'}
                   </Text>
                 </Pressable>
               ))}
             </View>
           )}
-          {query.trim().length > 0 && matches.length === 0 && (
+          {open && query.trim().length > 0 && matches.length === 0 && (
             <Text className="mt-2 text-xs text-lucrei-textMuted">Nenhum produto encontrado com esse nome.</Text>
           )}
         </View>
