@@ -1019,11 +1019,6 @@ export default function RelatoriosScreen() {
             </GlassCard>
           ) : (
             <>
-              <GlassCard className="p-4" borderRadius={16}>
-                <Text className="text-sm font-medium text-lucrei-text">Lucro por dia</Text>
-                <DailyProfitChart data={summary.trend} />
-              </GlassCard>
-
               {token && products.length > 0 && (
                 <ProductReportCard
                   token={token}
@@ -1032,6 +1027,11 @@ export default function RelatoriosScreen() {
                   blurred={subscriptionAccess.isPastDue}
                 />
               )}
+
+              <GlassCard className="p-4" borderRadius={16}>
+                <Text className="text-sm font-medium text-lucrei-text">Lucro por dia</Text>
+                <DailyProfitChart data={summary.trend} />
+              </GlassCard>
 
               <GlassCard className="p-4" borderRadius={16}>
                 <Text className="mb-3 text-sm font-medium text-lucrei-text">Pra onde foi o dinheiro</Text>
