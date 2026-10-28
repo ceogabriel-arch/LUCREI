@@ -437,6 +437,104 @@ export async function productRoutes(app: FastifyInstance) {
     }
   );
 
+  // Export em lote do checkbox da lista de "Relatório por produto" - produto
+  // marcado pode ser de lojas diferentes (modo "Todas as lojas"), por isso
+  // não é aninhado em /shops/:shopId como os outros exports; cada item carrega
+  // a própria loja e tudo sai numa planilha só, com a coluna "Produto"
+  // identificando de qual item cada linha é.
+  app.post<{ Body: { items: { shopId: string; itemId: string; name?: string }[]; period?: Period } }>(
+    '/products/export',
+    { onRequest: [app.authenticate] },
+    async (request, reply) => {
+      const { items, period: bodyPeriod } = request.body;
+      if (!Array.isArray(items) || items.length === 0) {
+        return reply.status(400).send({ message: 'items é obrigatório e não pode ser vazio.' });
+      }
+      const period = bodyPeriod ?? '30d';
+
+      const shopCache = new Map<string, Awaited<ReturnType<typeof requireOwnedShop>>>();
+      async function ownedShop(shopId: string) {
+        if (!shopCache.has(shopId)) shopCache.set(shopId, await requireOwnedShop(request.user.sub, shopId));
+        return shopCache.get(shopId)!;
+      }
+
+      const header = [
+        'Produto',
+        'Loja',
+        'Data do pedido',
+        'Nº do pedido',
+        'Status',
+        'Quantidade',
+        'Valor de venda (R$)',
+        'Frete alocado (R$)',
+        'Taxa marketplace (R$)',
+        'Imposto (R$)',
+        'Custo do produto (R$)',
+        'Lucro (R$)',
+      ];
+      const rows: (string | number | Date | null)[][] = [];
+
+      for (const item of items) {
+        const shop = await ownedShop(item.shopId);
+        if (!shop) continue;
+
+        const isMercadoLivre = shop.provider === 'mercado_livre';
+        const itemIdFilter = isMercadoLivre ? { mercadoLivreItemId: item.itemId } : { shopeeItemId: item.itemId };
+
+        const lineItems = await prisma.orderLineItem.findMany({
+          where: { order: { shopId: shop.id, completedAt: { gte: rangeStart(period) } }, ...itemIdFilter },
+          include: { order: true, product: true },
+          orderBy: { order: { orderDate: 'asc' } },
+        });
+
+        const productRecord = await prisma.product.findFirst({ where: { shopId: shop.id, ...itemIdFilter } });
+        const productName =
+          item.name ?? lineItems[0]?.product?.name ?? lineItems[0]?.itemName ?? productRecord?.name ?? item.itemId;
+
+        for (const li of lineItems) {
+          rows.push([
+            productName,
+            shop.shopName,
+            li.order.orderDate,
+            li.order.shopeeOrderSn ?? li.order.mercadoLivreOrderId ?? '',
+            STATUS_LABELS[li.order.orderStatus] ?? li.order.orderStatus,
+            li.quantity,
+            Number(li.salePrice),
+            Number(li.shippingFeeAllocated),
+            Number(li.shopeeFeeAllocated),
+            Number(li.taxAllocated),
+            li.productCostSnapshot !== null ? Number(li.productCostSnapshot) : null,
+            li.profit !== null ? Number(li.profit) : null,
+          ]);
+        }
+
+        const pendingOrders = await listPendingOrdersForProduct(shop, item.itemId, productName);
+        for (const p of pendingOrders) {
+          rows.push([
+            productName,
+            shop.shopName,
+            p.orderDate,
+            p.orderSn,
+            STATUS_LABELS[p.status] ?? p.status,
+            p.quantity,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+          ]);
+        }
+      }
+
+      const buffer = await buildOrdersXlsx(header, rows, 'Produtos');
+
+      reply.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      reply.header('Content-Disposition', 'attachment; filename="produtos-lucrei.xlsx"');
+      return reply.send(buffer);
+    }
+  );
+
   app.post<{ Params: { shopId: string }; Body: UpsertProductBody }>(
     '/shops/:shopId/products',
     { onRequest: [app.authenticate] },
