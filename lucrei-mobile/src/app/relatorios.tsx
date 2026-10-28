@@ -1,7 +1,17 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  Text,
+  TextInput,
+  type TextStyle,
+  View,
+} from 'react-native';
 
 import { BlurredValue } from '@/components/blurred-value';
 import { DailyProfitChart } from '@/components/daily-profit-chart';
@@ -162,6 +172,12 @@ const PRODUCT_REPORT_PERIOD_TO_API: Record<ProductReportPeriodLabel, Period> = {
   '30 dias': '30d',
   '3 meses': '90d',
 };
+
+// RN Web desenha o anel de foco padrão do navegador em volta do TextInput
+// (aparece como uma borda clara mesmo no tema escuro) - mesmo fix usado em
+// text-field.tsx/password-field.tsx.
+const webOutlineStyle: TextStyle | undefined =
+  Platform.OS === 'web' ? ({ outlineStyle: 'none' } as unknown as TextStyle) : undefined;
 
 // Busca/seleciona 1 produto dentro da lista já carregada pro período fixo da
 // tela (só pra achar o produto pelo nome) - os totais mostrados aqui vêm de
@@ -452,6 +468,7 @@ function ProductReportCard({
               placeholderTextColor={Colors.textMuted}
               autoCorrect={false}
               className="flex-1 py-2.5 text-sm text-lucrei-text"
+              style={webOutlineStyle}
             />
             <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={Colors.textMuted} />
           </View>
