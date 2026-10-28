@@ -191,8 +191,19 @@ function ProductReportCard({
   const [exporting, setExporting] = useState(false);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [exportingSelected, setExportingSelected] = useState(false);
+  const [periodCounts, setPeriodCounts] = useState<Map<string, number> | null>(null);
+  const [loadingCounts, setLoadingCounts] = useState(false);
 
-  const keyFor = (p: ShopeeProduct) => `${p.shopId ?? ''}-${p.shopeeItemId}`;
+  const resolveShopId = (p: ShopeeProduct) => p.shopId ?? fallbackShopId ?? '';
+  const keyFor = (p: ShopeeProduct) => `${resolveShopId(p)}-${p.shopeeItemId}`;
+  // "orders" vindo de products já é fixo em 30 dias (ver load() da tela) -
+  // bate com o período padrão daqui, mas Hoje/7 dias/3 meses precisam
+  // recalcular esse número por conta própria (periodCounts), senão o card
+  // mostra a mesma contagem de 30 dias não importa o período escolhido
+  // (achado ao vivo: clicava "Hoje" e continuava aparecendo "94 pedidos").
+  const ordersFor = (p: ShopeeProduct) => periodCounts?.get(keyFor(p)) ?? p.orders;
+
+  const shopIds = [...new Set(products.map(resolveShopId).filter((id) => id !== ''))];
 
   // Dropdown abre no foco mesmo sem digitar nada (lista os produtos
   // ordenados por quem mais vendeu) - sem digitar nada antes, não dava pra
@@ -203,8 +214,40 @@ function ProductReportCard({
   const matches = !open
     ? []
     : query.trim().length === 0
-      ? [...products].sort((a, b) => b.orders - a.orders)
+      ? [...products].sort((a, b) => ordersFor(b) - ordersFor(a))
       : products.filter((p) => p.name.toLowerCase().includes(query.trim().toLowerCase()));
+
+  useEffect(() => {
+    // 30 dias é o período que já vem pronto em "products" (ver comentário
+    // acima) - só busca de novo pros outros períodos.
+    if (period === '30 dias' || shopIds.length === 0) {
+      setPeriodCounts(null);
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingCounts(true);
+    Promise.all(shopIds.map((shopId) => getShopeeProducts(token, shopId, PRODUCT_REPORT_PERIOD_TO_API[period])))
+      .then((results) => {
+        if (cancelled) return;
+        const map = new Map<string, number>();
+        results.forEach((res, i) => {
+          for (const p of res.products) map.set(`${shopIds[i]}-${p.shopeeItemId}`, p.orders);
+        });
+        setPeriodCounts(map);
+      })
+      .catch(() => {
+        if (!cancelled) setPeriodCounts(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingCounts(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- shopIds é recalculado toda render a partir de products; comparar pelo conteúdo evitaria refetch desnecessário, mas o array já é curto (poucas lojas).
+  }, [period, shopIds.join(','), token]);
 
   useEffect(() => {
     // Selecionar/limpar produto já zera "report" direto no handler (abaixo) -
@@ -271,7 +314,7 @@ function ProductReportCard({
   async function handleExportSelected() {
     const items = products
       .filter((p) => checked.has(keyFor(p)))
-      .map((p) => ({ shopId: p.shopId ?? fallbackShopId ?? '', itemId: p.shopeeItemId, name: p.name }))
+      .map((p) => ({ shopId: resolveShopId(p), itemId: p.shopeeItemId, name: p.name }))
       .filter((i) => i.shopId !== '');
     if (items.length === 0) return;
     setExportingSelected(true);
@@ -289,21 +332,25 @@ function ProductReportCard({
     <GlassCard className="p-4" borderRadius={16}>
       <Text className="mb-3 text-sm font-medium text-lucrei-text">Relatório por produto</Text>
 
-      <View className="mb-3 flex-row self-start rounded-full bg-lucrei-surfaceAlt p-1">
-        {PRODUCT_REPORT_PERIODS.map((p) => {
-          const active = p === period;
-          return (
-            <Pressable
-              key={p}
-              onPress={() => setPeriod(p)}
-              className="rounded-full px-3 py-1.5"
-              style={{ backgroundColor: active ? Colors.gold : 'transparent' }}>
-              <Text className="text-xs font-medium" style={{ color: active ? Colors.onGold : Colors.textMuted }}>
-                {p}
-              </Text>
-            </Pressable>
-          );
-        })}
+      <View className="mb-3 flex-row items-center gap-2">
+        <View className="flex-row self-start rounded-full bg-lucrei-surfaceAlt p-1" style={{ opacity: loadingCounts ? 0.5 : 1 }}>
+          {PRODUCT_REPORT_PERIODS.map((p) => {
+            const active = p === period;
+            return (
+              <Pressable
+                key={p}
+                onPress={() => setPeriod(p)}
+                disabled={loadingCounts}
+                className="rounded-full px-3 py-1.5"
+                style={{ backgroundColor: active ? Colors.gold : 'transparent' }}>
+                <Text className="text-xs font-medium" style={{ color: active ? Colors.onGold : Colors.textMuted }}>
+                  {p}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        {loadingCounts && <ActivityIndicator size="small" color={Colors.gold} />}
       </View>
 
       {selected ? (
@@ -389,7 +436,9 @@ function ProductReportCard({
         </View>
       ) : (
         <View>
-          <View className="flex-row items-center rounded-xl border border-lucrei-border bg-lucrei-bg px-3.5">
+          <View
+            className="flex-row items-center rounded-xl border border-lucrei-border bg-lucrei-bg px-3.5"
+            style={{ opacity: loadingCounts ? 0.6 : 1 }}>
             <TextInput
               value={query}
               onChangeText={setQuery}
@@ -398,6 +447,7 @@ function ProductReportCard({
               // (ele seleciona o produto e fecha sozinho) - sem isso o blur
               // fecha a lista antes do toque registrar.
               onBlur={() => setTimeout(() => setOpen(false), 150)}
+              editable={!loadingCounts}
               placeholder="Buscar produto pelo nome..."
               placeholderTextColor={Colors.textMuted}
               autoCorrect={false}
@@ -406,15 +456,16 @@ function ProductReportCard({
             <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={Colors.textMuted} />
           </View>
           {matches.length > 0 && (
-            <View className="mt-2 overflow-hidden rounded-xl border border-lucrei-border">
+            <View className="mt-2 overflow-hidden rounded-xl bg-lucrei-surface">
               <ScrollView style={{ maxHeight: 300 }} nestedScrollEnabled keyboardShouldPersistTaps="handled">
                 {matches.map((product, index) => {
                   const key = keyFor(product);
                   const isChecked = checked.has(key);
+                  const orders = ordersFor(product);
                   return (
                     <View
                       key={`${key}-${index}`}
-                      className="flex-row items-center bg-lucrei-surface"
+                      className="flex-row items-center"
                       style={index > 0 ? { borderTopWidth: 1, borderTopColor: Colors.border } : undefined}>
                       <Pressable onPress={() => toggleChecked(key)} hitSlop={8} className="px-3 py-2.5">
                         <Ionicons
@@ -430,9 +481,13 @@ function ProductReportCard({
                           {product.name}
                           {product.shopName ? ` · ${product.shopName}` : ''}
                         </Text>
-                        <Text className="text-xs text-lucrei-textMuted">
-                          {product.orders} {product.orders === 1 ? 'pedido' : 'pedidos'}
-                        </Text>
+                        {loadingCounts ? (
+                          <ActivityIndicator size="small" color={Colors.textMuted} />
+                        ) : (
+                          <Text className="text-xs text-lucrei-textMuted">
+                            {orders} {orders === 1 ? 'pedido' : 'pedidos'}
+                          </Text>
+                        )}
                       </Pressable>
                     </View>
                   );
