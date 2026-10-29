@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { BlurredValue } from '@/components/blurred-value';
 import { useAppTheme } from '@/lib/theme';
@@ -73,14 +73,16 @@ export function StatTile({
         <>
           <Pressable
             className="absolute right-2.5 top-2.5 z-20"
-            // Só onPress (sem hover) - reportado ao vivo que o "?" parava
-            // de funcionar num dispositivo híbrido (touchscreen com
-            // mouse/trackpad também disponível): o navegador reporta
-            // "hover: hover" nesse caso mesmo quando a pessoa está tocando
-            // na tela, então a versão anterior desligava o onPress achando
-            // que só tinha mouse. onPress sozinho funciona igual em
-            // qualquer entrada (toque ou clique), sem precisar adivinhar.
+            // onPress cobre toque/clique em qualquer dispositivo (ver nota
+            // abaixo sobre por que não dava pra confiar só em CSS "hover:
+            // hover"). onHoverIn/onHoverOut, só na web, são eventos reais
+            // de mouseenter/mouseleave (não a media query "hover: hover"
+            // que mentia em dispositivo híbrido touchscreen+mouse/trackpad
+            // e foi o que quebrou a tentativa anterior) - então também dá
+            // pra ligar sem reintroduzir aquele bug.
             onPress={() => setShowTooltip((v) => !v)}
+            onHoverIn={Platform.OS === 'web' ? () => setShowTooltip(true) : undefined}
+            onHoverOut={Platform.OS === 'web' ? () => setShowTooltip(false) : undefined}
             hitSlop={8}>
             <Ionicons name="help-circle-outline" size={large ? 18 : 15} color={Colors.textMuted} />
           </Pressable>
