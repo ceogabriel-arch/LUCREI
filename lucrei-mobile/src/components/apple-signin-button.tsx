@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, Text } from 'react-native';
 
 import { signInWithAppleWeb } from '@/lib/apple-web-auth';
-import { useColors } from '@/lib/theme';
+import { useAppTheme } from '@/lib/theme';
 
 // No app nativo iOS usa a API nativa da Apple (expo-apple-authentication);
 // na web usa o SDK "Sign in with Apple JS" (apple-web-auth.ts). Não existe
@@ -19,7 +19,7 @@ export function AppleSignInButton({
   onCredential: (identityToken: string, fullName: string | undefined) => void;
   onError: (message: string) => void;
 }) {
-  const Colors = useColors();
+  const { scheme, colors: Colors } = useAppTheme();
   const [submitting, setSubmitting] = useState(false);
   const [available, setAvailable] = useState(Platform.OS === 'web');
 
@@ -74,11 +74,32 @@ export function AppleSignInButton({
     }
   }
 
-  const handlePress = Platform.OS === 'web' ? handlePressWeb : handlePressNative;
+  // No iOS usa o botão nativo da própria Apple (AppleAuthenticationButton) -
+  // Guideline 4 exige o botão oficial deles (cor/formato/texto
+  // padronizados), um Pressable customizado com ícone genérico foi
+  // rejeitado na revisão por não ser "claramente identificável como botão
+  // da Apple". Continua custom só na web, onde esse botão nativo não existe
+  // e essa exigência de design não se aplica (ali é o SDK "Sign in with
+  // Apple JS", com seu próprio guia de estilo separado).
+  if (Platform.OS === 'ios') {
+    return (
+      <AppleAuthentication.AppleAuthenticationButton
+        buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+        buttonStyle={
+          scheme === 'dark'
+            ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
+            : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
+        }
+        cornerRadius={16}
+        style={{ marginTop: 12, height: 52, opacity: submitting ? 0.6 : 1 }}
+        onPress={handlePressNative}
+      />
+    );
+  }
 
   return (
     <Pressable
-      onPress={handlePress}
+      onPress={handlePressWeb}
       disabled={submitting}
       // Na web o botão do Google é um iframe deles (ver
       // google-signin-button.web.tsx), com altura fixa menor que o padding
@@ -86,7 +107,7 @@ export function AppleSignInButton({
       // grande" comparado ao do Google. Padding menor só na web pra ficar
       // visualmente parecido; mobile mantém o alvo de toque maior de
       // propósito.
-      className={`mt-3 flex-row items-center justify-center gap-2 rounded-2xl border border-lucrei-border ${Platform.OS === 'web' ? 'py-2.5' : 'py-4'}`}
+      className="mt-3 flex-row items-center justify-center gap-2 rounded-2xl border border-lucrei-border py-2.5"
       style={{ opacity: submitting ? 0.6 : 1, backgroundColor: Colors.surface }}>
       {submitting ? (
         <ActivityIndicator color={Colors.text} />
