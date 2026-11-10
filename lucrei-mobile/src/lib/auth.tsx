@@ -15,6 +15,7 @@ import {
   signup as apiSignup,
   updateDailyGoal as apiUpdateDailyGoal,
   updateName as apiUpdateName,
+  verifyApplePurchase as apiVerifyApplePurchase,
 } from '@/lib/api';
 import { forgetGoogleWebSession } from '@/lib/google-web-session';
 import { clearToken, getToken, setToken } from '@/lib/token-storage';
@@ -42,6 +43,7 @@ type AuthContextValue = {
   deleteAccount: (password?: string) => Promise<AuthResult>;
   selectPlan: (key: string, couponCode?: string) => Promise<SelectPlanResult>;
   cancelPlan: () => Promise<AuthResult>;
+  completeAppleIapPurchase: (signedTransactionInfo: string) => Promise<AuthResult>;
   refreshUser: () => Promise<void>;
 };
 
@@ -274,6 +276,20 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
   }, [token]);
 
+  const completeAppleIapPurchase = useCallback(
+    async (signedTransactionInfo: string): Promise<AuthResult> => {
+      if (!token) return { ok: false, message: 'Não autenticado.' };
+      try {
+        const user = await apiVerifyApplePurchase(token, signedTransactionInfo);
+        setState({ status: 'authenticated', token, user });
+        return { ok: true };
+      } catch (err) {
+        return { ok: false, message: err instanceof ApiError ? err.message : 'Algo deu errado.' };
+      }
+    },
+    [token]
+  );
+
   const value = useMemo<AuthContextValue>(
     () => ({
       state,
@@ -288,6 +304,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       deleteAccount,
       selectPlan,
       cancelPlan,
+      completeAppleIapPurchase,
       refreshUser,
     }),
     [
@@ -303,6 +320,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       deleteAccount,
       selectPlan,
       cancelPlan,
+      completeAppleIapPurchase,
       refreshUser,
     ]
   );

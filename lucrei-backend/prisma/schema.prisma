@@ -87,6 +87,14 @@ model User {
   // "sub" da Apple quando a conta foi criada ou vinculada via Sign in with
   // Apple - mesmo papel do googleId acima.
   appleId                     String?            @unique
+  // UUID gerado na 1ª vez que a conta inicia uma compra via Apple IAP -
+  // mandado como appAccountToken pro StoreKit no momento da compra, e
+  // devolvido pela Apple em toda transação/notificação dessa assinatura.
+  // É assim que o webhook da Apple (que não tem noção de usuário Lucrei
+  // nenhum, só do app/transação) acha a conta certa pra aplicar o plano,
+  // mesmo numa renovação que chega semanas depois sem nenhuma requisição
+  // nossa no meio.
+  appleAppAccountToken        String?            @unique
   // Marca quando o aviso de "perto do limite de vendas" foi enviado - impede
   // reenviar toda sincronização depois de passar de 80%. Comparado sempre
   // contra o início do mês atual, então reseta sozinho todo mês.

@@ -1,9 +1,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 
+import { AppleIapController, type AppleIapHandle } from '@/components/apple-iap-controller';
 import { GlassCard } from '@/components/glass-card';
 import { Screen } from '@/components/screen';
 import {
@@ -83,17 +84,27 @@ function PlanCard({
   plan,
   appliedCoupon,
   upgradeAmount,
+  onApplePurchase,
+  applePurchasing,
 }: {
   plan: Plan;
   appliedCoupon: CouponPreview | null;
   upgradeAmount: number | null;
+  onApplePurchase: (plan: Plan) => void;
+  applePurchasing: boolean;
 }) {
   const { state, selectPlan } = useAuth();
   const Colors = useColors();
   const [saving, setSaving] = useState(false);
   const [checkingInvoice, setCheckingInvoice] = useState(false);
+  const busy = saving || applePurchasing;
   const user = state.status === 'authenticated' ? state.user : null;
-  const effectivePercentOff = appliedCoupon?.percentOff ?? user?.pendingCouponPercentOff ?? null;
+  // A Apple proíbe qualquer mecanismo de desconto fora do IAP deles
+  // (Guideline 3.1.1) - cupom só vale fora do iOS (cobrança HyperCash via
+  // site/Android). No iOS o preço mostrado é sempre o cheio, mesmo que a
+  // conta já tenha um cupom pendente de uma assinatura anterior pelo site.
+  const effectivePercentOff =
+    Platform.OS === 'ios' ? null : (appliedCoupon?.percentOff ?? user?.pendingCouponPercentOff ?? null);
   const isCustomPricing = plan.priceCurrent === null;
 
   const isCurrent = user?.plan?.key === plan.key && user.subscriptionStatus !== 'canceled';
@@ -157,13 +168,9 @@ function PlanCard({
     // HyperCash de lá violaria a regra 3.1.1 deles. Começar o teste grátis
     // não conta (não gera cobrança nenhuma na hora - só actionLabel
     // "Testar 15 dias grátis" nunca abre link de pagamento, ver doSubscribe
-    // acima), só os fluxos que realmente cobram ficam bloqueados aqui até
-    // implementarmos o IAP de verdade.
+    // abaixo), só os fluxos que realmente cobram passam pelo IAP da Apple.
     if (Platform.OS === 'ios' && actionLabel !== 'Testar 15 dias grátis') {
-      showAlert(
-        'Assine pelo site',
-        'Por enquanto, pra assinar ou trocar de plano, acesse app.lucreiapp.com pelo navegador do seu celular ou computador. Depois é só abrir o app de novo - sua assinatura aparece automaticamente.'
-      );
+      onApplePurchase(plan);
       return;
     }
 
@@ -340,10 +347,10 @@ function PlanCard({
         <View className="mt-5">
           <Pressable
             onPress={handlePressSubscribe}
-            disabled={(isCurrent && !isCurrentAndTrialing) || saving}
+            disabled={(isCurrent && !isCurrentAndTrialing) || busy}
             className="flex-row items-center justify-center gap-1.5 rounded-xl bg-lucrei-gold py-3"
-            style={{ opacity: isCurrent && !isCurrentAndTrialing ? 0.5 : saving ? 0.7 : 1 }}>
-            {saving ? (
+            style={{ opacity: isCurrent && !isCurrentAndTrialing ? 0.5 : busy ? 0.7 : 1 }}>
+            {busy ? (
               <ActivityIndicator size="small" color={Colors.onGold} />
             ) : (
               <Text className="text-sm font-semibold text-lucrei-onGold">{actionLabel}</Text>
@@ -404,6 +411,21 @@ export default function PlanosScreen() {
   const [appliedCoupon, setAppliedCoupon] = useState<CouponPreview | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
   const [checkingCoupon, setCheckingCoupon] = useState(false);
+
+  // Chave do plano com uma compra Apple IAP em andamento (null = nenhuma) -
+  // appleIapRef guarda as funções de verdade (purchase/restore), expostas
+  // pelo AppleIapController só quando montado (iOS).
+  const [purchasingPlanKey, setPurchasingPlanKey] = useState<string | null>(null);
+  const [restoringPurchases, setRestoringPurchases] = useState(false);
+  const appleIapRef = useRef<AppleIapHandle | null>(null);
+
+  function handleApplePurchase(plan: Plan) {
+    appleIapRef.current?.purchase(plan);
+  }
+
+  function handleRestorePurchases() {
+    appleIapRef.current?.restore();
+  }
 
   async function handleApplyCoupon() {
     if (authState.status !== 'authenticated' || !couponInput.trim()) return;
@@ -473,6 +495,16 @@ export default function PlanosScreen() {
 
   return (
     <Screen>
+      {/* useIAP não existe fora do iOS (web/Android ainda não vendem plano
+          por IAP) - só monta o controller aí, nunca chama o hook direto. */}
+      {Platform.OS === 'ios' ? (
+        <AppleIapController
+          handleRef={appleIapRef}
+          onPurchasingChange={setPurchasingPlanKey}
+          onRestoringChange={setRestoringPurchases}
+        />
+      ) : null}
+
       <View className="flex-row items-center gap-3">
         <Pressable onPress={() => router.back()} hitSlop={8}>
           <Ionicons name="chevron-back" size={24} color={Colors.text} />
@@ -482,6 +514,18 @@ export default function PlanosScreen() {
       <Text className="mt-2 text-base text-lucrei-textMuted">
         O plano Start inclui 15 dias grátis para testar. Escolha o plano ideal para o volume de vendas da sua loja.
       </Text>
+      {Platform.OS === 'ios' ? (
+        <Pressable onPress={handleRestorePurchases} disabled={restoringPurchases} className="mt-2 flex-row items-center gap-1.5 self-start">
+          {restoringPurchases ? (
+            <ActivityIndicator size="small" color={Colors.gold} />
+          ) : (
+            <Ionicons name="refresh" size={14} color={Colors.gold} />
+          )}
+          <Text className="text-xs font-medium" style={{ color: Colors.gold }}>
+            Restaurar compras
+          </Text>
+        </Pressable>
+      ) : null}
 
       <View className="mt-5 flex-row rounded-2xl border border-lucrei-border bg-lucrei-surface p-1.5" style={webCapWidth()}>
         {BILLING_PERIOD_OPTIONS.map((option) => {
@@ -514,7 +558,7 @@ export default function PlanosScreen() {
           abraçar só o próprio conteúdo, igual um chip/toast. O estado do
           formulário (TextInput + botão Aplicar) continua largura cheia
           embaixo - esse sim precisa do espaço. */}
-      {(appliedCoupon || pendingCouponPercentOff) && (
+      {Platform.OS !== 'ios' && (appliedCoupon || pendingCouponPercentOff) && (
         // webCapWidth() aqui fora alinha a coluna com o resto (toggle,
         // cards) - sem isso o flex-start abaixo abraça o próprio conteúdo
         // em relação à largura TOTAL da tela, não à coluna centralizada,
@@ -553,7 +597,7 @@ export default function PlanosScreen() {
         </View>
       )}
 
-      {!appliedCoupon && !pendingCouponPercentOff && (
+      {Platform.OS !== 'ios' && !appliedCoupon && !pendingCouponPercentOff && (
         <GlassCard className="mt-4 p-4" borderRadius={16} style={webCapWidth()}>
           <View className="flex-row items-center gap-2">
             <Ionicons name="pricetag-outline" size={16} color={Colors.textMuted} />
@@ -608,7 +652,14 @@ export default function PlanosScreen() {
       {loadState === 'ready' && (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="pb-8" contentContainerStyle={webCapWidth()}>
           {visiblePlans.map((plan) => (
-            <PlanCard key={plan.key} plan={plan} appliedCoupon={appliedCoupon} upgradeAmount={upgradePreview[plan.key] ?? null} />
+            <PlanCard
+              key={plan.key}
+              plan={plan}
+              appliedCoupon={appliedCoupon}
+              upgradeAmount={upgradePreview[plan.key] ?? null}
+              onApplePurchase={handleApplePurchase}
+              applePurchasing={purchasingPlanKey === plan.key}
+            />
           ))}
         </ScrollView>
       )}

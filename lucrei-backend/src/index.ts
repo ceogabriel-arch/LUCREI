@@ -19,6 +19,7 @@ import { startSyncWatchdog } from './lib/sync-watchdog';
 import { startTrialExpiryWatchdog } from './lib/trial-expiry-watchdog';
 import { adminRoutes } from './modules/admin/routes';
 import { announcementsRoutes } from './modules/announcements/routes';
+import { appleIapRoutes } from './modules/apple-iap/routes';
 import { authRoutes } from './modules/auth/routes';
 import { billingRoutes } from './modules/billing/routes';
 import { labelRoutes } from './modules/labels/routes';
@@ -201,6 +202,7 @@ async function main() {
   await app.register(legalRoutes);
   await app.register(passwordResetRoutes);
   await app.register(billingRoutes);
+  await app.register(appleIapRoutes);
   await app.register(rewardsRoutes);
   await app.register(adminRoutes);
   await app.register(announcementsRoutes);

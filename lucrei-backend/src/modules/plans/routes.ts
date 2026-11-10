@@ -350,9 +350,22 @@ export async function plansRoutes(app: FastifyInstance) {
 
   app.post('/plans/cancel', { onRequest: [app.authenticate] }, async (request, reply) => {
     const subscription = await prisma.subscription.findFirst({
-      where: { userId: request.user.sub, provider: 'hypercash', status: { not: 'canceled' } },
+      where: { userId: request.user.sub, status: { not: 'canceled' } },
       orderBy: { createdAt: 'desc' },
     });
+
+    // Assinatura Apple IAP não tem API pra cancelar por fora - só a própria
+    // pessoa, pelo Ajustes do iPhone ou pela tela de assinaturas da App
+    // Store. Aqui só avisa isso, sem tocar em nada local: cancelar ali
+    // dispara DID_CHANGE_RENEWAL_STATUS/EXPIRED, e é o webhook
+    // (/billing/apple/webhook) que vai refletir isso de verdade quando
+    // acontecer - "cancelado" antes disso seria mentira (o acesso continua
+    // pago até o fim do período já cobrado).
+    if (subscription?.provider === 'apple_iap') {
+      return reply.status(400).send({
+        message: 'Essa assinatura foi feita pela App Store. Pra cancelar, vá em Ajustes > seu nome > Assinaturas no iPhone.',
+      });
+    }
 
     if (subscription?.providerSubscriptionId) {
       try {
