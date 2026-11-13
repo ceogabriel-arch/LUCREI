@@ -11,7 +11,7 @@
     },
     "preview": {
       "distribution": "internal",
-      "env": { "HUSKY": "0" }
+      "env": { "HUSKY": "0", "SENTRY_DISABLE_AUTO_UPLOAD": "true" }
     },
     "production": {
       "autoIncrement": true,

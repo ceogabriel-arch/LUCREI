@@ -8,6 +8,15 @@
 //     upload key (pra gerar o .aab de verdade pro Play Store)
 //   - desativa o upload de source maps do Sentry (não tem SENTRY_ORG/
 //     SENTRY_AUTH_TOKEN localmente, só existem nos secrets do EAS)
+//   - exclui o sub-projeto Gradle "sentry-react-native-expo" do autolinking -
+//     o expo-modules-autolinking resolve o sourceDir desse projeto (só esse,
+//     os outros módulos ficam com o caminho normal) pro caminho UNC puro
+//     (\\matrix\usuario\filipe.lourenço\...) em vez do drive mapeado (Z:\...),
+//     e o Gradle 9 não reconhece esse diretório como existente nesse caminho
+//     UNC com acento (`ç`) - só acontece em build LOCAL nessa máquina; EAS
+//     builda em Linux e não tem esse problema. Afeta só esse hook extra do
+//     Sentry pro Expo, não o módulo nativo principal (crash reporting
+//     continua linkado normalmente).
 //
 // Uso: node scripts/patch-android-build.js <apk|aab> <debugKeystorePath>
 const fs = require('fs');
@@ -34,12 +43,12 @@ const oldSigningBlock = `    signingConfigs {
     }
     buildTypes {
         debug {
-            signingConfig signingConfigs.debug
+            signingConfig = signingConfigs.debug
         }
         release {
             // Caution! In production, you need to generate your own keystore file.
             // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug`;
+            signingConfig = signingConfigs.debug`;
 
 if (!content.includes(oldSigningBlock)) {
   console.error('Bloco de signingConfigs esperado não encontrado - o template do expo prebuild deve ter mudado. Ajuste este script.');
@@ -68,10 +77,10 @@ const newSigningBlock = `    signingConfigs {
     }
     buildTypes {
         debug {
-            signingConfig signingConfigs.debug
+            signingConfig = signingConfigs.debug
         }
         release {
-            signingConfig ${releaseSigningConfig}`;
+            signingConfig = ${releaseSigningConfig}`;
 
 content = content.replace(oldSigningBlock, newSigningBlock);
 
@@ -93,3 +102,19 @@ content = content.replace(dependenciesMarker, sentryDisableBlock);
 
 fs.writeFileSync(buildGradlePath, content);
 console.log(`android/app/build.gradle atualizado (release assinado com ${releaseSigningConfig}).`);
+
+const settingsGradlePath = path.join(__dirname, '..', 'android', 'settings.gradle');
+let settingsContent = fs.readFileSync(settingsGradlePath, 'utf8');
+
+const useExpoModulesLine = 'expoAutolinking.useExpoModules()';
+if (!settingsContent.includes(useExpoModulesLine)) {
+  console.error('Linha "expoAutolinking.useExpoModules()" não encontrada em android/settings.gradle - ajuste este script.');
+  process.exit(1);
+}
+
+settingsContent = settingsContent.replace(
+  useExpoModulesLine,
+  `expoAutolinking.exclude = ["@sentry/react-native"]\n${useExpoModulesLine}`,
+);
+fs.writeFileSync(settingsGradlePath, settingsContent);
+console.log('android/settings.gradle atualizado (excluindo sentry-react-native-expo do autolinking local).');
