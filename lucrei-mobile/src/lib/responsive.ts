@@ -4,24 +4,42 @@ export const WEB_MAX_WIDTH = 480;
 
 // Acima disso, considera que é uma janela de desktop (o app Electron ou o
 // site num navegador largo) em vez de um celular acessando pela web - só
-// isso liga o menu lateral e o conteúdo mais largo. Nunca afeta nativo
-// (Platform.OS !== 'web') nem uma janela estreita.
+// isso liga o menu lateral e o conteúdo mais largo. Nunca afeta uma janela
+// estreita nem o nativo - no nativo quem decide é TABLET_BREAKPOINT, abaixo.
 export const DESKTOP_BREAKPOINT = 900;
 export const DESKTOP_CONTENT_MAX_WIDTH = 1100;
 
+// iPad em retrato (o app é travado em "portrait" - ver app.json) tem entre
+// ~744pt (iPad mini) e ~1024pt (iPad Pro 13") de largura; qualquer iPhone
+// trancado em retrato fica bem abaixo disso (~430pt no maior deles). Acima
+// desse valor é tablet de verdade, não celular - reportado ao vivo como "a
+// tela esticou feio no iPad" (telas desenhadas pra largura de celular,
+// cards e textos enormes ocupando a largura toda da tela).
+export const TABLET_BREAKPOINT = 700;
+
 /**
- * Caps content to a phone-sized column and centers it — only on web, e só
- * abaixo do breakpoint de desktop. Native rendering (iOS/Android) é
- * completamente intocado.
+ * Caps content to a phone-sized column and centers it. Na web, abaixo do
+ * breakpoint de desktop. No nativo, só entra em ação acima de
+ * TABLET_BREAKPOINT (iPad) - um iPhone continua exatamente como sempre foi.
  */
 export function webCapWidth() {
-  if (Platform.OS !== 'web') return undefined;
-  const isDesktop = Dimensions.get('window').width >= DESKTOP_BREAKPOINT;
-  return {
-    width: '100%' as const,
-    maxWidth: isDesktop ? DESKTOP_CONTENT_MAX_WIDTH : WEB_MAX_WIDTH,
-    alignSelf: 'center' as const,
-  };
+  const width = Dimensions.get('window').width;
+  if (Platform.OS === 'web') {
+    const isDesktop = width >= DESKTOP_BREAKPOINT;
+    return {
+      width: '100%' as const,
+      maxWidth: isDesktop ? DESKTOP_CONTENT_MAX_WIDTH : WEB_MAX_WIDTH,
+      alignSelf: 'center' as const,
+    };
+  }
+  if (width >= TABLET_BREAKPOINT) {
+    return {
+      width: '100%' as const,
+      maxWidth: WEB_MAX_WIDTH,
+      alignSelf: 'center' as const,
+    };
+  }
+  return undefined;
 }
 
 export function useIsDesktopWeb() {
