@@ -25,3 +25,14 @@ export const MERCADO_LIVRE_ORDER_STATUS_LABELS: Record<string, string> = {
   cancelled: 'Cancelado',
   invalid: 'Inválido',
 };
+
+// Status de evento de pedido da iFood - nomes ainda não confirmados contra a
+// documentação oficial (exige login, ver aviso em ifood-client/index.ts no
+// backend), usado só no detalhe da previsão de lucro.
+export const IFOOD_ORDER_STATUS_LABELS: Record<string, string> = {
+  PLACED: 'Pedido recebido',
+  CONFIRMED: 'Confirmado',
+  DISPATCHED: 'Saiu pra entrega',
+  CONCLUDED: 'Concluído',
+  CANCELLED: 'Cancelado',
+};

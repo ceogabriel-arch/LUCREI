@@ -1,6 +1,7 @@
 import type { Shop } from '@prisma/client';
 
 import { rangeStart } from './period';
+import { IFOOD_RESOLVED_STATUSES } from '../modules/sync/ifood-service';
 import { ML_RESOLVED_STATUSES } from '../modules/sync/mercadolivre-service';
 import { SHOPEE_PENDING_STATUSES } from '../modules/sync/service';
 
@@ -17,7 +18,11 @@ export const pendingWindowStart = () => rangeStart('30d');
 // tem número real no resumo/Order. Sem isso o mesmo pedido contaria duas
 // vezes - uma no resumo de verdade, outra estimado aqui.
 export function pendingWhereForShop(shop: Shop) {
-  return shop.provider === 'mercado_livre'
-    ? { shopId: shop.id, mercadoLivreOrderId: { not: null }, orderStatus: { notIn: [...ML_RESOLVED_STATUSES] } }
-    : { shopId: shop.id, shopeeOrderSn: { not: null }, orderStatus: { in: [...SHOPEE_PENDING_STATUSES] } };
+  if (shop.provider === 'mercado_livre') {
+    return { shopId: shop.id, mercadoLivreOrderId: { not: null }, orderStatus: { notIn: [...ML_RESOLVED_STATUSES] } };
+  }
+  if (shop.provider === 'ifood') {
+    return { shopId: shop.id, ifoodOrderId: { not: null }, orderStatus: { notIn: [...IFOOD_RESOLVED_STATUSES] } };
+  }
+  return { shopId: shop.id, shopeeOrderSn: { not: null }, orderStatus: { in: [...SHOPEE_PENDING_STATUSES] } };
 }

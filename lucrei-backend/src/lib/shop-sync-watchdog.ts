@@ -3,6 +3,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import { mapLimit } from './concurrency';
 import { prisma } from './prisma';
 import { runShopSync } from '../modules/sync/service';
+import { runShopSync as runIfoodShopSync } from '../modules/sync/ifood-service';
 import { runShopSync as runMLShopSync } from '../modules/sync/mercadolivre-service';
 
 // Achado ao vivo (16-18/10): a loja da Rubia ficou 3 dias sem receber pedido
@@ -52,7 +53,7 @@ export async function syncStaleShops(logger?: FastifyBaseLogger): Promise<number
       { shopId: shop.id, shopName: shop.shopName, lastSyncedAt: shop.lastSyncedAt },
       'watchdog: loja sem sincronizar há tempo demais, sincronizando sozinho'
     );
-    const sync = shop.provider === 'mercado_livre' ? runMLShopSync : runShopSync;
+    const sync = shop.provider === 'mercado_livre' ? runMLShopSync : shop.provider === 'ifood' ? runIfoodShopSync : runShopSync;
     // runShopSync/runMLShopSync já marcam 'running'/'done'/'error' e gravam
     // lastSyncedAt sozinhos (mesmo caminho do botão manual) - erro de uma
     // loja não deve travar nem pular as outras.

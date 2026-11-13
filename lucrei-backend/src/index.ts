@@ -14,6 +14,7 @@ import Fastify, { type FastifyError } from 'fastify';
 import { prisma } from './lib/prisma';
 import { startCanceledSubscriptionExpiryWatchdog } from './lib/canceled-subscription-expiry-watchdog';
 import { startHypercashExpiryWatchdog } from './lib/hypercash-expiry-watchdog';
+import { startIfoodPollWatchdog } from './lib/ifood-poll-watchdog';
 import { startShopSyncWatchdog } from './lib/shop-sync-watchdog';
 import { startSyncWatchdog } from './lib/sync-watchdog';
 import { startTrialExpiryWatchdog } from './lib/trial-expiry-watchdog';
@@ -31,6 +32,7 @@ import { plansRoutes } from './modules/plans/routes';
 import { productRoutes } from './modules/products/routes';
 import { rewardsRoutes } from './modules/rewards/routes';
 import { shopRoutes } from './modules/shops/routes';
+import { ifoodRoutes } from './modules/ifood/routes';
 import { mercadolivreRoutes } from './modules/mercadolivre/routes';
 import { summaryRoutes } from './modules/summary/routes';
 import { syncRoutes } from './modules/sync/routes';
@@ -185,13 +187,14 @@ async function main() {
     },
   });
 
-  for (const route of ['pedidos', 'produtos', 'relatorios', 'etiquetas', 'configuracoes', 'shopee-connected', 'mercadolivre-connected', 'planos', 'admin']) {
+  for (const route of ['pedidos', 'produtos', 'relatorios', 'etiquetas', 'configuracoes', 'shopee-connected', 'mercadolivre-connected', 'ifood-connected', 'planos', 'admin']) {
     app.get(`/${route}`, (_req, reply) => reply.sendFile(`${route}.html`));
   }
 
   await app.register(authRoutes);
   await app.register(shopRoutes);
   await app.register(mercadolivreRoutes);
+  await app.register(ifoodRoutes);
   await app.register(syncRoutes);
   await app.register(productRoutes);
   await app.register(summaryRoutes);
@@ -221,6 +224,10 @@ async function main() {
   // real) - sincroniza sozinho qualquer loja ativa parada há tempo demais,
   // sem depender do push nem de a pessoa abrir o app. Ver shop-sync-watchdog.ts.
   startShopSyncWatchdog(app.log);
+
+  // A iFood não tem push/webhook de pedido - sem isso, nenhuma loja iFood
+  // jamais saberia de pedido novo. Ver ifood-poll-watchdog.ts.
+  startIfoodPollWatchdog(app.log);
 
   // Expira sozinho link de pagamento da HyperCash pendente havia mais de
   // 24h - evita um link abandonado continuar valendo pra sempre com o

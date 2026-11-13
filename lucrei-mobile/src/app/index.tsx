@@ -18,16 +18,19 @@ import { Screen } from '@/components/screen';
 import { ShopPicker } from '@/components/shop-picker';
 import { Sparkline } from '@/components/sparkline';
 import { StatTile } from '@/components/stat-tile';
+import { UsageBar } from '@/components/usage-bar';
 import {
   ApiError,
   getCombinedOrderForecast,
   getCombinedSummary,
   getOrderForecast,
+  getSalesUsage,
   getShopeeProducts,
   getSummary,
   getSyncStatus,
   startSync,
   type OrderForecast,
+  type SalesUsage,
   type ShopeeProduct,
   type Summary,
 } from '@/lib/api';
@@ -35,6 +38,8 @@ import { showAlert } from '@/lib/alert';
 import { useAuth } from '@/lib/auth';
 import { useDataRefresh } from '@/lib/data-refresh';
 import { formatBRL } from '@/lib/format';
+import { connectIfoodStore } from '@/lib/ifood';
+import { MARKETPLACE_LABELS_LOWER, marketplaceLabel, type Marketplace } from '@/lib/marketplace';
 import { PERIOD_TO_API, PERIODS, type PeriodLabel, usePeriod } from '@/lib/period';
 import { useIsDesktopWeb, webCapWidth } from '@/lib/responsive';
 import { connectMercadoLivreStore } from '@/lib/mercado-livre';
@@ -62,7 +67,7 @@ export default function InicioScreen() {
   const { refreshSignal, triggerRefresh } = useDataRefresh();
   const subscriptionAccess = useSubscriptionAccess();
   const [backendStatus, setBackendStatus] = useState<BackendStatus>('checking');
-  const [connecting, setConnecting] = useState<'shopee' | 'mercado_livre' | null>(null);
+  const [connecting, setConnecting] = useState<'shopee' | 'mercado_livre' | 'ifood' | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
   // Qual período o "summary" guardado acima pertence de verdade - achado ao
   // vivo: trocar de "Hoje" pra "30 dias" pintava o botão novo na hora, mas
@@ -74,11 +79,12 @@ export default function InicioScreen() {
   const summaryRequestIdRef = useRef(0);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [perShopProfit, setPerShopProfit] = useState<
-    { shopId: string; shopName: string; provider: 'shopee' | 'mercado_livre'; profit: number }[]
+    { shopId: string; shopName: string; provider: Marketplace; profit: number }[]
   >([]);
   const [forecast, setForecast] = useState<OrderForecast | null>(null);
   const [missingCostProducts, setMissingCostProducts] = useState<ShopeeProduct[]>([]);
   const [lifetimeProfit, setLifetimeProfit] = useState<number | null>(null);
+  const [usage, setUsage] = useState<SalesUsage | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [pendingOrdersOpen, setPendingOrdersOpen] = useState(false);
@@ -178,6 +184,50 @@ export default function InicioScreen() {
     }
   }
 
+  // Espelha handleConnectMercadoLivre - mesmo shape de erro/motivo, só troca
+  // o texto pra iFood.
+  async function handleConnectIfood() {
+    if (state.status !== 'authenticated') return;
+    setConnecting('ifood');
+    try {
+      const result = await connectIfoodStore(state.token);
+      if (result.status === 'success') {
+        showAlert('Loja conectada!', 'Sua loja iFood foi conectada com sucesso.');
+        await refreshShops();
+      } else if (result.status === 'error') {
+        if (result.reason === 'shop_taken') {
+          showAlert(
+            'Loja já conectada em outra conta',
+            'Essa loja iFood já está conectada em outra conta Lucrei. Se você esperava logar em outra loja, confira se o navegador não está logado na iFood com a conta errada - senão, peça para desconectá-la lá (em Configurações) antes de conectar aqui.'
+          );
+        } else if (result.reason === 'invalid_state') {
+          showAlert(
+            'O link de conexão expirou',
+            'Demorou demais pra terminar o login na iFood e o link venceu. Toque em "iFood" e tente de novo.'
+          );
+        } else if (result.reason === 'exchange_failed') {
+          showAlert(
+            'A iFood não respondeu a tempo',
+            'Falha temporária na comunicação com a iFood. Tente conectar de novo em instantes.'
+          );
+        } else if (result.reason === 'no_merchant') {
+          showAlert(
+            'Nenhuma loja encontrada',
+            'Sua conta iFood não tem nenhuma loja vinculada ainda. Cadastre uma loja no painel da iFood antes de conectar aqui.'
+          );
+        } else {
+          showAlert('Não foi possível conectar', 'Tente novamente em instantes.');
+        }
+      } else if (result.status === 'cancelled') {
+        showAlert('Conexão não concluída', 'A conexão com a iFood não foi concluída. Tente de novo.');
+      }
+    } catch (err) {
+      showAlert('Erro', err instanceof ApiError ? err.message : 'Algo deu errado.');
+    } finally {
+      setConnecting(null);
+    }
+  }
+
   useFocusEffect(
     useCallback(() => {
       refreshShops();
@@ -213,6 +263,7 @@ export default function InicioScreen() {
       setSummary(null);
       setSummaryPeriod(null);
       setPerShopProfit([]);
+      setUsage(null);
       setSummaryLoading(false);
       return;
     }
@@ -220,7 +271,7 @@ export default function InicioScreen() {
     try {
       if (viewingAll) {
         const activeShops = shops.filter((s) => s.status === 'active');
-        const [combined, perShop] = await Promise.all([
+        const [combined, perShop, salesUsage] = await Promise.all([
           getCombinedSummary(token, PERIOD_TO_API[period]),
           Promise.all(
             activeShops.map((shop) =>
@@ -232,23 +283,30 @@ export default function InicioScreen() {
               }))
             )
           ),
+          getSalesUsage(token),
         ]);
         if (isStale()) return;
         setSummary(combined);
         setSummaryPeriod(period);
         setPerShopProfit(perShop);
+        setUsage(salesUsage);
       } else {
-        const s = await getSummary(token, selectedShop!.id, PERIOD_TO_API[period]);
+        const [s, salesUsage] = await Promise.all([
+          getSummary(token, selectedShop!.id, PERIOD_TO_API[period]),
+          getSalesUsage(token),
+        ]);
         if (isStale()) return;
         setSummary(s);
         setSummaryPeriod(period);
         setPerShopProfit([]);
+        setUsage(salesUsage);
       }
     } catch {
       if (isStale()) return;
       setSummary(null);
       setSummaryPeriod(null);
       setPerShopProfit([]);
+      setUsage(null);
     } finally {
       if (!isStale()) setSummaryLoading(false);
     }
@@ -422,6 +480,10 @@ export default function InicioScreen() {
   const hasShop = shops.some((s) => s.status === 'active');
   const showingRealData = hasShop && summary !== null;
   const stillLoading = !shopsLoaded || (hasShop && summaryLoading && (summary === null || summaryPeriod !== period));
+  // Mesmo tratamento de "ocultar lucro" do atraso de pagamento vale pra quem
+  // passou do limite de vendas do plano - mesma UsageBar embaixo explica o
+  // porquê.
+  const isOverLimit = (usage?.overLimit ?? false) || subscriptionAccess.isPastDue;
 
   // A sincronização automática (dispara sozinha ao conectar) pode ainda
   // estar rodando quando o resumo já veio zerado do banco - sem isso, loja
@@ -470,8 +532,8 @@ export default function InicioScreen() {
   // ou uma loja Mercado Livre selecionada, nomear a marketplace errada
   // era confuso (reportado ao vivo: "que líquido da Shopee ele vai fazer
   // se ele é Mercado Livre?").
-  const marketplaceLabel = viewingAll ? 'Marketplace' : selectedShop?.provider === 'mercado_livre' ? 'Mercado Livre' : 'Shopee';
-  const marketplaceLabelLower = viewingAll ? 'do marketplace' : selectedShop?.provider === 'mercado_livre' ? 'do Mercado Livre' : 'da Shopee';
+  const marketplaceLabelText = viewingAll ? 'Marketplace' : marketplaceLabel(selectedShop?.provider ?? 'shopee');
+  const marketplaceLabelLower = viewingAll ? 'do marketplace' : MARKETPLACE_LABELS_LOWER[selectedShop?.provider ?? 'shopee'];
 
   const kpiTiles = showingRealData
     ? [
@@ -495,7 +557,7 @@ export default function InicioScreen() {
           helpText: `Soma de tudo que sai do seu bolso no período: custo do produto, frete líquido e taxas ${marketplaceLabelLower}.`,
         },
         {
-          label: `Líquido ${marketplaceLabel}`,
+          label: `Líquido ${marketplaceLabelText}`,
           value: formatBRL(summary!.revenue - summary!.shopeeFees),
           helpText: `Faturamento menos as taxas cobradas ${marketplaceLabelLower}. Ainda não desconta o custo do produto nem o frete.`,
         },
@@ -666,7 +728,7 @@ export default function InicioScreen() {
                           <View className="mt-3 h-[52px] justify-center">
                             <ActivityIndicator color={Colors.gold} />
                           </View>
-                        ) : subscriptionAccess.isPastDue ? (
+                        ) : isOverLimit ? (
                           <View className="mt-3">
                             <BlurredValue width={180} height={isDesktop ? 52 : 44} />
                           </View>
@@ -710,7 +772,7 @@ export default function InicioScreen() {
 
                   {!stillLoading && !isDesktop && (
                     <View className="mt-5">
-                      {subscriptionAccess.isPastDue ? (
+                      {isOverLimit ? (
                         <BlurredValue width={296} height={56} />
                       ) : (
                         <Sparkline data={summary!.trend} />
@@ -722,7 +784,7 @@ export default function InicioScreen() {
 
                 {!stillLoading && isDesktop && (
                   <View className="flex-row items-center gap-6">
-                    {subscriptionAccess.isPastDue ? (
+                    {isOverLimit ? (
                       <>
                         <BlurredValue width={84} height={84} />
                         <BlurredValue width={84} height={84} />
@@ -745,6 +807,8 @@ export default function InicioScreen() {
             </GlassCard>
 
             <PastDueBanner />
+
+            {usage && <UsageBar usage={usage} />}
 
             {/* Conectar a loja só traz pedido novo daqui pra frente - sem
                 isso, muita gente achava que o Lucrei "não estava puxando os
@@ -780,7 +844,7 @@ export default function InicioScreen() {
                 style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 } as any}>
                 {!stillLoading &&
                   kpiTiles.map((kpi) => (
-                    <StatTile key={kpi.label} {...kpi} blurred={subscriptionAccess.isPastDue} large />
+                    <StatTile key={kpi.label} {...kpi} blurred={isOverLimit} large />
                   ))}
               </View>
             ) : (
@@ -791,7 +855,7 @@ export default function InicioScreen() {
                 contentContainerClassName="gap-3 px-5">
                 {!stillLoading &&
                   kpiTiles.map((kpi) => (
-                    <StatTile key={kpi.label} {...kpi} blurred={subscriptionAccess.isPastDue} />
+                    <StatTile key={kpi.label} {...kpi} blurred={isOverLimit} />
                   ))}
               </ScrollView>
             )}
@@ -815,7 +879,7 @@ export default function InicioScreen() {
                     ainda em processamento. Toque pra ver.
                   </Text>
                 </View>
-                {subscriptionAccess.isPastDue ? (
+                {isOverLimit ? (
                   <BlurredValue width={70} />
                 ) : (
                   <Text className="text-lg font-bold" style={{ color: Colors.goldDim }}>
@@ -869,7 +933,7 @@ export default function InicioScreen() {
                         {shop.shopName}
                       </Text>
                     </View>
-                    {subscriptionAccess.isPastDue ? (
+                    {isOverLimit ? (
                       <BlurredValue width={70} />
                     ) : (
                       <Text
@@ -891,7 +955,7 @@ export default function InicioScreen() {
           <GlassCard className="mt-6 items-center px-6 py-12">
             <Ionicons name="storefront-outline" size={32} color={Colors.textMuted} />
             <Text className="mt-3 text-center text-base font-semibold text-lucrei-text">
-              Conecte sua loja Shopee ou Mercado Livre pra ver seu lucro real aqui
+              Conecte sua loja Shopee, Mercado Livre ou iFood pra ver seu lucro real aqui
             </Text>
             <Text className="mt-1 max-w-xs text-center text-sm text-lucrei-textMuted">
               Faturamento, custos e lucro de cada venda aparecem automaticamente assim que você conectar.
@@ -905,33 +969,47 @@ export default function InicioScreen() {
           <AchievementsCard totalProfit={lifetimeProfit} accountCreatedAt={state.user.createdAt} />
         )}
 
-        <View className="mt-8 flex-row gap-2.5 self-center" style={{ width: isDesktop ? 360 : '100%' }}>
+        <View className="mt-8 flex-row gap-2 self-center" style={{ width: isDesktop ? 440 : '100%' }}>
           <Pressable
             onPress={handleConnectShopee}
             disabled={connecting !== null}
-            className="flex-1 flex-row items-center justify-center gap-2 rounded-2xl bg-lucrei-gold py-4"
+            className="flex-1 flex-row items-center justify-center gap-1.5 rounded-2xl bg-lucrei-gold py-4"
             style={{ opacity: connecting !== null ? 0.7 : 1 }}>
             {connecting === 'shopee' ? (
               <ActivityIndicator color={Colors.onGold} />
             ) : (
-              <Ionicons name="storefront-outline" size={18} color={Colors.onGold} />
+              <Ionicons name="storefront-outline" size={16} color={Colors.onGold} />
             )}
-            <Text className="text-base font-semibold text-lucrei-onGold" numberOfLines={1}>
+            <Text className="text-sm font-semibold text-lucrei-onGold" numberOfLines={1}>
               {connecting === 'shopee' ? 'Conectando...' : 'Shopee'}
             </Text>
           </Pressable>
           <Pressable
             onPress={handleConnectMercadoLivre}
             disabled={connecting !== null}
-            className="flex-1 flex-row items-center justify-center gap-2 rounded-2xl bg-lucrei-gold py-4"
+            className="flex-1 flex-row items-center justify-center gap-1.5 rounded-2xl bg-lucrei-gold py-4"
             style={{ opacity: connecting !== null ? 0.7 : 1 }}>
             {connecting === 'mercado_livre' ? (
               <ActivityIndicator color={Colors.onGold} />
             ) : (
-              <Ionicons name="storefront-outline" size={18} color={Colors.onGold} />
+              <Ionicons name="storefront-outline" size={16} color={Colors.onGold} />
             )}
-            <Text className="text-base font-semibold text-lucrei-onGold" numberOfLines={1}>
+            <Text className="text-sm font-semibold text-lucrei-onGold" numberOfLines={1}>
               {connecting === 'mercado_livre' ? 'Conectando...' : 'Mercado Livre'}
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={handleConnectIfood}
+            disabled={connecting !== null}
+            className="flex-1 flex-row items-center justify-center gap-1.5 rounded-2xl bg-lucrei-gold py-4"
+            style={{ opacity: connecting !== null ? 0.7 : 1 }}>
+            {connecting === 'ifood' ? (
+              <ActivityIndicator color={Colors.onGold} />
+            ) : (
+              <Ionicons name="storefront-outline" size={16} color={Colors.onGold} />
+            )}
+            <Text className="text-sm font-semibold text-lucrei-onGold" numberOfLines={1}>
+              {connecting === 'ifood' ? 'Conectando...' : 'iFood'}
             </Text>
           </Pressable>
         </View>

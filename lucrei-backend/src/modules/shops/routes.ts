@@ -226,12 +226,17 @@ export async function shopRoutes(app: FastifyInstance) {
         provider: true,
         historyBackfillStatus: true,
         taxRatePercent: true,
+        ifoodCommissionPercent: true,
         taxpayerType: true,
         syncStatus: true,
       },
     });
     return {
-      shops: shops.map((s) => ({ ...s, taxRatePercent: s.taxRatePercent != null ? Number(s.taxRatePercent) : null })),
+      shops: shops.map((s) => ({
+        ...s,
+        taxRatePercent: s.taxRatePercent != null ? Number(s.taxRatePercent) : null,
+        ifoodCommissionPercent: s.ifoodCommissionPercent != null ? Number(s.ifoodCommissionPercent) : null,
+      })),
     };
   });
 
@@ -249,6 +254,7 @@ export async function shopRoutes(app: FastifyInstance) {
       // provider dessa loja.
       await prisma.shopeeOAuthToken.deleteMany({ where: { shopId: shop.id } });
       await prisma.mercadoLivreOAuthToken.deleteMany({ where: { shopId: shop.id } });
+      await prisma.ifoodOAuthToken.deleteMany({ where: { shopId: shop.id } });
       const updated = await prisma.shop.update({
         where: { id: shop.id },
         data: { status: 'disconnected', disconnectedAt: new Date() },
@@ -282,6 +288,36 @@ export async function shopRoutes(app: FastifyInstance) {
       });
 
       return { id: updated.id, taxRatePercent: updated.taxRatePercent != null ? Number(updated.taxRatePercent) : null };
+    }
+  );
+
+  app.patch<{ Params: { shopId: string }; Body: { ifoodCommissionPercent: number | null } }>(
+    '/shops/:shopId/ifood-commission',
+    {
+      onRequest: [app.authenticate],
+      schema: {
+        body: {
+          type: 'object',
+          required: ['ifoodCommissionPercent'],
+          properties: { ifoodCommissionPercent: { type: ['number', 'null'], minimum: 0, maximum: 100 } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const shop = await prisma.shop.findFirst({
+        where: { id: request.params.shopId, userId: request.user.sub },
+      });
+      if (!shop) return reply.status(404).send({ message: 'Loja não encontrada.' });
+
+      const updated = await prisma.shop.update({
+        where: { id: shop.id },
+        data: { ifoodCommissionPercent: request.body.ifoodCommissionPercent },
+      });
+
+      return {
+        id: updated.id,
+        ifoodCommissionPercent: updated.ifoodCommissionPercent != null ? Number(updated.ifoodCommissionPercent) : null,
+      };
     }
   );
 

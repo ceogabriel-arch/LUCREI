@@ -5,11 +5,11 @@ import { ActivityIndicator, Dimensions, Modal, Pressable, RefreshControl, Scroll
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BlurredValue } from '@/components/blurred-value';
-import { GlassCard } from '@/components/glass-card';
 import { PastDueBanner } from '@/components/past-due-banner';
 import { Screen } from '@/components/screen';
 import { ShopPicker } from '@/components/shop-picker';
 import { ToastBanner, useToast } from '@/components/toast';
+import { UsageBar } from '@/components/usage-bar';
 import {
   ApiError,
   getOrders,
@@ -23,6 +23,7 @@ import {
 import { useAuth } from '@/lib/auth';
 import { useDataRefresh } from '@/lib/data-refresh';
 import { formatBRL } from '@/lib/format';
+import { MARKETPLACE_FEE_LABELS, type Marketplace } from '@/lib/marketplace';
 import { ORDER_STATUS_LABELS as STATUS_LABELS } from '@/lib/order-status-labels';
 import { PERIOD_TO_API, PERIODS, usePeriod } from '@/lib/period';
 import { useModalPresentation, webCapWidth } from '@/lib/responsive';
@@ -50,8 +51,8 @@ function BreakdownRow({ label, value, isTotal }: { label: string; value: string;
   );
 }
 
-function ItemBreakdown({ item, provider }: { item: OrderLineItem; provider?: 'shopee' | 'mercado_livre' }) {
-  const feeLabel = provider === 'mercado_livre' ? '− Taxa Mercado Livre' : '− Taxa Shopee';
+function ItemBreakdown({ item, provider }: { item: OrderLineItem; provider?: Marketplace }) {
+  const feeLabel = MARKETPLACE_FEE_LABELS[provider ?? 'shopee'];
   return (
     <View className="rounded-2xl border border-lucrei-border bg-lucrei-surfaceAlt p-4">
       <Text className="text-sm font-medium text-lucrei-text">
@@ -106,45 +107,6 @@ function OrderDetailModal({ order, onClose }: { order: Order | null; onClose: ()
         </SafeAreaView>
       </View>
     </Modal>
-  );
-}
-
-// Sem limite (salesLimit null) não mostra nada - não faz sentido uma barra
-// de progresso pra um teto que não existe.
-function UsageBar({ usage }: { usage: SalesUsage }) {
-  const Colors = useColors();
-  if (usage.salesLimit == null) return null;
-
-  const fraction = Math.min(1, usage.ordersThisMonth / usage.salesLimit);
-  const nearLimit = !usage.overLimit && fraction >= 0.8;
-  const barColor = usage.overLimit ? Colors.danger : nearLimit ? Colors.gold : Colors.success;
-
-  return (
-    <GlassCard className="mt-4 p-4" borderRadius={16}>
-      <View className="flex-row items-center justify-between">
-        <Text className="text-xs font-medium text-lucrei-textMuted">Vendas do mês</Text>
-        <Text className="text-xs font-semibold" style={{ color: barColor }}>
-          {usage.ordersThisMonth} / {usage.salesLimit}
-        </Text>
-      </View>
-      <View className="mt-2 h-2 overflow-hidden rounded-full bg-lucrei-surfaceAlt">
-        <View style={{ width: `${fraction * 100}%`, backgroundColor: barColor }} className="h-full rounded-full" />
-      </View>
-      {usage.blocked && (
-        <Text className="mt-2 text-xs" style={{ color: Colors.danger }}>
-          Limite atingido — novos pedidos não sincronizam mais até você fazer upgrade.
-        </Text>
-      )}
-      {usage.overLimit && !usage.blocked && (
-        <Text className="mt-2 text-xs" style={{ color: Colors.danger }}>
-          Limite atingido — valores ocultos. Você tem {usage.graceDaysLeft}{' '}
-          {usage.graceDaysLeft === 1 ? 'dia' : 'dias'} pra fazer upgrade antes da sincronização travar.
-        </Text>
-      )}
-      {nearLimit && (
-        <Text className="mt-2 text-xs text-lucrei-textMuted">Quase no limite do seu plano.</Text>
-      )}
-    </GlassCard>
   );
 }
 

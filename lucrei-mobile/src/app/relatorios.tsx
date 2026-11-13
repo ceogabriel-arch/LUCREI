@@ -22,6 +22,7 @@ import { PastDueBanner } from '@/components/past-due-banner';
 import { PendingOrdersModal } from '@/components/pending-orders-modal';
 import { Screen } from '@/components/screen';
 import { ShopPicker } from '@/components/shop-picker';
+import { UsageBar } from '@/components/usage-bar';
 import type { ThemeColors } from '@/constants/theme';
 import {
   ApiError,
@@ -30,12 +31,14 @@ import {
   getCombinedSummaryRange,
   getOrderForecast,
   getProductReport,
+  getSalesUsage,
   getShopeeProducts,
   getSummary,
   getSummaryRange,
   type OrderForecast,
   type Period,
   type ProductReport,
+  type SalesUsage,
   type ShopeeProduct,
   type Summary,
 } from '@/lib/api';
@@ -44,7 +47,8 @@ import { useAuth } from '@/lib/auth';
 import { useDataRefresh } from '@/lib/data-refresh';
 import { exportOrdersCsv, exportOrdersExcel, exportProductExcel, exportProductsExcel } from '@/lib/export-csv';
 import { formatBRL } from '@/lib/format';
-import { MERCADO_LIVRE_ORDER_STATUS_LABELS, ORDER_STATUS_LABELS } from '@/lib/order-status-labels';
+import { MARKETPLACE_LABELS_LOWER } from '@/lib/marketplace';
+import { IFOOD_ORDER_STATUS_LABELS, MERCADO_LIVRE_ORDER_STATUS_LABELS, ORDER_STATUS_LABELS } from '@/lib/order-status-labels';
 import { webCapWidth } from '@/lib/responsive';
 import { useSelectedShop } from '@/lib/selected-shop';
 import { useSubscriptionAccess } from '@/lib/subscription-access';
@@ -424,7 +428,12 @@ function ProductReportCard({
                 {report.pendingOrders.length === 1 ? 'pedido ainda não concluído' : 'pedidos ainda não concluídos'}
               </Text>
               {report.pendingOrders.map((order) => {
-                const statusLabels = order.provider === 'mercado_livre' ? MERCADO_LIVRE_ORDER_STATUS_LABELS : ORDER_STATUS_LABELS;
+                const statusLabels =
+                  order.provider === 'mercado_livre'
+                    ? MERCADO_LIVRE_ORDER_STATUS_LABELS
+                    : order.provider === 'ifood'
+                      ? IFOOD_ORDER_STATUS_LABELS
+                      : ORDER_STATUS_LABELS;
                 return (
                   <View key={order.orderSn} className="flex-row items-center justify-between">
                     <Text className="flex-1 pr-3 text-xs text-lucrei-text" numberOfLines={1}>
@@ -543,6 +552,7 @@ function ReportRangeCard({
   shopId,
   connectedAt,
   isShopee,
+  overLimit,
 }: {
   token: string;
   // null = "Todas as lojas" (resumo somado, sem CSV nem backfill - essas
@@ -553,9 +563,13 @@ function ReportRangeCard({
   // pedido) - mostrar o botão pra uma loja ML garantia falha, com um texto
   // que ainda por cima dizia "na Shopee" pra loja errada.
   isShopee: boolean;
+  // Vem já calculado do pai (RelatoriosScreen), que já busca getSalesUsage()
+  // uma vez só pra tela inteira - evita essa card repetir a mesma chamada.
+  overLimit: boolean;
 }) {
   const Colors = useColors();
   const subscriptionAccess = useSubscriptionAccess();
+  const blurProfit = subscriptionAccess.isPastDue || overLimit;
   const now = new Date();
   const [mode, setMode] = useState<ReportMode>('month');
   const [year, setYear] = useState(now.getFullYear());
@@ -713,7 +727,7 @@ function ReportRangeCard({
         {loading ? (
           <ActivityIndicator color={Colors.gold} />
         ) : summary ? (
-          subscriptionAccess.isPastDue ? (
+          blurProfit ? (
             <View className="gap-1.5">
               <View className="flex-row items-center justify-between">
                 <Text className="text-xs text-lucrei-textMuted">Faturamento</Text>
@@ -765,7 +779,7 @@ function ReportRangeCard({
             </Text>
             <Text className="mt-0.5 text-xs text-lucrei-textMuted">Ainda em processamento no marketplace. Toque pra ver.</Text>
           </View>
-          {subscriptionAccess.isPastDue ? (
+          {blurProfit ? (
             <BlurredValue width={70} />
           ) : (
             <Text className="text-sm font-bold" style={{ color: Colors.goldDim }}>
@@ -834,6 +848,7 @@ export default function RelatoriosScreen() {
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [summary, setSummary] = useState<Summary | null>(null);
   const [products, setProducts] = useState<ShopeeProduct[]>([]);
+  const [usage, setUsage] = useState<SalesUsage | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   // Trocar de período com a tela já pronta mantém loadState em 'ready' (de
   // propósito, pra não piscar a tela inteira de loading) - sem isso, nada
@@ -865,7 +880,7 @@ export default function RelatoriosScreen() {
       // relatório (ninguém olha Curva ABC/produto mais lucrativo do dia).
       const apiPeriod = '30d';
       if (viewingAll) {
-        const [summaryRes, productsPerShop] = await Promise.all([
+        const [summaryRes, productsPerShop, salesUsage] = await Promise.all([
           getCombinedSummary(token, apiPeriod),
           Promise.all(
             activeShops.map((shop) =>
@@ -874,16 +889,20 @@ export default function RelatoriosScreen() {
               )
             )
           ),
+          getSalesUsage(token),
         ]);
         setSummary(summaryRes);
         setProducts(productsPerShop.flat());
+        setUsage(salesUsage);
       } else if (selectedShop) {
-        const [summaryRes, productsRes] = await Promise.all([
+        const [summaryRes, productsRes, salesUsage] = await Promise.all([
           getSummary(token, selectedShop.id, apiPeriod),
           getShopeeProducts(token, selectedShop.id, apiPeriod),
+          getSalesUsage(token),
         ]);
         setSummary(summaryRes);
         setProducts(productsRes.products);
+        setUsage(salesUsage);
       }
       setLoadState('ready');
     } catch {
@@ -946,7 +965,10 @@ export default function RelatoriosScreen() {
   // "Shopee" só faz sentido nesse texto quando a loja selecionada é
   // realmente uma Shopee - mesmo problema já corrigido na Início ("Líquido
   // Shopee" aparecendo pra loja Mercado Livre).
-  const marketplaceLabelLower = viewingAll ? 'do marketplace' : selectedShop?.provider === 'mercado_livre' ? 'do Mercado Livre' : 'da Shopee';
+  const marketplaceLabelLower = viewingAll ? 'do marketplace' : MARKETPLACE_LABELS_LOWER[selectedShop?.provider ?? 'shopee'];
+  // Mesmo tratamento de "ocultar lucro" do atraso de pagamento vale pra quem
+  // passou do limite de vendas do plano.
+  const isOverLimit = (usage?.overLimit ?? false) || subscriptionAccess.isPastDue;
 
   return (
     <Screen>
@@ -1005,16 +1027,21 @@ export default function RelatoriosScreen() {
               shopId={viewingAll ? null : selectedShop!.id}
               connectedAt={viewingAll ? (selectedShop?.connectedAt ?? new Date().toISOString()) : selectedShop!.connectedAt}
               isShopee={viewingAll ? false : selectedShop!.provider !== 'mercado_livre'}
+              overLimit={isOverLimit}
             />
           )}
 
           <PastDueBanner />
 
-          {subscriptionAccess.isPastDue ? (
+          {usage && <UsageBar usage={usage} />}
+
+          {isOverLimit ? (
             <GlassCard className="items-center p-6" borderRadius={16}>
               <Ionicons name="lock-closed" size={20} color={Colors.textMuted} />
               <Text className="mt-2 text-center text-sm text-lucrei-textMuted">
-                Gráficos e detalhamento de lucro ficam ocultos até você regularizar o pagamento.
+                {subscriptionAccess.isPastDue
+                  ? 'Gráficos e detalhamento de lucro ficam ocultos até você regularizar o pagamento.'
+                  : 'Gráficos e detalhamento de lucro ficam ocultos até você fazer upgrade do plano.'}
               </Text>
             </GlassCard>
           ) : (
@@ -1024,7 +1051,7 @@ export default function RelatoriosScreen() {
                   token={token}
                   fallbackShopId={viewingAll ? null : (selectedShop?.id ?? null)}
                   products={products}
-                  blurred={subscriptionAccess.isPastDue}
+                  blurred={isOverLimit}
                 />
               )}
 

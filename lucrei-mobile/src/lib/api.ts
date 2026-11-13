@@ -1,3 +1,5 @@
+import type { Marketplace } from './marketplace';
+
 export const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export type Period = 'today' | '7d' | '30d' | '90d' | 'all';
@@ -161,7 +163,7 @@ export type Shop = {
   status: string;
   connectedAt: string;
   disconnectedAt: string | null;
-  provider: 'shopee' | 'mercado_livre';
+  provider: Marketplace;
   // null = nunca rodou. Usado pra saber se ainda vale a pena empurrar a
   // pessoa pra sincronizar o histórico completo (ver history-backfill-card).
   historyBackfillStatus: 'running' | 'done' | 'error' | null;
@@ -175,6 +177,9 @@ export type Shop = {
   // Define a tabela de taxas da Shopee usada no Precificador (CPF paga taxa
   // fixa maior por item).
   taxpayerType: 'cnpj' | 'cpf';
+  // null até o lojista configurar - a iFood não manda a comissão dela no
+  // pedido, então só o cálculo de lucro de loja iFood usa isso.
+  ifoodCommissionPercent: number | null;
 };
 
 export function getShops(token: string) {
@@ -204,6 +209,14 @@ export function updateShopTaxRate(token: string, shopId: string, taxRatePercent:
     method: 'PATCH',
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify({ taxRatePercent }),
+  });
+}
+
+export function updateShopIfoodCommission(token: string, shopId: string, ifoodCommissionPercent: number | null) {
+  return request<{ id: string; ifoodCommissionPercent: number | null }>(`/shops/${shopId}/ifood-commission`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ ifoodCommissionPercent }),
   });
 }
 
@@ -262,7 +275,7 @@ export type PendingOrder = {
   status: string;
   orderDate: string;
   shopName?: string;
-  provider: 'shopee' | 'mercado_livre';
+  provider: Marketplace;
   product: string | null;
   estimatedProfit: number;
 };
@@ -332,7 +345,7 @@ export type ProductReportPendingOrder = {
   status: string;
   orderDate: string;
   quantity: number;
-  provider: 'shopee' | 'mercado_livre';
+  provider: Marketplace;
 };
 
 export type ProductReport = {
@@ -408,7 +421,7 @@ export type Order = {
   // Idem - preenchido no cliente (os dois modos, combinado ou loja única) a
   // partir da loja já conhecida, pra "Taxa Shopee"/"Taxa Mercado Livre" no
   // detalhe do pedido não ficar fixo errado pra loja ML.
-  provider?: 'shopee' | 'mercado_livre';
+  provider?: Marketplace;
 };
 
 export function getOrders(token: string, shopId: string, period: Period) {
@@ -642,7 +655,7 @@ export function setAdminRewardClaimFulfilled(token: string, id: string, fulfille
 export type AdminSyncIssue = {
   shopId: string;
   shopName: string;
-  provider: 'shopee' | 'mercado_livre';
+  provider: Marketplace;
   userEmail: string;
   syncStatus: string | null;
   syncError: string | null;

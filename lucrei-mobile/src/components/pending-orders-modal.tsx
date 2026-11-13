@@ -6,12 +6,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MarketplaceBadge } from '@/components/marketplace-badge';
 import { getCombinedPendingOrders, getPendingOrders, type PendingOrder } from '@/lib/api';
 import { formatBRL, formatElapsed } from '@/lib/format';
-import { MERCADO_LIVRE_ORDER_STATUS_LABELS, ORDER_STATUS_LABELS } from '@/lib/order-status-labels';
+import { IFOOD_ORDER_STATUS_LABELS, MERCADO_LIVRE_ORDER_STATUS_LABELS, ORDER_STATUS_LABELS } from '@/lib/order-status-labels';
 import { useModalPresentation } from '@/lib/responsive';
 import { useColors } from '@/lib/theme';
 
 function statusLabel(order: PendingOrder) {
-  const map = order.provider === 'mercado_livre' ? MERCADO_LIVRE_ORDER_STATUS_LABELS : ORDER_STATUS_LABELS;
+  const map =
+    order.provider === 'mercado_livre'
+      ? MERCADO_LIVRE_ORDER_STATUS_LABELS
+      : order.provider === 'ifood'
+        ? IFOOD_ORDER_STATUS_LABELS
+        : ORDER_STATUS_LABELS;
   return map[order.status] ?? order.status;
 }
 

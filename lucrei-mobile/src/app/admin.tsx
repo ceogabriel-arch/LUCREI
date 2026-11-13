@@ -346,7 +346,7 @@ export default function AdminScreen() {
                   className="rounded-xl border p-3.5"
                   style={{ borderColor: Colors.danger, backgroundColor: Colors.surface }}>
                   <Text className="text-sm font-medium text-lucrei-text">
-                    {i.shopName} ({i.provider === 'mercado_livre' ? 'ML' : 'Shopee'}) · {i.userEmail}
+                    {i.shopName} ({i.provider === 'mercado_livre' ? 'ML' : i.provider === 'ifood' ? 'iFood' : 'Shopee'}) · {i.userEmail}
                   </Text>
                   <Text className="mt-1 text-xs text-lucrei-textMuted">
                     sync: {i.syncStatus ?? '—'}

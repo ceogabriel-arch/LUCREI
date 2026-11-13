@@ -19,7 +19,9 @@ import { GlassCard } from '@/components/glass-card';
 import { MarketplaceBadge } from '@/components/marketplace-badge';
 import { Screen } from '@/components/screen';
 import { ToastBanner, useToast } from '@/components/toast';
+import { ShopIfoodCommissionField } from '@/components/shop-ifood-commission-field';
 import { ShopTaxRateField } from '@/components/shop-tax-rate-field';
+import { marketplaceLabel } from '@/lib/marketplace';
 import { API_URL, disconnectShop, getDailyGoalSuggestion, type AuthUser, type Shop } from '@/lib/api';
 import { showAlert } from '@/lib/alert';
 import { useAuth } from '@/lib/auth';
@@ -541,9 +543,7 @@ function ShopRow({ shop, onDisconnected }: { shop: Shop; onDisconnected: () => v
             <Text className="text-sm text-lucrei-text" numberOfLines={1}>
               {shop.shopName}
             </Text>
-            <Text className="text-[11px] text-lucrei-textMuted">
-              {shop.provider === 'mercado_livre' ? 'Mercado Livre' : 'Shopee'}
-            </Text>
+            <Text className="text-[11px] text-lucrei-textMuted">{marketplaceLabel(shop.provider)}</Text>
           </View>
         </View>
         <View className="flex-row items-center gap-3">
@@ -574,6 +574,7 @@ function ShopRow({ shop, onDisconnected }: { shop: Shop; onDisconnected: () => v
       )}
 
       {active && <ShopTaxRateField shop={shop} />}
+      {active && shop.provider === 'ifood' && <ShopIfoodCommissionField shop={shop} />}
     </View>
   );
 }

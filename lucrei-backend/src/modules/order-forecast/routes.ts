@@ -2,10 +2,12 @@ import type { Shop } from '@prisma/client';
 import type { FastifyInstance } from 'fastify';
 
 import { formatOrderProductLabel } from '../../lib/order-product-label';
+import { getValidAccessToken as getValidIfoodAccessToken } from '../../lib/ifood-token';
 import { getValidAccessToken as getValidMercadoLivreAccessToken } from '../../lib/mercadolivre-token';
 import { pendingWhereForShop, pendingWindowStart } from '../../lib/pending-orders';
 import { prisma } from '../../lib/prisma';
 import { getValidAccessToken } from '../../lib/shopee-token';
+import { getOrder as getIfoodOrder } from '../../ifood-client';
 import { getOrder as getMercadoLivreOrder } from '../../mercadolivre-client';
 import { getOrderDetail } from '../../shopee-client';
 import { computeShopSummary } from '../summary/routes';
@@ -14,6 +16,7 @@ type ShopForecast = { pendingCount: number; projectedProfit: number; projectedRe
 type PendingEvent = {
   shopeeOrderSn: string | null;
   mercadoLivreOrderId: string | null;
+  ifoodOrderId: string | null;
   orderStatus: string;
   orderDate: Date;
   shopId: string;
@@ -74,12 +77,19 @@ async function listPendingOrders(shops: Shop[]): Promise<PendingEvent[]> {
   return prisma.recentOrderEvent.findMany({
     where: { OR: shops.map((shop) => ({ ...pendingWhereForShop(shop), orderDate: { gte: pendingWindowStart() } })) },
     orderBy: { orderDate: 'asc' },
-    select: { shopeeOrderSn: true, mercadoLivreOrderId: true, orderStatus: true, orderDate: true, shopId: true },
+    select: {
+      shopeeOrderSn: true,
+      mercadoLivreOrderId: true,
+      ifoodOrderId: true,
+      orderStatus: true,
+      orderDate: true,
+      shopId: true,
+    },
   });
 }
 
 function orderKey(e: PendingEvent): string {
-  return (e.shopeeOrderSn ?? e.mercadoLivreOrderId)!;
+  return (e.shopeeOrderSn ?? e.mercadoLivreOrderId ?? e.ifoodOrderId)!;
 }
 
 // Pedido ainda em processamento nunca está na tabela Order (só sincroniza
@@ -129,6 +139,23 @@ async function fetchProductLabels(events: PendingEvent[], shops: Shop[]): Promis
             .filter((it): it is { quantity: number; name: string } => !!it.name);
           const label = formatOrderProductLabel(items);
           if (label) labelByKey.set(e.mercadoLivreOrderId!, label);
+        } catch {
+          // idem - sem token válido ou API fora do ar, pedido segue sem label.
+        }
+      }),
+    ...events
+      .filter((e) => e.ifoodOrderId)
+      .map(async (e) => {
+        const shop = shopById.get(e.shopId);
+        if (!shop) return;
+        try {
+          const { accessToken } = await getValidIfoodAccessToken(shop.id);
+          const order = await getIfoodOrder(accessToken, e.ifoodOrderId!);
+          const items = (order.items ?? [])
+            .map((it) => ({ quantity: it.quantity, name: it.name }))
+            .filter((it): it is { quantity: number; name: string } => !!it.name);
+          const label = formatOrderProductLabel(items);
+          if (label) labelByKey.set(e.ifoodOrderId!, label);
         } catch {
           // idem - sem token válido ou API fora do ar, pedido segue sem label.
         }

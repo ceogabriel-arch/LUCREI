@@ -24,3 +24,14 @@ export async function trackRecentMercadoLivreOrderEvent(shopId: string, orderId:
     create: { shopId, mercadoLivreOrderId: orderId, orderStatus: status, orderDate: new Date() },
   });
 }
+
+// Mesma ideia, mas pra iFood - alimentado pelo watchdog de polling (ver
+// ifood-service.ts), que é a única forma de saber de pedido novo (sem
+// webhook nem push), pra TODO evento visto (não só pedido concluído).
+export async function trackRecentIfoodOrderEvent(shopId: string, orderId: string, status: string) {
+  await prisma.recentOrderEvent.upsert({
+    where: { ifoodOrderId: orderId },
+    update: { orderStatus: status },
+    create: { shopId, ifoodOrderId: orderId, orderStatus: status, orderDate: new Date() },
+  });
+}

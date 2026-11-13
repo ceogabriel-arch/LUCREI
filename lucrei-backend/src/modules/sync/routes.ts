@@ -5,6 +5,7 @@ import { checkSubscriptionAccessBlock } from '../../lib/subscription-access';
 import { startOfCurrentMonth } from '../../lib/period';
 import { prisma } from '../../lib/prisma';
 import { sendPushNotification } from '../../lib/push-notifications';
+import { runHistoryBackfill as runIfoodHistoryBackfill, runShopSync as runIfoodShopSync } from './ifood-service';
 import { runHistoryBackfill as runMLHistoryBackfill, runShopSync as runMLShopSync } from './mercadolivre-service';
 import { runHistoryBackfill, runShopSync, WINDOW_SECONDS } from './service';
 
@@ -93,8 +94,9 @@ export async function syncRoutes(app: FastifyInstance) {
         }
       }
 
-      // Mesma rota serve os dois marketplaces - só muda qual sync dispara.
-      const sync = shop.provider === 'mercado_livre' ? runMLShopSync : runShopSync;
+      // Mesma rota serve os três marketplaces - só muda qual sync dispara.
+      const sync =
+        shop.provider === 'mercado_livre' ? runMLShopSync : shop.provider === 'ifood' ? runIfoodShopSync : runShopSync;
       sync(shop.id).catch((err) => app.log.error(err));
 
       return reply.send({ status: 'running', ordersSynced: 0 });
@@ -174,9 +176,13 @@ export async function syncRoutes(app: FastifyInstance) {
 
       // Mercado Livre não tem limite de 15 dias por chamada (ver
       // mercadolivre-service.ts) - o "backfill" de lá já é o histórico
-      // inteiro, sem precisar de uma data de início.
+      // inteiro, sem precisar de uma data de início. iFood não tem endpoint
+      // de histórico confirmado ainda - o "backfill" dela só repete o
+      // polling normal (ver ifood-service.ts).
       if (shop.provider === 'mercado_livre') {
         runMLHistoryBackfill(shop.id).catch((err) => app.log.error(err));
+      } else if (shop.provider === 'ifood') {
+        runIfoodHistoryBackfill(shop.id).catch((err) => app.log.error(err));
       } else {
         const since = new Date(Date.now() - HISTORY_BACKFILL_DAYS * 24 * 60 * 60 * 1000);
         runHistoryBackfill(shop.id, since).catch((err) => app.log.error(err));

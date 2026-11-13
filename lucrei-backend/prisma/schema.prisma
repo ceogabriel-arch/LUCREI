@@ -40,6 +40,7 @@ enum ShopStatus {
 enum Marketplace {
   shopee
   mercado_livre
+  ifood
 }
 
 // Tipo de cadastro do vendedor - muda a tabela de taxas da Shopee no
@@ -164,6 +165,8 @@ model Shop {
   // com mercadoLivreShopId) - ver Marketplace/provider abaixo.
   shopeeShopId       String?     @unique
   mercadoLivreShopId String?     @unique
+  // Id do merchant na iFood - mesmo papel de shopeeShopId/mercadoLivreShopId.
+  ifoodShopId        String?     @unique
   provider           Marketplace @default(shopee)
   shopName           String
   region             String      @default("BR")
@@ -183,6 +186,12 @@ model Shop {
   // lucro - ver nota em order-math.ts.
   taxRatePercent Decimal?     @db.Decimal(5, 2)
   taxpayerType   TaxpayerType @default(cnpj)
+
+  // Comissão (%) que a iFood retém por contrato - não vem no payload do
+  // pedido (diferente do sale_fee da Shopee/ML), então precisa ser
+  // preenchida manualmente pelo lojista pra entrar no cálculo de lucro.
+  // null = nenhum desconto de comissão aplicado ainda. Só loja iFood usa.
+  ifoodCommissionPercent Decimal? @db.Decimal(5, 2)
 
   // Backfill de histórico (botão em Relatórios) roda em segundo plano porque
   // pode levar minutos - esses campos são o estado que o app faz polling pra
@@ -206,6 +215,7 @@ model Shop {
   user                   User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
   oauthToken             ShopeeOAuthToken?
   mercadoLivreOAuthToken MercadoLivreOAuthToken?
+  ifoodOAuthToken        IfoodOAuthToken?
   products               Product[]
   orders                 Order[]
   importBatches          CostImportBatch[]
@@ -240,6 +250,23 @@ model MercadoLivreOAuthToken {
   shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
 }
 
+// Auth da iFood separa client credentials (do app, globais - env vars) de
+// autorização por loja (o merchantId abaixo) - toda chamada de pedido/evento
+// precisa do merchantId junto com o token. Formato (authorization_code,
+// refresh) ainda não confirmado contra uma autorização real - ver aviso em
+// ifood-client/index.ts.
+model IfoodOAuthToken {
+  id                   String   @id @default(cuid())
+  shopId               String   @unique
+  merchantId           String
+  accessToken          String
+  refreshToken         String
+  accessTokenExpiresAt DateTime
+  updatedAt            DateTime @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+}
+
 model Product {
   id                 String            @id @default(cuid())
   shopId             String
@@ -247,6 +274,10 @@ model Product {
   shopeeModelId      String?
   // Item id do Mercado Livre (ex: "MLB1234567890") - loja Shopee não tem.
   mercadoLivreItemId String?
+  // Id do item na iFood - criado sob demanda a partir do próprio pedido
+  // (sem API de catálogo confirmada ainda, ver ifood-service.ts), custo
+  // manual até o lojista preencher.
+  ifoodItemId        String?
   sku                String?
   name               String
   costPrice          Decimal           @db.Decimal(12, 2)
@@ -260,6 +291,7 @@ model Product {
   @@index([shopId])
   @@index([shopeeItemId])
   @@index([mercadoLivreItemId])
+  @@index([ifoodItemId])
 }
 
 model Order {
@@ -269,6 +301,7 @@ model Order {
   // vice-versa com mercadoLivreOrderId) - mesmo padrão do Shop na Fase 1.
   shopeeOrderSn        String?   @unique
   mercadoLivreOrderId  String?   @unique
+  ifoodOrderId         String?   @unique
   orderStatus          String
   orderDate            DateTime
   // Quando o pedido entrou em COMPLETED na Shopee (update_time do
@@ -310,6 +343,7 @@ model OrderLineItem {
   productId            String?
   shopeeItemId         String?
   mercadoLivreItemId   String?
+  ifoodItemId          String?
   // Nome do item no momento do pedido (vem do get_escrow_detail) - a Shopee
   // não devolve mais isso se o produto for excluído do catálogo depois. Sem
   // guardar aqui, um item descontinuado vira um "custo não informado" sem
@@ -335,6 +369,7 @@ model OrderLineItem {
   @@index([productId])
   @@index([shopeeItemId])
   @@index([mercadoLivreItemId])
+  @@index([ifoodItemId])
 }
 
 // Rastro leve de "pedido comprado, ainda não sabemos o lucro" - alimenta só
@@ -351,10 +386,11 @@ model RecentOrderEvent {
   // (e vice-versa) - mesmo padrão de Shop/Order desde a Fase 1/2 do ML.
   shopeeOrderSn       String?  @unique
   mercadoLivreOrderId String?  @unique
+  ifoodOrderId        String?  @unique
   orderStatus         String
   // Preenchido com o horário em que vimos esse pedido pela primeira vez - via
-  // push (Shopee) ou via sincronização periódica (Mercado Livre, que ainda
-  // não tem webhook). Usado só pra descartar pedido "fantasma" há tempo
+  // push (Shopee) ou via sincronização periódica (Mercado Livre e iFood, que
+  // não têm webhook). Usado só pra descartar pedido "fantasma" há tempo
   // demais sem resolução.
   orderDate           DateTime
   updatedAt           DateTime @updatedAt

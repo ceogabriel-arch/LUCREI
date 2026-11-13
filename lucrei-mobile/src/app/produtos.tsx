@@ -9,15 +9,19 @@ import { GlassCard } from '@/components/glass-card';
 import { PastDueBanner } from '@/components/past-due-banner';
 import { Screen } from '@/components/screen';
 import { ShopPicker } from '@/components/shop-picker';
+import { ShopIfoodCommissionField } from '@/components/shop-ifood-commission-field';
 import { ShopTaxRateField } from '@/components/shop-tax-rate-field';
+import { UsageBar } from '@/components/usage-bar';
 import {
   ApiError,
   getOrphanProducts,
+  getSalesUsage,
   getShopeeProducts,
   saveProductCost,
   saveProductCosts,
   type OrphanProduct,
   type ProductCostInput,
+  type SalesUsage,
   type ShopeeProduct,
 } from '@/lib/api';
 import { showAlert } from '@/lib/alert';
@@ -61,6 +65,7 @@ const ProductRow = memo(function ProductRow({
   onChangeCost,
   onToggleSelect,
   period,
+  overLimit,
 }: {
   product: ShopeeProduct;
   value: string;
@@ -70,9 +75,13 @@ const ProductRow = memo(function ProductRow({
   onChangeCost: (shopeeItemId: string, text: string) => void;
   onToggleSelect: (shopeeItemId: string) => void;
   period: PeriodLabel;
+  // Vem já calculado do pai (ProdutosScreen), que busca getSalesUsage() uma
+  // vez só pra tela inteira - evita repetir a chamada em cada linha da lista.
+  overLimit: boolean;
 }) {
   const Colors = useColors();
   const subscriptionAccess = useSubscriptionAccess();
+  const blurProfit = subscriptionAccess.isPastDue || overLimit;
   return (
     <View
       className="flex-row items-center gap-3 rounded-2xl border bg-lucrei-surface p-3"
@@ -99,7 +108,7 @@ const ProductRow = memo(function ProductRow({
           {product.price != null ? `Preço: ${formatBRL(product.price)}` : 'Sem preço informado'}
           {product.shopName ? ` · ${product.shopName}` : ''}
         </Text>
-        {subscriptionAccess.isPastDue && product.profit != null ? (
+        {blurProfit && product.profit != null ? (
           <View className="mt-1">
             <BlurredValue width={110} />
           </View>
@@ -304,8 +313,10 @@ export default function ProdutosScreen() {
   // produto (o cadastro de custo não muda de um dia pro outro).
   const period: PeriodLabel = '30 dias';
   const { refreshSignal } = useDataRefresh();
+  const subscriptionAccess = useSubscriptionAccess();
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [products, setProducts] = useState<ShopeeProduct[]>([]);
+  const [usage, setUsage] = useState<SalesUsage | null>(null);
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
@@ -374,16 +385,20 @@ export default function ProdutosScreen() {
         // pedidos.tsx) - a mesma rota já funciona pra Shopee e Mercado Livre
         // (Fase 2, permissão "Publicação e sincronização" confirmada ao
         // vivo), não precisa mais filtrar por marketplace aqui.
-        const products = viewingAll
-          ? await Promise.all(
-              activeShops.map((shop) => getShopeeProducts(token, shop.id, PERIOD_TO_API[period], force))
-            ).then((results) =>
-              results.flatMap((r, i) =>
-                r.products.map((p) => ({ ...p, shopName: activeShops[i].shopName, shopId: activeShops[i].id }))
+        const [products, salesUsage] = await Promise.all([
+          viewingAll
+            ? Promise.all(
+                activeShops.map((shop) => getShopeeProducts(token, shop.id, PERIOD_TO_API[period], force))
+              ).then((results) =>
+                results.flatMap((r, i) =>
+                  r.products.map((p) => ({ ...p, shopName: activeShops[i].shopName, shopId: activeShops[i].id }))
+                )
               )
-            )
-          : await getShopeeProducts(token, selectedShop!.id, PERIOD_TO_API[period], force).then((r) => r.products);
+            : getShopeeProducts(token, selectedShop!.id, PERIOD_TO_API[period], force).then((r) => r.products),
+          getSalesUsage(token),
+        ]);
         setProducts(products);
+        setUsage(salesUsage);
         setEdits({});
         setSelected(new Set());
         setLoadState('ready');
@@ -551,6 +566,10 @@ export default function ProdutosScreen() {
     }
   }
 
+  // Mesmo tratamento de "ocultar lucro" do atraso de pagamento vale pra quem
+  // passou do limite de vendas do plano.
+  const isOverLimit = (usage?.overLimit ?? false) || subscriptionAccess.isPastDue;
+
   return (
     <Screen>
       <Text className="text-2xl font-bold text-lucrei-text">Produtos</Text>
@@ -565,8 +584,9 @@ export default function ProdutosScreen() {
           quem está mexendo em custo de produto espera achar ela aqui do
           lado - mesmo campo, mesma loja, só a versão compacta. */}
       {!viewingAll && selectedShop && (
-        <View className="mt-5">
+        <View className="mt-5 flex-row flex-wrap gap-2">
           <ShopTaxRateField shop={selectedShop} compact />
+          {selectedShop.provider === 'ifood' && <ShopIfoodCommissionField shop={selectedShop} compact />}
         </View>
       )}
 
@@ -610,6 +630,8 @@ export default function ProdutosScreen() {
         </View>
       )}
       <PastDueBanner />
+
+      {usage && <UsageBar usage={usage} />}
 
       {loadState === 'loading' && (
         <View className="mt-10 items-center">
@@ -720,6 +742,7 @@ export default function ProdutosScreen() {
                     onChangeCost={handleChangeCost}
                     onToggleSelect={handleToggleSelect}
                     period={period}
+                    overLimit={isOverLimit}
                   />
                 );
               })
