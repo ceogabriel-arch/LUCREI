@@ -7,6 +7,7 @@ import { prisma } from '../../lib/prisma';
 import { sendPushNotification } from '../../lib/push-notifications';
 import { runHistoryBackfill as runIfoodHistoryBackfill, runShopSync as runIfoodShopSync } from './ifood-service';
 import { runHistoryBackfill as runMLHistoryBackfill, runShopSync as runMLShopSync } from './mercadolivre-service';
+import { runHistoryBackfill as runTiktokHistoryBackfill, runShopSync as runTiktokShopSync } from './tiktokshop-service';
 import { runHistoryBackfill, runShopSync, WINDOW_SECONDS } from './service';
 
 // Avisa a conta quando ela cruza esse percentual do limite mensal do plano,
@@ -94,9 +95,15 @@ export async function syncRoutes(app: FastifyInstance) {
         }
       }
 
-      // Mesma rota serve os três marketplaces - só muda qual sync dispara.
+      // Mesma rota serve todos os marketplaces - só muda qual sync dispara.
       const sync =
-        shop.provider === 'mercado_livre' ? runMLShopSync : shop.provider === 'ifood' ? runIfoodShopSync : runShopSync;
+        shop.provider === 'mercado_livre'
+          ? runMLShopSync
+          : shop.provider === 'ifood'
+            ? runIfoodShopSync
+            : shop.provider === 'tiktok_shop'
+              ? runTiktokShopSync
+              : runShopSync;
       sync(shop.id).catch((err) => app.log.error(err));
 
       return reply.send({ status: 'running', ordersSynced: 0 });
@@ -183,6 +190,10 @@ export async function syncRoutes(app: FastifyInstance) {
         runMLHistoryBackfill(shop.id).catch((err) => app.log.error(err));
       } else if (shop.provider === 'ifood') {
         runIfoodHistoryBackfill(shop.id).catch((err) => app.log.error(err));
+      } else if (shop.provider === 'tiktok_shop') {
+        // Igual o Mercado Livre: a busca do TikTok Shop não tem limite de
+        // janela confirmado, então o backfill varre o histórico inteiro.
+        runTiktokHistoryBackfill(shop.id).catch((err) => app.log.error(err));
       } else {
         const since = new Date(Date.now() - HISTORY_BACKFILL_DAYS * 24 * 60 * 60 * 1000);
         runHistoryBackfill(shop.id, since).catch((err) => app.log.error(err));

@@ -34,6 +34,7 @@ import { rewardsRoutes } from './modules/rewards/routes';
 import { shopRoutes } from './modules/shops/routes';
 import { ifoodRoutes } from './modules/ifood/routes';
 import { mercadolivreRoutes } from './modules/mercadolivre/routes';
+import { tiktokshopRoutes } from './modules/tiktokshop/routes';
 import { summaryRoutes } from './modules/summary/routes';
 import { syncRoutes } from './modules/sync/routes';
 
@@ -187,7 +188,7 @@ async function main() {
     },
   });
 
-  for (const route of ['pedidos', 'produtos', 'relatorios', 'etiquetas', 'configuracoes', 'shopee-connected', 'mercadolivre-connected', 'ifood-connected', 'planos', 'admin']) {
+  for (const route of ['pedidos', 'produtos', 'relatorios', 'etiquetas', 'configuracoes', 'shopee-connected', 'mercadolivre-connected', 'tiktokshop-connected', 'planos', 'admin']) {
     app.get(`/${route}`, (_req, reply) => reply.sendFile(`${route}.html`));
   }
 
@@ -195,6 +196,7 @@ async function main() {
   await app.register(shopRoutes);
   await app.register(mercadolivreRoutes);
   await app.register(ifoodRoutes);
+  await app.register(tiktokshopRoutes);
   await app.register(syncRoutes);
   await app.register(productRoutes);
   await app.register(summaryRoutes);

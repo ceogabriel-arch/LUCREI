@@ -1,28 +1,36 @@
 /**
- * Cliente da API de parceiros da iFood. NÃO confirmado contra uma
- * autorização real ainda (developer.ifood.com.br exige login pra ver a
- * documentação completa) - o formato abaixo segue o padrão OAuth2 +
- * polling de eventos que a própria iFood descreve publicamente e que
- * integrações de terceiros (SDKs não-oficiais) implementam, igual o
- * mercado-livre-client fez antes de confirmar contra uma loja real.
- * Precisa validar nomes de campo e endpoints exatos assim que houver
- * credenciais de sandbox - só este arquivo deve precisar mudar.
+ * Cliente da API de parceiros da iFood, modelo de app DISTRIBUÍDO.
+ * Confirmado contra a loja de teste em 14/11/2026 (userCode, troca do
+ * authorizationCode, refresh, merchants e polling).
+ *
+ * A iFood não tem login por redirecionamento como Shopee/ML: o Lucrei pede
+ * um código de vínculo (userCode), o lojista digita esse código no Portal do
+ * Parceiro ("Ativar integração por código"), recebe um authorizationCode e
+ * cola de volta no Lucrei, que troca pelo token junto com o
+ * authorizationCodeVerifier devolvido no primeiro passo.
  */
 
-const AUTH_HOST = 'https://auth.ifood.com.br';
 const API_HOST = 'https://merchant-api.ifood.com.br';
 const DEFAULT_TIMEOUT_MS = 15_000;
 
 function getConfig() {
   const clientId = process.env.IFOOD_CLIENT_ID;
   const clientSecret = process.env.IFOOD_CLIENT_SECRET;
-  const callbackUrl = process.env.IFOOD_CALLBACK_URL;
 
-  if (!clientId || !clientSecret || !callbackUrl) {
-    throw new Error('Credenciais da iFood não configuradas (IFOOD_CLIENT_ID / IFOOD_CLIENT_SECRET / IFOOD_CALLBACK_URL).');
+  if (!clientId || !clientSecret) {
+    throw new Error('Credenciais da iFood não configuradas (IFOOD_CLIENT_ID / IFOOD_CLIENT_SECRET).');
   }
 
-  return { clientId, clientSecret, callbackUrl };
+  return { clientId, clientSecret };
+}
+
+// Erro da iFood vem como { error: { code, message } } - não string solta.
+function ifoodErrorMessage(body: { error?: unknown; message?: string }, fallback: string) {
+  if (body.error && typeof body.error === 'object' && 'message' in body.error) {
+    return String((body.error as { message: unknown }).message);
+  }
+  if (typeof body.error === 'string') return body.error;
+  return body.message || fallback;
 }
 
 // Mesmo motivo do mercadolivre-client: sem timeout, uma resposta lenta trava
@@ -44,14 +52,30 @@ async function fetchJson<T>(url: string, init?: RequestInit, timeoutMs = DEFAULT
   }
 }
 
-export function getAuthorizationUrl(state: string) {
-  const { clientId, callbackUrl } = getConfig();
-  const url = new URL(`${AUTH_HOST}/authentication/v1.0/oauth/authorize`);
-  url.searchParams.set('response_type', 'code');
-  url.searchParams.set('client_id', clientId);
-  url.searchParams.set('redirect_uri', callbackUrl);
-  url.searchParams.set('state', state);
-  return url.toString();
+type UserCodeResponse = {
+  userCode: string;
+  authorizationCodeVerifier: string;
+  verificationUrl: string;
+  verificationUrlComplete: string;
+  expiresIn: number;
+  error?: unknown;
+  message?: string;
+};
+
+// Passo 1 do vínculo: código curto (ex. "MVFJ-SSTV", vale 10 min) que o
+// lojista digita no Portal do Parceiro. O verifier nunca vai pro lojista em
+// texto puro - o backend guarda (cifrado) até o passo 2.
+export async function requestUserCode() {
+  const { clientId } = getConfig();
+  const { ok, body } = await fetchJson<UserCodeResponse>(`${API_HOST}/authentication/v1.0/oauth/userCode`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+    body: new URLSearchParams({ clientId }).toString(),
+  });
+  if (!ok || !body.userCode) {
+    throw new Error(ifoodErrorMessage(body, 'Falha ao gerar código de vínculo na iFood.'));
+  }
+  return body;
 }
 
 type TokenResponse = {
@@ -59,32 +83,40 @@ type TokenResponse = {
   refreshToken: string;
   expiresIn: number;
   type: string;
-  error?: string;
+  error?: unknown;
   message?: string;
 };
 
-export async function exchangeCodeForToken(code: string) {
-  const { clientId, clientSecret, callbackUrl } = getConfig();
-  const { ok, body } = await fetchJson<TokenResponse>(`${AUTH_HOST}/authentication/v1.0/oauth/token`, {
+export class IfoodAuthorizationCodeError extends Error {}
+
+// Passo 2: authorizationCode (vale 5 min) que o Portal do Parceiro mostrou
+// depois do lojista aprovar o código de vínculo.
+export async function exchangeAuthorizationCode(authorizationCode: string, authorizationCodeVerifier: string) {
+  const { clientId, clientSecret } = getConfig();
+  const { ok, status, body } = await fetchJson<TokenResponse>(`${API_HOST}/authentication/v1.0/oauth/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
     body: new URLSearchParams({
       grantType: 'authorization_code',
       clientId,
       clientSecret,
-      code,
-      redirectUri: callbackUrl,
+      authorizationCode,
+      authorizationCodeVerifier,
     }).toString(),
   });
-  if (!ok || body.error) {
-    throw new Error(body.message || body.error || 'Falha ao trocar code por token na iFood.');
+  if (!ok || !body.accessToken) {
+    const message = ifoodErrorMessage(body, 'Falha ao trocar o código de autorização na iFood.');
+    // 4xx = código errado/vencido (culpa do que foi colado); 5xx/timeout =
+    // falha passageira da iFood - a rota mostra mensagens diferentes.
+    if (status >= 400 && status < 500) throw new IfoodAuthorizationCodeError(message);
+    throw new Error(message);
   }
   return body;
 }
 
 export async function refreshAccessToken(refreshToken: string) {
   const { clientId, clientSecret } = getConfig();
-  const { ok, body } = await fetchJson<TokenResponse>(`${AUTH_HOST}/authentication/v1.0/oauth/token`, {
+  const { ok, body } = await fetchJson<TokenResponse>(`${API_HOST}/authentication/v1.0/oauth/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
     body: new URLSearchParams({
@@ -94,8 +126,8 @@ export async function refreshAccessToken(refreshToken: string) {
       refreshToken,
     }).toString(),
   });
-  if (!ok || body.error) {
-    throw new Error(body.message || body.error || 'Falha ao renovar o token da iFood.');
+  if (!ok || !body.accessToken) {
+    throw new Error(ifoodErrorMessage(body, 'Falha ao renovar o token da iFood.'));
   }
   return body;
 }
@@ -131,11 +163,12 @@ export type IfoodEvent = {
 };
 
 // Polling - a iFood não empurra pedido, precisa buscar eventos periodicamente
-// (ver ifood-poll-watchdog.ts). Formato de resposta (array direto vs
-// {events: [...]}) ainda não confirmado.
+// (ver ifood-poll-watchdog.ts). Sem "?groups=ALL": esse parâmetro dá 400 na
+// API atual. Formato da resposta com evento (array direto vs
+// {events: [...]}) ainda não confirmado - a loja de teste só devolveu 204.
 export async function getMerchantEvents(accessToken: string, merchantId: string) {
   const { ok, status, body } = await fetchJson<IfoodEvent[]>(
-    `${API_HOST}/order/v1.0/events:polling?groups=ALL`,
+    `${API_HOST}/order/v1.0/events:polling`,
     { headers: { Authorization: `Bearer ${accessToken}`, 'x-polling-merchants': merchantId } }
   );
   // 204 (sem evento novo) não é erro - só não tem nada pra processar agora.
@@ -182,7 +215,7 @@ type OrderDetailResponse = {
     discount?: number;
     orderAmount?: number;
   };
-  error?: string;
+  error?: unknown;
   message?: string;
 };
 
@@ -191,7 +224,7 @@ export async function getOrder(accessToken: string, orderId: string) {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!ok || body.error) {
-    throw new Error(body.message || body.error || 'Falha ao buscar detalhe do pedido na iFood.');
+    throw new Error(ifoodErrorMessage(body, 'Falha ao buscar detalhe do pedido na iFood.'));
   }
   return body;
 }

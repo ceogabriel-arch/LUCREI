@@ -48,7 +48,12 @@ import { useDataRefresh } from '@/lib/data-refresh';
 import { exportOrdersCsv, exportOrdersExcel, exportProductExcel, exportProductsExcel } from '@/lib/export-csv';
 import { formatBRL } from '@/lib/format';
 import { MARKETPLACE_LABELS_LOWER } from '@/lib/marketplace';
-import { IFOOD_ORDER_STATUS_LABELS, MERCADO_LIVRE_ORDER_STATUS_LABELS, ORDER_STATUS_LABELS } from '@/lib/order-status-labels';
+import {
+  IFOOD_ORDER_STATUS_LABELS,
+  MERCADO_LIVRE_ORDER_STATUS_LABELS,
+  ORDER_STATUS_LABELS,
+  TIKTOKSHOP_ORDER_STATUS_LABELS,
+} from '@/lib/order-status-labels';
 import { webCapWidth } from '@/lib/responsive';
 import { useSelectedShop } from '@/lib/selected-shop';
 import { useSubscriptionAccess } from '@/lib/subscription-access';
@@ -433,7 +438,9 @@ function ProductReportCard({
                     ? MERCADO_LIVRE_ORDER_STATUS_LABELS
                     : order.provider === 'ifood'
                       ? IFOOD_ORDER_STATUS_LABELS
-                      : ORDER_STATUS_LABELS;
+                      : order.provider === 'tiktok_shop'
+                        ? TIKTOKSHOP_ORDER_STATUS_LABELS
+                        : ORDER_STATUS_LABELS;
                 return (
                   <View key={order.orderSn} className="flex-row items-center justify-between">
                     <Text className="flex-1 pr-3 text-xs text-lucrei-text" numberOfLines={1}>

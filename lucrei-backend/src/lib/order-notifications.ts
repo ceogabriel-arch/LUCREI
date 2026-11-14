@@ -91,7 +91,8 @@ export async function notifyOrderCompletedIfNeeded(params: {
   });
   if (claimed.count === 0) return;
 
-  const marketplaceLabel = shop.provider === 'mercado_livre' ? 'ML' : 'Shopee';
+  const marketplaceLabel =
+    shop.provider === 'mercado_livre' ? 'ML' : shop.provider === 'tiktok_shop' ? 'TikTok' : shop.provider === 'ifood' ? 'iFood' : 'Shopee';
   const { title, body, sound } = buildNotificationMessage(params.totalProfit, params.totalRevenue, marketplaceLabel);
 
   try {

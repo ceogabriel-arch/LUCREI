@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import { Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 
-export default function IfoodConnectedRoute() {
+export default function TiktokShopConnectedRoute() {
   useEffect(() => {
     if (Platform.OS === 'web') {
       WebBrowser.maybeCompleteAuthSession();

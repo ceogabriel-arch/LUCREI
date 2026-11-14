@@ -19,6 +19,14 @@ export const STATUS_LABELS: Record<string, string> = {
   paid: 'Pago',
   cancelled: 'Cancelado',
   invalid: 'Inválido',
+  // Status do TikTok Shop (MAIÚSCULO como a Shopee, mas vocabulário próprio -
+  // UNPAID/COMPLETED/CANCELLED já estão acima com o mesmo sentido).
+  ON_HOLD: 'Em análise',
+  AWAITING_SHIPMENT: 'Aguardando envio',
+  PARTIALLY_SHIPPING: 'Envio parcial',
+  AWAITING_COLLECTION: 'Aguardando coleta',
+  IN_TRANSIT: 'Em trânsito',
+  DELIVERED: 'Entregue',
 };
 
 // Excel/Sheets em PT-BR esperam vírgula decimal - ponto quebraria a leitura

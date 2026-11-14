@@ -6,6 +6,8 @@ import { getValidAccessToken as getValidMercadoLivreAccessToken } from './mercad
 import { pendingWhereForShop, pendingWindowStart } from './pending-orders';
 import { prisma } from './prisma';
 import { getValidAccessToken } from './shopee-token';
+import { getValidAccessToken as getValidTiktokShopAccessToken } from './tiktokshop-token';
+import { getOrders as getTiktokShopOrders } from '../tiktokshop-client';
 
 export type PendingProductOrder = { orderSn: string; status: string; orderDate: Date; quantity: number };
 
@@ -47,6 +49,32 @@ export async function listPendingOrdersForProduct(
         })
     );
     return results.filter((r): r is PendingProductOrder => r !== null);
+  }
+
+  // TikTok Shop: line_items trazem product_id, então o match com itemId é
+  // exato (igual o Mercado Livre) - e tem multiget, até 50 pedidos por vez.
+  if (shop.provider === 'tiktok_shop') {
+    try {
+      const { accessToken, shopCipher } = await getValidTiktokShopAccessToken(shop.id);
+      const ids = events.map((e) => e.tiktokShopOrderId).filter((id): id is string => !!id);
+      const eventById = new Map(events.map((e) => [e.tiktokShopOrderId, e]));
+      const rows: PendingProductOrder[] = [];
+      for (let i = 0; i < ids.length; i += 50) {
+        const orders = await getTiktokShopOrders(accessToken, shopCipher, ids.slice(i, i + 50));
+        for (const order of orders) {
+          const event = eventById.get(order.id);
+          if (!event) continue;
+          const quantity = (order.line_items ?? [])
+            .filter((li) => li.product_id === itemId)
+            .reduce((sum, li) => sum + (li.quantity && li.quantity > 0 ? li.quantity : 1), 0);
+          if (quantity === 0) continue;
+          rows.push({ orderSn: order.id, status: event.orderStatus, orderDate: event.orderDate, quantity });
+        }
+      }
+      return rows;
+    } catch {
+      return [];
+    }
   }
 
   try {

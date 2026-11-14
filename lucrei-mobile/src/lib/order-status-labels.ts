@@ -26,6 +26,20 @@ export const MERCADO_LIVRE_ORDER_STATUS_LABELS: Record<string, string> = {
   invalid: 'Inválido',
 };
 
+// Status de pedido do TikTok Shop (API 202309) - não confirmados contra
+// pedido real ainda, ver aviso em tiktokshop-client/index.ts no backend.
+export const TIKTOKSHOP_ORDER_STATUS_LABELS: Record<string, string> = {
+  UNPAID: 'Aguardando pagamento',
+  ON_HOLD: 'Em análise',
+  AWAITING_SHIPMENT: 'Aguardando envio',
+  PARTIALLY_SHIPPING: 'Envio parcial',
+  AWAITING_COLLECTION: 'Aguardando coleta',
+  IN_TRANSIT: 'Em trânsito',
+  DELIVERED: 'Entregue',
+  COMPLETED: 'Concluído',
+  CANCELLED: 'Cancelado',
+};
+
 // Status de evento de pedido da iFood - nomes ainda não confirmados contra a
 // documentação oficial (exige login, ver aviso em ifood-client/index.ts no
 // backend), usado só no detalhe da previsão de lucro.

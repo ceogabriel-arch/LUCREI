@@ -46,7 +46,7 @@ export async function orderRoutes(app: FastifyInstance) {
             // diferença. Sem esse fallback, pedido ML mandava null aqui e
             // quebrava a busca por texto no app (Cannot read 'toLowerCase'
             // of null) - mesmo fallback que o /orders/export já tinha.
-            shopeeOrderSn: order.shopeeOrderSn ?? order.mercadoLivreOrderId,
+            shopeeOrderSn: order.shopeeOrderSn ?? order.mercadoLivreOrderId ?? order.tiktokShopOrderId ?? order.ifoodOrderId,
             orderStatus: order.orderStatus,
             orderDate: order.orderDate,
             revenue,
@@ -89,7 +89,8 @@ export async function orderRoutes(app: FastifyInstance) {
         orderBy: { orderDate: 'asc' },
       });
 
-      const marketplaceLabel = shop.provider === 'mercado_livre' ? 'Mercado Livre' : 'Shopee';
+      const marketplaceLabel =
+        shop.provider === 'mercado_livre' ? 'Mercado Livre' : shop.provider === 'tiktok_shop' ? 'TikTok Shop' : 'Shopee';
       const header = [
         'Data do pedido',
         'Nº do pedido',
@@ -114,7 +115,7 @@ export async function orderRoutes(app: FastifyInstance) {
             const productName = li.product?.name ?? li.itemName ?? `Item ${li.shopeeItemId ?? '?'}`;
             xlsxRows.push([
               order.orderDate,
-              order.shopeeOrderSn ?? order.mercadoLivreOrderId ?? '',
+              order.shopeeOrderSn ?? order.mercadoLivreOrderId ?? order.tiktokShopOrderId ?? order.ifoodOrderId ?? '',
               statusStr,
               productName,
               li.quantity,
@@ -143,7 +144,7 @@ export async function orderRoutes(app: FastifyInstance) {
             [
               dateStr,
               // Um dos dois é sempre preenchido, dependendo do marketplace da loja.
-              csvField(order.shopeeOrderSn ?? order.mercadoLivreOrderId ?? ''),
+              csvField(order.shopeeOrderSn ?? order.mercadoLivreOrderId ?? order.tiktokShopOrderId ?? order.ifoodOrderId ?? ''),
               csvField(statusStr),
               csvField(productName),
               String(li.quantity),
@@ -215,7 +216,7 @@ export async function orderRoutes(app: FastifyInstance) {
             xlsxRows.push([
               order.orderDate,
               order.shop.shopName,
-              order.shopeeOrderSn ?? order.mercadoLivreOrderId ?? '',
+              order.shopeeOrderSn ?? order.mercadoLivreOrderId ?? order.tiktokShopOrderId ?? order.ifoodOrderId ?? '',
               statusStr,
               productName,
               li.quantity,
@@ -244,7 +245,7 @@ export async function orderRoutes(app: FastifyInstance) {
             [
               dateStr,
               csvField(order.shop.shopName),
-              csvField(order.shopeeOrderSn ?? order.mercadoLivreOrderId ?? ''),
+              csvField(order.shopeeOrderSn ?? order.mercadoLivreOrderId ?? order.tiktokShopOrderId ?? order.ifoodOrderId ?? ''),
               csvField(statusStr),
               csvField(productName),
               String(li.quantity),

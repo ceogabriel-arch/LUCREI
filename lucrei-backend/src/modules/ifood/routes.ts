@@ -1,82 +1,119 @@
 import type { FastifyInstance } from 'fastify';
 
-import { encrypt } from '../../lib/crypto';
+import { decrypt, encrypt } from '../../lib/crypto';
 import { sendShopReconnectAttemptEmail } from '../../lib/email';
-import { exchangeCodeForToken, getAuthorizationUrl, getMerchants } from '../../ifood-client';
+import { exchangeAuthorizationCode, getMerchants, IfoodAuthorizationCodeError, requestUserCode } from '../../ifood-client';
 import { prisma } from '../../lib/prisma';
 import { runShopSync } from '../sync/ifood-service';
 
-type AuthorizeUrlQuery = {
-  returnUrl?: string;
+type ConnectBody = {
+  linkToken?: string;
+  authorizationCode?: string;
 };
 
-type CallbackQuery = {
-  code?: string;
-  state?: string;
-  error?: string;
-};
+type LinkTokenPayload = { sub: string; kind: 'ifood_link'; verifier: string };
 
-const DEFAULT_RETURN_URL = `${process.env.APP_SCHEME || 'lucreimobile'}://ifood-connected`;
-
-// Espelha mercadolivreRoutes (modules/mercadolivre/routes.ts) - mesmo padrão
-// de state JWT, proteção "shop_taken" e consumo de trial. Sem rota de
-// webhook aqui: a iFood não empurra pedido, o recebimento é 100% via
-// watchdog de polling (ver ifood-poll-watchdog.ts).
+// Mesmas regras de mercadolivreRoutes (modules/mercadolivre/routes.ts) -
+// limite do plano, proteção "shop_taken" e consumo de trial - mas sem
+// redirecionamento: a iFood vincula por código (ver ifood-client/index.ts).
+// Sem rota de webhook aqui: a iFood não empurra pedido, o recebimento é 100%
+// via watchdog de polling (ver ifood-poll-watchdog.ts).
 export async function ifoodRoutes(app: FastifyInstance) {
-  app.get<{ Querystring: AuthorizeUrlQuery }>(
-    '/ifood/authorize-url',
-    { onRequest: [app.authenticate] },
-    async (request, reply) => {
-      const user = await prisma.user.findUnique({ where: { id: request.user.sub }, include: { plan: true } });
-      const integrationsLimit = user?.plan?.integrationsLimit ?? null;
+  async function integrationsLimitMessage(userId: string) {
+    const user = await prisma.user.findUnique({ where: { id: userId }, include: { plan: true } });
+    const integrationsLimit = user?.plan?.integrationsLimit ?? null;
+    if (integrationsLimit == null) return null;
 
-      if (integrationsLimit != null) {
-        // Contado POR marketplace, não no total - mesmo critério de
-        // shopee/mercadolivre (ver comentário equivalente nas duas rotas).
-        const activeShops = await prisma.shop.count({
-          where: { userId: request.user.sub, status: 'active', provider: 'ifood' },
-        });
-        if (activeShops >= integrationsLimit) {
-          return reply.status(403).send({
-            message:
-              `Seu plano ${user?.plan?.name ?? ''} permite conectar até ${integrationsLimit} loja${integrationsLimit === 1 ? '' : 's'} iFood. ` +
-              'Faça upgrade pra um plano com mais integrações pra conectar outra loja iFood.',
-            code: 'integrations_limit_reached',
+    // Contado POR marketplace, não no total - mesmo critério de
+    // shopee/mercadolivre (ver comentário equivalente nas duas rotas).
+    const activeShops = await prisma.shop.count({
+      where: { userId, status: 'active', provider: 'ifood' },
+    });
+    if (activeShops < integrationsLimit) return null;
+    return (
+      `Seu plano ${user?.plan?.name ?? ''} permite conectar até ${integrationsLimit} loja${integrationsLimit === 1 ? '' : 's'} iFood. ` +
+      'Faça upgrade pra um plano com mais integrações pra conectar outra loja iFood.'
+    );
+  }
+
+  // Passo 1: gera o código de vínculo que o lojista digita no Portal do
+  // Parceiro. O verifier volta pro app só dentro de um JWT assinado e
+  // cifrado (linkToken) - assim o backend não precisa guardar estado entre
+  // os dois passos e o app nunca vê o verifier em texto puro.
+  app.post('/ifood/user-code', { onRequest: [app.authenticate] }, async (request, reply) => {
+    const limitMessage = await integrationsLimitMessage(request.user.sub);
+    if (limitMessage) {
+      return reply.status(403).send({ message: limitMessage, code: 'integrations_limit_reached' });
+    }
+
+    try {
+      const userCode = await requestUserCode();
+      const linkToken = app.jwt.sign(
+        { sub: request.user.sub, kind: 'ifood_link', verifier: encrypt(userCode.authorizationCodeVerifier) },
+        // String com unidade: número puro no fast-jwt é milissegundo.
+        { expiresIn: `${userCode.expiresIn}s` }
+      );
+      return {
+        userCode: userCode.userCode,
+        verificationUrl: userCode.verificationUrlComplete || userCode.verificationUrl,
+        expiresIn: userCode.expiresIn,
+        linkToken,
+      };
+    } catch (err) {
+      app.log.error(err);
+      return reply.status(502).send({ message: 'A iFood não respondeu a tempo. Tente de novo em instantes.' });
+    }
+  });
+
+  // Passo 2: troca o código de autorização (mostrado pelo Portal do Parceiro
+  // depois do lojista aprovar) pelo token e conecta a loja.
+  app.post<{ Body: ConnectBody }>('/ifood/connect', { onRequest: [app.authenticate] }, async (request, reply) => {
+    const userId = request.user.sub;
+    const authorizationCode = request.body?.authorizationCode?.trim().toUpperCase();
+    const linkToken = request.body?.linkToken;
+
+    if (!authorizationCode || !linkToken) {
+      return reply.status(400).send({ message: 'Cole o código de autorização que o Portal do Parceiro mostrou.' });
+    }
+
+    let verifier: string;
+    try {
+      const payload = app.jwt.verify<LinkTokenPayload>(linkToken);
+      if (payload.kind !== 'ifood_link' || payload.sub !== userId) throw new Error('linkToken de outro usuário');
+      verifier = decrypt(payload.verifier);
+    } catch {
+      return reply.status(400).send({
+        message: 'O código de vínculo venceu (vale 10 minutos). Feche esta janela e toque em "iFood" de novo.',
+        code: 'link_expired',
+      });
+    }
+
+    const limitMessage = await integrationsLimitMessage(userId);
+    if (limitMessage) {
+      return reply.status(403).send({ message: limitMessage, code: 'integrations_limit_reached' });
+    }
+
+    try {
+      let token;
+      try {
+        token = await exchangeAuthorizationCode(authorizationCode, verifier);
+      } catch (err) {
+        if (err instanceof IfoodAuthorizationCodeError) {
+          return reply.status(400).send({
+            message: 'A iFood recusou esse código de autorização. Confira se copiou certo - ele vale só 5 minutos.',
+            code: 'invalid_code',
           });
         }
+        throw err;
       }
 
-      const returnUrl = request.query.returnUrl || DEFAULT_RETURN_URL;
-      const state = app.jwt.sign({ sub: request.user.sub, returnUrl }, { expiresIn: '30m' });
-      const url = getAuthorizationUrl(state);
-      return { url };
-    }
-  );
-
-  app.get<{ Querystring: CallbackQuery }>('/ifood/callback', async (request, reply) => {
-    const { code, state, error } = request.query;
-
-    if (!code || !state) {
-      const reason = error ? 'denied' : 'missing_params';
-      return reply.redirect(`${DEFAULT_RETURN_URL}?status=error&reason=${reason}`);
-    }
-
-    let userId: string;
-    let returnUrl: string;
-    try {
-      const payload = app.jwt.verify<{ sub: string; returnUrl: string }>(state);
-      userId = payload.sub;
-      returnUrl = payload.returnUrl || DEFAULT_RETURN_URL;
-    } catch {
-      return reply.redirect(`${DEFAULT_RETURN_URL}?status=error&reason=invalid_state`);
-    }
-
-    try {
-      const token = await exchangeCodeForToken(code);
       const merchants = await getMerchants(token.accessToken);
       const merchant = merchants[0];
       if (!merchant) {
-        return reply.redirect(`${returnUrl}?status=error&reason=no_merchant`);
+        return reply.status(400).send({
+          message: 'Essa autorização não liberou nenhuma loja iFood. Confira se você está logado na loja certa no Portal do Parceiro.',
+          code: 'no_merchant',
+        });
       }
       const ifoodShopId = merchant.id;
 
@@ -89,7 +126,11 @@ export async function ifoodRoutes(app: FastifyInstance) {
         if (currentOwner) {
           await sendShopReconnectAttemptEmail(app, currentOwner.email, existingShop.shopName, 'iFood');
         }
-        return reply.redirect(`${returnUrl}?status=error&reason=shop_taken`);
+        return reply.status(409).send({
+          message:
+            'Essa loja iFood já está conectada em outra conta Lucrei. Peça para desconectá-la lá (em Configurações) antes de conectar aqui.',
+          code: 'shop_taken',
+        });
       }
 
       const shop = await prisma.shop.upsert({
@@ -126,31 +167,29 @@ export async function ifoodRoutes(app: FastifyInstance) {
         }
       }
 
+      const tokenData = {
+        merchantId: merchant.id,
+        accessToken: encrypt(token.accessToken),
+        refreshToken: encrypt(token.refreshToken),
+        accessTokenExpiresAt: new Date(Date.now() + token.expiresIn * 1000),
+      };
       await prisma.ifoodOAuthToken.upsert({
         where: { shopId: shop.id },
-        update: {
-          merchantId: merchant.id,
-          accessToken: encrypt(token.accessToken),
-          refreshToken: encrypt(token.refreshToken),
-          accessTokenExpiresAt: new Date(Date.now() + token.expiresIn * 1000),
-        },
-        create: {
-          shopId: shop.id,
-          merchantId: merchant.id,
-          accessToken: encrypt(token.accessToken),
-          refreshToken: encrypt(token.refreshToken),
-          accessTokenExpiresAt: new Date(Date.now() + token.expiresIn * 1000),
-        },
+        update: tokenData,
+        create: { shopId: shop.id, ...tokenData },
       });
 
       // Mesmo motivo de Shopee/ML: dispara a primeira sincronização sozinho,
       // sem esperar o usuário achar o botão manual.
       runShopSync(shop.id).catch((err) => app.log.error(err));
 
-      return reply.redirect(`${returnUrl}?status=success`);
+      return { status: 'success', shopName: merchant.name };
     } catch (err) {
       app.log.error(err);
-      return reply.redirect(`${returnUrl}?status=error&reason=exchange_failed`);
+      return reply.status(502).send({
+        message: 'Falha temporária na comunicação com a iFood. Tente conectar de novo em instantes.',
+        code: 'exchange_failed',
+      });
     }
   });
 }

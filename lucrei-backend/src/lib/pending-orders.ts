@@ -4,6 +4,7 @@ import { rangeStart } from './period';
 import { IFOOD_RESOLVED_STATUSES } from '../modules/sync/ifood-service';
 import { ML_RESOLVED_STATUSES } from '../modules/sync/mercadolivre-service';
 import { SHOPEE_PENDING_STATUSES } from '../modules/sync/service';
+import { TIKTOKSHOP_PENDING_STATUSES } from '../modules/sync/tiktokshop-service';
 
 // Pedido pendente há mais tempo que isso provavelmente perdeu o rastro (push
 // da Shopee não garante entrega, e o sync periódico do ML só vê o que ainda
@@ -23,6 +24,9 @@ export function pendingWhereForShop(shop: Shop) {
   }
   if (shop.provider === 'ifood') {
     return { shopId: shop.id, ifoodOrderId: { not: null }, orderStatus: { notIn: [...IFOOD_RESOLVED_STATUSES] } };
+  }
+  if (shop.provider === 'tiktok_shop') {
+    return { shopId: shop.id, tiktokShopOrderId: { not: null }, orderStatus: { in: [...TIKTOKSHOP_PENDING_STATUSES] } };
   }
   return { shopId: shop.id, shopeeOrderSn: { not: null }, orderStatus: { in: [...SHOPEE_PENDING_STATUSES] } };
 }

@@ -8,7 +8,8 @@ declare module 'fastify' {
 
 declare module '@fastify/jwt' {
   interface FastifyJWT {
-    payload: { sub: string; returnUrl?: string; tv?: number };
+    // kind/verifier: só no linkToken do vínculo iFood (modules/ifood/routes.ts).
+    payload: { sub: string; returnUrl?: string; tv?: number; kind?: 'ifood_link'; verifier?: string };
     user: { sub: string; returnUrl?: string; tv?: number };
   }
 }

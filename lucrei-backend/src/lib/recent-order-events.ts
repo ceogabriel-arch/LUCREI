@@ -35,3 +35,13 @@ export async function trackRecentIfoodOrderEvent(shopId: string, orderId: string
     create: { shopId, ifoodOrderId: orderId, orderStatus: status, orderDate: new Date() },
   });
 }
+
+// Mesma ideia, pro TikTok Shop - sem webhook configurado ainda, quem chama é
+// a sincronização periódica, pra TODO pedido visto (igual o Mercado Livre).
+export async function trackRecentTiktokShopOrderEvent(shopId: string, orderId: string, status: string) {
+  await prisma.recentOrderEvent.upsert({
+    where: { tiktokShopOrderId: orderId },
+    update: { orderStatus: status },
+    create: { shopId, tiktokShopOrderId: orderId, orderStatus: status, orderDate: new Date() },
+  });
+}

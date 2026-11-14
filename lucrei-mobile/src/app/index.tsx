@@ -9,6 +9,7 @@ import { AnnouncementsBanner } from '@/components/announcements-banner';
 import { BlurredValue } from '@/components/blurred-value';
 import { GlassCard } from '@/components/glass-card';
 import { HistoryBackfillCard } from '@/components/history-backfill-card';
+import { IfoodConnectModal } from '@/components/ifood-connect-modal';
 import { MarketplaceBadge } from '@/components/marketplace-badge';
 import { MissingCostList } from '@/components/missing-cost-list';
 import { PastDueBanner } from '@/components/past-due-banner';
@@ -38,13 +39,13 @@ import { showAlert } from '@/lib/alert';
 import { useAuth } from '@/lib/auth';
 import { useDataRefresh } from '@/lib/data-refresh';
 import { formatBRL } from '@/lib/format';
-import { connectIfoodStore } from '@/lib/ifood';
 import { MARKETPLACE_LABELS_LOWER, marketplaceLabel, type Marketplace } from '@/lib/marketplace';
 import { PERIOD_TO_API, PERIODS, type PeriodLabel, usePeriod } from '@/lib/period';
 import { useIsDesktopWeb, webCapWidth } from '@/lib/responsive';
 import { connectMercadoLivreStore } from '@/lib/mercado-livre';
 import { useSelectedShop } from '@/lib/selected-shop';
 import { connectShopeeStore } from '@/lib/shopee';
+import { connectTiktokShopStore } from '@/lib/tiktok-shop';
 import { useSubscriptionAccess } from '@/lib/subscription-access';
 import { useAppTheme } from '@/lib/theme';
 
@@ -67,7 +68,8 @@ export default function InicioScreen() {
   const { refreshSignal, triggerRefresh } = useDataRefresh();
   const subscriptionAccess = useSubscriptionAccess();
   const [backendStatus, setBackendStatus] = useState<BackendStatus>('checking');
-  const [connecting, setConnecting] = useState<'shopee' | 'mercado_livre' | 'ifood' | null>(null);
+  const [connecting, setConnecting] = useState<'shopee' | 'mercado_livre' | 'ifood' | 'tiktok_shop' | null>(null);
+  const [ifoodModalVisible, setIfoodModalVisible] = useState(false);
   const [summary, setSummary] = useState<Summary | null>(null);
   // Qual período o "summary" guardado acima pertence de verdade - achado ao
   // vivo: trocar de "Hoje" pra "30 dias" pintava o botão novo na hora, mas
@@ -184,48 +186,63 @@ export default function InicioScreen() {
     }
   }
 
-  // Espelha handleConnectMercadoLivre - mesmo shape de erro/motivo, só troca
-  // o texto pra iFood.
-  async function handleConnectIfood() {
+  // Espelha handleConnectMercadoLivre - mesmo fluxo de redirecionamento e
+  // mesmo shape de erro/motivo, só troca o texto pro TikTok Shop.
+  async function handleConnectTiktokShop() {
     if (state.status !== 'authenticated') return;
-    setConnecting('ifood');
+    setConnecting('tiktok_shop');
     try {
-      const result = await connectIfoodStore(state.token);
+      const result = await connectTiktokShopStore(state.token);
       if (result.status === 'success') {
-        showAlert('Loja conectada!', 'Sua loja iFood foi conectada com sucesso.');
+        showAlert('Loja conectada!', 'Sua loja TikTok Shop foi conectada com sucesso.');
         await refreshShops();
       } else if (result.status === 'error') {
         if (result.reason === 'shop_taken') {
           showAlert(
             'Loja já conectada em outra conta',
-            'Essa loja iFood já está conectada em outra conta Lucrei. Se você esperava logar em outra loja, confira se o navegador não está logado na iFood com a conta errada - senão, peça para desconectá-la lá (em Configurações) antes de conectar aqui.'
+            'Essa loja TikTok Shop já está conectada em outra conta Lucrei. Peça para desconectá-la lá (em Configurações) antes de conectar aqui.'
           );
         } else if (result.reason === 'invalid_state') {
           showAlert(
             'O link de conexão expirou',
-            'Demorou demais pra terminar o login na iFood e o link venceu. Toque em "iFood" e tente de novo.'
+            'Demorou demais pra terminar a autorização no TikTok Shop e o link venceu. Toque em "TikTok" e tente de novo.'
           );
         } else if (result.reason === 'exchange_failed') {
           showAlert(
-            'A iFood não respondeu a tempo',
-            'Falha temporária na comunicação com a iFood. Tente conectar de novo em instantes.'
+            'O TikTok Shop não respondeu a tempo',
+            'Falha temporária na comunicação com o TikTok Shop. Tente conectar de novo em instantes.'
           );
-        } else if (result.reason === 'no_merchant') {
+        } else if (result.reason === 'no_shop') {
           showAlert(
             'Nenhuma loja encontrada',
-            'Sua conta iFood não tem nenhuma loja vinculada ainda. Cadastre uma loja no painel da iFood antes de conectar aqui.'
+            'Essa autorização não liberou nenhuma loja TikTok Shop. Confira se você está logado na conta de vendedor certa.'
           );
+        } else if (result.reason === 'denied') {
+          showAlert('Autorização recusada', 'A autorização foi recusada na tela do TikTok Shop. Toque em "TikTok" pra tentar de novo.');
         } else {
           showAlert('Não foi possível conectar', 'Tente novamente em instantes.');
         }
       } else if (result.status === 'cancelled') {
-        showAlert('Conexão não concluída', 'A conexão com a iFood não foi concluída. Tente de novo.');
+        showAlert('Conexão não concluída', 'A conexão com o TikTok Shop não foi concluída. Tente de novo.');
       }
     } catch (err) {
       showAlert('Erro', err instanceof ApiError ? err.message : 'Algo deu errado.');
     } finally {
       setConnecting(null);
     }
+  }
+
+  // A iFood vincula por código (ver IfoodConnectModal), não por
+  // redirecionamento - os erros já aparecem dentro do próprio modal.
+  function handleConnectIfood() {
+    if (state.status !== 'authenticated') return;
+    setIfoodModalVisible(true);
+  }
+
+  async function handleIfoodConnected(shopName: string) {
+    setIfoodModalVisible(false);
+    showAlert('Loja conectada!', `Sua loja iFood "${shopName}" foi conectada com sucesso.`);
+    await refreshShops();
   }
 
   useFocusEffect(
@@ -969,12 +986,14 @@ export default function InicioScreen() {
           <AchievementsCard totalProfit={lifetimeProfit} accountCreatedAt={state.user.createdAt} />
         )}
 
-        <View className="mt-8 flex-row gap-2 self-center" style={{ width: isDesktop ? 440 : '100%' }}>
+        {/* 4 marketplaces: numa linha só no desktop, 2x2 no celular - 4 lado a
+            lado numa tela de celular cortava "Mercado Livre" no meio. */}
+        <View className="mt-8 flex-row flex-wrap gap-2 self-center" style={{ width: isDesktop ? 580 : '100%' }}>
           <Pressable
             onPress={handleConnectShopee}
             disabled={connecting !== null}
             className="flex-1 flex-row items-center justify-center gap-1.5 rounded-2xl bg-lucrei-gold py-4"
-            style={{ opacity: connecting !== null ? 0.7 : 1 }}>
+            style={{ opacity: connecting !== null ? 0.7 : 1, minWidth: isDesktop ? undefined : '45%' }}>
             {connecting === 'shopee' ? (
               <ActivityIndicator color={Colors.onGold} />
             ) : (
@@ -988,7 +1007,7 @@ export default function InicioScreen() {
             onPress={handleConnectMercadoLivre}
             disabled={connecting !== null}
             className="flex-1 flex-row items-center justify-center gap-1.5 rounded-2xl bg-lucrei-gold py-4"
-            style={{ opacity: connecting !== null ? 0.7 : 1 }}>
+            style={{ opacity: connecting !== null ? 0.7 : 1, minWidth: isDesktop ? undefined : '45%' }}>
             {connecting === 'mercado_livre' ? (
               <ActivityIndicator color={Colors.onGold} />
             ) : (
@@ -1002,7 +1021,7 @@ export default function InicioScreen() {
             onPress={handleConnectIfood}
             disabled={connecting !== null}
             className="flex-1 flex-row items-center justify-center gap-1.5 rounded-2xl bg-lucrei-gold py-4"
-            style={{ opacity: connecting !== null ? 0.7 : 1 }}>
+            style={{ opacity: connecting !== null ? 0.7 : 1, minWidth: isDesktop ? undefined : '45%' }}>
             {connecting === 'ifood' ? (
               <ActivityIndicator color={Colors.onGold} />
             ) : (
@@ -1012,10 +1031,31 @@ export default function InicioScreen() {
               {connecting === 'ifood' ? 'Conectando...' : 'iFood'}
             </Text>
           </Pressable>
+          <Pressable
+            onPress={handleConnectTiktokShop}
+            disabled={connecting !== null}
+            className="flex-1 flex-row items-center justify-center gap-1.5 rounded-2xl bg-lucrei-gold py-4"
+            style={{ opacity: connecting !== null ? 0.7 : 1, minWidth: isDesktop ? undefined : '45%' }}>
+            {connecting === 'tiktok_shop' ? (
+              <ActivityIndicator color={Colors.onGold} />
+            ) : (
+              <Ionicons name="storefront-outline" size={16} color={Colors.onGold} />
+            )}
+            <Text className="text-sm font-semibold text-lucrei-onGold" numberOfLines={1}>
+              {connecting === 'tiktok_shop' ? 'Conectando...' : 'TikTok'}
+            </Text>
+          </Pressable>
         </View>
         <Text className="mt-2 text-center text-xs text-lucrei-textMuted">
           {hasShop ? 'Conectar outra loja' : 'Conecte sua loja'}
         </Text>
+        {state.status === 'authenticated' && ifoodModalVisible && (
+          <IfoodConnectModal
+            token={state.token}
+            onClose={() => setIfoodModalVisible(false)}
+            onConnected={handleIfoodConnected}
+          />
+        )}
         {!stillLoading && (
           <Text className="mt-3 text-center text-xs text-lucrei-textMuted">
             {(() => {

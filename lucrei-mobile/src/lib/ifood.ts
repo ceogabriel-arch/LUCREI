@@ -1,33 +1,38 @@
-import * as Linking from 'expo-linking';
-import * as WebBrowser from 'expo-web-browser';
-
 import { ApiError } from '@/lib/api';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
-export type ConnectIfoodResult = { status: 'success' | 'error' | 'cancelled'; reason?: string };
+export type IfoodLink = {
+  userCode: string;
+  verificationUrl: string;
+  expiresIn: number;
+  linkToken: string;
+};
 
-export async function connectIfoodStore(token: string): Promise<ConnectIfoodResult> {
+async function post<T>(path: string, token: string, body?: unknown): Promise<T> {
   if (!API_URL) throw new ApiError('Servidor não configurado.');
-
-  const returnUrl = Linking.createURL('ifood-connected');
-
-  const res = await fetch(`${API_URL}/ifood/authorize-url?returnUrl=${encodeURIComponent(returnUrl)}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  const body = await res.json().catch(() => null);
-  if (!res.ok) {
-    throw new ApiError(body?.message ?? 'Não foi possível iniciar a conexão com a iFood.');
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body ?? {}),
+    });
+  } catch {
+    throw new ApiError('Não foi possível conectar ao servidor.');
   }
+  const json = await res.json().catch(() => null);
+  if (!res.ok) throw new ApiError(json?.message ?? 'Algo deu errado. Tente novamente.', res.status);
+  return json as T;
+}
 
-  const result = await WebBrowser.openAuthSessionAsync(body.url, returnUrl, {
-    windowFeatures: { width: 620, height: 820 },
-  });
-  if (result.type !== 'success') {
-    return { status: 'cancelled' };
-  }
+// A iFood não tem login por redirecionamento como Shopee/ML: o lojista
+// digita este código no Portal do Parceiro e cola de volta o código de
+// autorização que o portal mostra (ver lucrei-backend/src/ifood-client).
+export function startIfoodLink(token: string) {
+  return post<IfoodLink>('/ifood/user-code', token);
+}
 
-  const { queryParams } = Linking.parse(result.url);
-  if (queryParams?.status === 'success') return { status: 'success' };
-  return { status: 'error', reason: typeof queryParams?.reason === 'string' ? queryParams.reason : undefined };
+export function finishIfoodLink(token: string, linkToken: string, authorizationCode: string) {
+  return post<{ status: 'success'; shopName: string }>('/ifood/connect', token, { linkToken, authorizationCode });
 }

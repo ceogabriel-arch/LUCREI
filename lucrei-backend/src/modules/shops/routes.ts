@@ -255,6 +255,7 @@ export async function shopRoutes(app: FastifyInstance) {
       await prisma.shopeeOAuthToken.deleteMany({ where: { shopId: shop.id } });
       await prisma.mercadoLivreOAuthToken.deleteMany({ where: { shopId: shop.id } });
       await prisma.ifoodOAuthToken.deleteMany({ where: { shopId: shop.id } });
+      await prisma.tiktokShopOAuthToken.deleteMany({ where: { shopId: shop.id } });
       const updated = await prisma.shop.update({
         where: { id: shop.id },
         data: { status: 'disconnected', disconnectedAt: new Date() },

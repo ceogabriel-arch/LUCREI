@@ -7,9 +7,12 @@ import { getValidAccessToken as getValidMercadoLivreAccessToken } from '../../li
 import { pendingWhereForShop, pendingWindowStart } from '../../lib/pending-orders';
 import { prisma } from '../../lib/prisma';
 import { getValidAccessToken } from '../../lib/shopee-token';
+import { getValidAccessToken as getValidTiktokShopAccessToken } from '../../lib/tiktokshop-token';
 import { getOrder as getIfoodOrder } from '../../ifood-client';
 import { getOrder as getMercadoLivreOrder } from '../../mercadolivre-client';
 import { getOrderDetail } from '../../shopee-client';
+import { getOrders as getTiktokShopOrders } from '../../tiktokshop-client';
+import { groupTiktokLineItems } from '../sync/tiktokshop-order-math';
 import { computeShopSummary } from '../summary/routes';
 
 type ShopForecast = { pendingCount: number; projectedProfit: number; projectedRevenue: number; readyToShipCount: number };
@@ -17,6 +20,7 @@ type PendingEvent = {
   shopeeOrderSn: string | null;
   mercadoLivreOrderId: string | null;
   ifoodOrderId: string | null;
+  tiktokShopOrderId: string | null;
   orderStatus: string;
   orderDate: Date;
   shopId: string;
@@ -81,6 +85,7 @@ async function listPendingOrders(shops: Shop[]): Promise<PendingEvent[]> {
       shopeeOrderSn: true,
       mercadoLivreOrderId: true,
       ifoodOrderId: true,
+      tiktokShopOrderId: true,
       orderStatus: true,
       orderDate: true,
       shopId: true,
@@ -89,7 +94,7 @@ async function listPendingOrders(shops: Shop[]): Promise<PendingEvent[]> {
 }
 
 function orderKey(e: PendingEvent): string {
-  return (e.shopeeOrderSn ?? e.mercadoLivreOrderId ?? e.ifoodOrderId)!;
+  return (e.shopeeOrderSn ?? e.mercadoLivreOrderId ?? e.ifoodOrderId ?? e.tiktokShopOrderId)!;
 }
 
 // Pedido ainda em processamento nunca está na tabela Order (só sincroniza
@@ -107,6 +112,14 @@ async function fetchProductLabels(events: PendingEvent[], shops: Shop[]): Promis
   for (const e of events) {
     if (!e.shopeeOrderSn) continue;
     snsByShop.set(e.shopId, [...(snsByShop.get(e.shopId) ?? []), e.shopeeOrderSn]);
+  }
+
+  // TikTok Shop tem multiget de pedido (até 50 ids por chamada, pela
+  // documentação) - agrupa por loja igual a Shopee.
+  const tiktokIdsByShop = new Map<string, string[]>();
+  for (const e of events) {
+    if (!e.tiktokShopOrderId) continue;
+    tiktokIdsByShop.set(e.shopId, [...(tiktokIdsByShop.get(e.shopId) ?? []), e.tiktokShopOrderId]);
   }
 
   await Promise.all([
@@ -160,6 +173,21 @@ async function fetchProductLabels(events: PendingEvent[], shops: Shop[]): Promis
           // idem - sem token válido ou API fora do ar, pedido segue sem label.
         }
       }),
+    ...[...tiktokIdsByShop.entries()].map(async ([shopId, ids]) => {
+      try {
+        const { accessToken, shopCipher } = await getValidTiktokShopAccessToken(shopId);
+        for (let i = 0; i < ids.length; i += 50) {
+          const orders = await getTiktokShopOrders(accessToken, shopCipher, ids.slice(i, i + 50));
+          for (const order of orders) {
+            const items = groupTiktokLineItems(order.line_items ?? []).map((it) => ({ quantity: it.quantity, name: it.name }));
+            const label = formatOrderProductLabel(items);
+            if (label) labelByKey.set(order.id, label);
+          }
+        }
+      } catch {
+        // idem - sem token válido ou API fora do ar, pedido segue sem label.
+      }
+    }),
   ]);
 
   return labelByKey;

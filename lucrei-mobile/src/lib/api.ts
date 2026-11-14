@@ -674,7 +674,7 @@ export type AdminMetrics = {
   usersByStatus: { status: SubscriptionStatus; count: number }[];
   activeSubscriptions: number;
   mrrEstimate: number;
-  shopsByProvider: { provider: 'shopee' | 'mercado_livre'; count: number }[];
+  shopsByProvider: { provider: Marketplace; count: number }[];
 };
 
 export function getAdminMetrics(token: string) {

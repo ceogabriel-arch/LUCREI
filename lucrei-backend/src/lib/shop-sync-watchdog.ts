@@ -5,6 +5,7 @@ import { prisma } from './prisma';
 import { runShopSync } from '../modules/sync/service';
 import { runShopSync as runIfoodShopSync } from '../modules/sync/ifood-service';
 import { runShopSync as runMLShopSync } from '../modules/sync/mercadolivre-service';
+import { runShopSync as runTiktokShopSync } from '../modules/sync/tiktokshop-service';
 
 // Achado ao vivo (16-18/10): a loja da Rubia ficou 3 dias sem receber pedido
 // nenhum porque o push em tempo real da Shopee (assinatura calculada em cima
@@ -53,7 +54,14 @@ export async function syncStaleShops(logger?: FastifyBaseLogger): Promise<number
       { shopId: shop.id, shopName: shop.shopName, lastSyncedAt: shop.lastSyncedAt },
       'watchdog: loja sem sincronizar há tempo demais, sincronizando sozinho'
     );
-    const sync = shop.provider === 'mercado_livre' ? runMLShopSync : shop.provider === 'ifood' ? runIfoodShopSync : runShopSync;
+    const sync =
+      shop.provider === 'mercado_livre'
+        ? runMLShopSync
+        : shop.provider === 'ifood'
+          ? runIfoodShopSync
+          : shop.provider === 'tiktok_shop'
+            ? runTiktokShopSync
+            : runShopSync;
     // runShopSync/runMLShopSync já marcam 'running'/'done'/'error' e gravam
     // lastSyncedAt sozinhos (mesmo caminho do botão manual) - erro de uma
     // loja não deve travar nem pular as outras.

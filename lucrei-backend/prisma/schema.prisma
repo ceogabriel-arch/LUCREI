@@ -41,6 +41,7 @@ enum Marketplace {
   shopee
   mercado_livre
   ifood
+  tiktok_shop
 }
 
 // Tipo de cadastro do vendedor - muda a tabela de taxas da Shopee no
@@ -167,6 +168,9 @@ model Shop {
   mercadoLivreShopId String?     @unique
   // Id do merchant na iFood - mesmo papel de shopeeShopId/mercadoLivreShopId.
   ifoodShopId        String?     @unique
+  // Id da loja no TikTok Shop (o "id" de /authorization/202309/shops) -
+  // mesmo papel de shopeeShopId/mercadoLivreShopId.
+  tiktokShopId       String?     @unique
   provider           Marketplace @default(shopee)
   shopName           String
   region             String      @default("BR")
@@ -216,6 +220,7 @@ model Shop {
   oauthToken             ShopeeOAuthToken?
   mercadoLivreOAuthToken MercadoLivreOAuthToken?
   ifoodOAuthToken        IfoodOAuthToken?
+  tiktokShopOAuthToken   TiktokShopOAuthToken?
   products               Product[]
   orders                 Order[]
   importBatches          CostImportBatch[]
@@ -267,6 +272,25 @@ model IfoodOAuthToken {
   shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
 }
 
+// Igual ao Mercado Livre: OAuth por loja com refresh token. O shopCipher
+// (devolvido por /authorization/202309/shops) é obrigatório na query de
+// quase toda chamada de API da loja - guardado junto do token porque só
+// muda se o vendedor autorizar de novo. Formato do refresh (se roda ou é
+// reutilizável) ainda não confirmado contra uma loja real - por isso sempre
+// salva o refresh_token que vier na resposta.
+model TiktokShopOAuthToken {
+  id                    String    @id @default(cuid())
+  shopId                String    @unique
+  shopCipher            String
+  accessToken           String
+  refreshToken          String
+  accessTokenExpiresAt  DateTime
+  refreshTokenExpiresAt DateTime?
+  updatedAt             DateTime  @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+}
+
 model Product {
   id                 String            @id @default(cuid())
   shopId             String
@@ -278,6 +302,9 @@ model Product {
   // (sem API de catálogo confirmada ainda, ver ifood-service.ts), custo
   // manual até o lojista preencher.
   ifoodItemId        String?
+  // Id do produto no TikTok Shop - criado sob demanda a partir do próprio
+  // pedido (mesmo esquema da iFood), custo manual até o vendedor preencher.
+  tiktokShopItemId   String?
   sku                String?
   name               String
   costPrice          Decimal           @db.Decimal(12, 2)
@@ -292,6 +319,7 @@ model Product {
   @@index([shopeeItemId])
   @@index([mercadoLivreItemId])
   @@index([ifoodItemId])
+  @@index([tiktokShopItemId])
 }
 
 model Order {
@@ -302,6 +330,7 @@ model Order {
   shopeeOrderSn        String?   @unique
   mercadoLivreOrderId  String?   @unique
   ifoodOrderId         String?   @unique
+  tiktokShopOrderId    String?   @unique
   orderStatus          String
   orderDate            DateTime
   // Quando o pedido entrou em COMPLETED na Shopee (update_time do
@@ -344,6 +373,7 @@ model OrderLineItem {
   shopeeItemId         String?
   mercadoLivreItemId   String?
   ifoodItemId          String?
+  tiktokShopItemId     String?
   // Nome do item no momento do pedido (vem do get_escrow_detail) - a Shopee
   // não devolve mais isso se o produto for excluído do catálogo depois. Sem
   // guardar aqui, um item descontinuado vira um "custo não informado" sem
@@ -370,6 +400,7 @@ model OrderLineItem {
   @@index([shopeeItemId])
   @@index([mercadoLivreItemId])
   @@index([ifoodItemId])
+  @@index([tiktokShopItemId])
 }
 
 // Rastro leve de "pedido comprado, ainda não sabemos o lucro" - alimenta só
@@ -387,6 +418,7 @@ model RecentOrderEvent {
   shopeeOrderSn       String?  @unique
   mercadoLivreOrderId String?  @unique
   ifoodOrderId        String?  @unique
+  tiktokShopOrderId   String?  @unique
   orderStatus         String
   // Preenchido com o horário em que vimos esse pedido pela primeira vez - via
   // push (Shopee) ou via sincronização periódica (Mercado Livre e iFood, que
