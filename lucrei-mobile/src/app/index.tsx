@@ -7,6 +7,7 @@ import { ActivityIndicator, Linking, Pressable, RefreshControl, ScrollView, Text
 import { AchievementsCard } from '@/components/achievements-card';
 import { AnnouncementsBanner } from '@/components/announcements-banner';
 import { BlurredValue } from '@/components/blurred-value';
+import { ConnectMarketplaceMenu } from '@/components/connect-marketplace-menu';
 import { GlassCard } from '@/components/glass-card';
 import { HistoryBackfillCard } from '@/components/history-backfill-card';
 import { IfoodConnectModal } from '@/components/ifood-connect-modal';
@@ -986,66 +987,24 @@ export default function InicioScreen() {
           <AchievementsCard totalProfit={lifetimeProfit} accountCreatedAt={state.user.createdAt} />
         )}
 
-        {/* 4 marketplaces: numa linha só no desktop, 2x2 no celular - 4 lado a
-            lado numa tela de celular cortava "Mercado Livre" no meio. */}
-        <View className="mt-8 flex-row flex-wrap gap-2 self-center" style={{ width: isDesktop ? 580 : '100%' }}>
-          <Pressable
-            onPress={handleConnectShopee}
-            disabled={connecting !== null}
-            className="flex-1 flex-row items-center justify-center gap-1.5 rounded-2xl bg-lucrei-gold py-4"
-            style={{ opacity: connecting !== null ? 0.7 : 1, minWidth: isDesktop ? undefined : '45%' }}>
-            {connecting === 'shopee' ? (
-              <ActivityIndicator color={Colors.onGold} />
-            ) : (
-              <Ionicons name="storefront-outline" size={16} color={Colors.onGold} />
-            )}
-            <Text className="text-sm font-semibold text-lucrei-onGold" numberOfLines={1}>
-              {connecting === 'shopee' ? 'Conectando...' : 'Shopee'}
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={handleConnectMercadoLivre}
-            disabled={connecting !== null}
-            className="flex-1 flex-row items-center justify-center gap-1.5 rounded-2xl bg-lucrei-gold py-4"
-            style={{ opacity: connecting !== null ? 0.7 : 1, minWidth: isDesktop ? undefined : '45%' }}>
-            {connecting === 'mercado_livre' ? (
-              <ActivityIndicator color={Colors.onGold} />
-            ) : (
-              <Ionicons name="storefront-outline" size={16} color={Colors.onGold} />
-            )}
-            <Text className="text-sm font-semibold text-lucrei-onGold" numberOfLines={1}>
-              {connecting === 'mercado_livre' ? 'Conectando...' : 'Mercado Livre'}
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={handleConnectIfood}
-            disabled={connecting !== null}
-            className="flex-1 flex-row items-center justify-center gap-1.5 rounded-2xl bg-lucrei-gold py-4"
-            style={{ opacity: connecting !== null ? 0.7 : 1, minWidth: isDesktop ? undefined : '45%' }}>
-            {connecting === 'ifood' ? (
-              <ActivityIndicator color={Colors.onGold} />
-            ) : (
-              <Ionicons name="storefront-outline" size={16} color={Colors.onGold} />
-            )}
-            <Text className="text-sm font-semibold text-lucrei-onGold" numberOfLines={1}>
-              {connecting === 'ifood' ? 'Conectando...' : 'iFood'}
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={handleConnectTiktokShop}
-            disabled={connecting !== null}
-            className="flex-1 flex-row items-center justify-center gap-1.5 rounded-2xl bg-lucrei-gold py-4"
-            style={{ opacity: connecting !== null ? 0.7 : 1, minWidth: isDesktop ? undefined : '45%' }}>
-            {connecting === 'tiktok_shop' ? (
-              <ActivityIndicator color={Colors.onGold} />
-            ) : (
-              <Ionicons name="storefront-outline" size={16} color={Colors.onGold} />
-            )}
-            <Text className="text-sm font-semibold text-lucrei-onGold" numberOfLines={1}>
-              {connecting === 'tiktok_shop' ? 'Conectando...' : 'TikTok'}
-            </Text>
-          </Pressable>
-        </View>
+        {/* Um botão só que abre a lista de marketplaces - o que não tiver
+            credencial no servidor aparece cinza "Em breve" (ver
+            ConnectMarketplaceMenu). */}
+        {state.status === 'authenticated' && (
+          <View className="mt-8">
+            <ConnectMarketplaceMenu
+              token={state.token}
+              connecting={connecting}
+              width={isDesktop ? 440 : '100%'}
+              onSelect={(marketplace) => {
+                if (marketplace === 'shopee') handleConnectShopee();
+                else if (marketplace === 'mercado_livre') handleConnectMercadoLivre();
+                else if (marketplace === 'ifood') handleConnectIfood();
+                else handleConnectTiktokShop();
+              }}
+            />
+          </View>
+        )}
         <Text className="mt-2 text-center text-xs text-lucrei-textMuted">
           {hasShop ? 'Conectar outra loja' : 'Conecte sua loja'}
         </Text>

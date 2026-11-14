@@ -33,6 +33,7 @@ import { productRoutes } from './modules/products/routes';
 import { rewardsRoutes } from './modules/rewards/routes';
 import { shopRoutes } from './modules/shops/routes';
 import { ifoodRoutes } from './modules/ifood/routes';
+import { marketplacesRoutes } from './modules/marketplaces/routes';
 import { mercadolivreRoutes } from './modules/mercadolivre/routes';
 import { tiktokshopRoutes } from './modules/tiktokshop/routes';
 import { summaryRoutes } from './modules/summary/routes';
@@ -197,6 +198,7 @@ async function main() {
   await app.register(mercadolivreRoutes);
   await app.register(ifoodRoutes);
   await app.register(tiktokshopRoutes);
+  await app.register(marketplacesRoutes);
   await app.register(syncRoutes);
   await app.register(productRoutes);
   await app.register(summaryRoutes);

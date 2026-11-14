@@ -188,6 +188,16 @@ export function getShops(token: string) {
   });
 }
 
+// Quais marketplaces o servidor consegue conectar agora (credenciais
+// configuradas) - o que vier false aparece cinza "Em breve" no menu.
+export type MarketplaceAvailability = Record<'shopee' | 'mercado_livre' | 'ifood' | 'tiktok_shop', boolean>;
+
+export function getMarketplaceAvailability(token: string) {
+  return request<MarketplaceAvailability>('/marketplaces/availability', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 export function disconnectShop(token: string, shopId: string) {
   return request<{ id: string; status: string; disconnectedAt: string }>(`/shops/${shopId}/disconnect`, {
     method: 'POST',
