@@ -38,13 +38,20 @@ describe('groupTiktokLineItems', () => {
 });
 
 describe('computeTiktokOrderCosts', () => {
-  it('sums absolute fee and shipping amounts across statement transactions', () => {
+  it('treats debits as costs and nets refunds/subsidies against them', () => {
     const costs = computeTiktokOrderCosts([
       { fee_amount: '-5.50', shipping_cost_amount: '-8' },
       { fee_amount: '1.5' },
     ]);
-    expect(costs.totalFee).toBeCloseTo(7);
+    expect(costs.totalFee).toBeCloseTo(4);
     expect(costs.shippingCost).toBe(8);
+  });
+
+  it('never returns negative costs when credits exceed debits', () => {
+    expect(computeTiktokOrderCosts([{ fee_amount: '2', shipping_cost_amount: '3' }])).toEqual({
+      totalFee: 0,
+      shippingCost: 0,
+    });
   });
 
   it('returns zero costs when there is no statement yet', () => {

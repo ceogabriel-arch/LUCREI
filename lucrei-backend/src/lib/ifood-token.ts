@@ -1,8 +1,15 @@
 import { decrypt, encrypt } from './crypto';
 import { prisma } from './prisma';
-import { refreshAccessToken } from '../ifood-client';
+import { IfoodRefreshRejectedError, refreshAccessToken } from '../ifood-client';
 
 const REFRESH_MARGIN_MS = 5 * 60 * 1000;
+
+// Gravado em Shop.syncError quando a iFood recusa o refresh (lojista removeu
+// o app no Portal do Parceiro, ou o refresh token venceu) - o
+// ifood-poll-watchdog pula a loja enquanto isso estiver lá, em vez de
+// tentar de novo a cada 30s pra sempre. Reconectar limpa.
+export const IFOOD_RECONNECT_MESSAGE =
+  'A autorização da iFood foi removida ou venceu. Reconecte a loja pelo "Conectar marketplace".';
 
 type TokenResult = { accessToken: string; merchantId: string };
 
@@ -30,7 +37,19 @@ export async function getValidAccessToken(shopId: string): Promise<TokenResult> 
   const refreshToken = decrypt(shop.ifoodOAuthToken.refreshToken);
   const refreshPromise = (async (): Promise<TokenResult> => {
     try {
-      const refreshed = await refreshAccessToken(refreshToken);
+      let refreshed;
+      try {
+        refreshed = await refreshAccessToken(refreshToken);
+      } catch (err) {
+        if (err instanceof IfoodRefreshRejectedError) {
+          await prisma.shop.update({
+            where: { id: shop.id },
+            data: { syncStatus: 'error', syncError: IFOOD_RECONNECT_MESSAGE },
+          });
+          throw new Error(IFOOD_RECONNECT_MESSAGE);
+        }
+        throw err;
+      }
       await prisma.ifoodOAuthToken.update({
         where: { shopId: shop.id },
         data: {

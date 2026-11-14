@@ -1,6 +1,8 @@
 import { checkDailyGoalReached } from '../../lib/daily-goal-notifications';
 import { acknowledgeEvents, getMerchantEvents, getOrder, type IfoodEvent } from '../../ifood-client';
-import { getValidAccessToken } from '../../lib/ifood-token';
+import { getValidAccessToken, IFOOD_RECONNECT_MESSAGE } from '../../lib/ifood-token';
+
+export { IFOOD_RECONNECT_MESSAGE };
 import { notifyOrderCompletedIfNeeded } from '../../lib/order-notifications';
 import { prisma } from '../../lib/prisma';
 import { trackRecentIfoodOrderEvent } from '../../lib/recent-order-events';
@@ -42,7 +44,9 @@ export async function syncOneIfoodOrder(shopId: string, orderId: string) {
   return processOrder(shopId, accessToken, orderId);
 }
 
-async function processOrder(shopDbId: string, accessToken: string, orderId: string) {
+// concludedAt: hora do evento CONCLUDED - a hora de criação do pedido punha
+// um pedido das 23:50 concluído às 00:30 no dia anterior.
+async function processOrder(shopDbId: string, accessToken: string, orderId: string, concludedAt?: Date) {
   const shop = await prisma.shop.findUniqueOrThrow({ where: { id: shopDbId } });
   const order = await getOrder(accessToken, orderId);
   const items = order.items ?? [];
@@ -56,7 +60,7 @@ async function processOrder(shopDbId: string, accessToken: string, orderId: stri
   const deliveryFeeToSeller = 0;
 
   const totals = computeIfoodOrderTotals(items);
-  const completedAt = order.createdAt ? new Date(order.createdAt) : new Date();
+  const completedAt = concludedAt ?? (order.createdAt ? new Date(order.createdAt) : new Date());
 
   const dbOrder = await prisma.order.upsert({
     where: { ifoodOrderId: orderId },
@@ -156,29 +160,63 @@ async function processOrder(shopDbId: string, accessToken: string, orderId: stri
 // reaparece na próxima consulta). Chamado pelo watchdog dedicado (ver
 // ifood-poll-watchdog.ts) e também é o que runShopSync usa como "sincronizar
 // agora" manual, já que não há endpoint de busca por período confirmado.
-export async function pollShopEvents(shopId: string): Promise<{ eventsProcessed: number }> {
+// Um polling por loja de cada vez - o watchdog, o "Sincronizar" manual e o
+// shop-sync-watchdog podiam rodar juntos pra mesma loja, buscar os mesmos
+// eventos ainda não confirmados e processar o mesmo pedido em paralelo
+// (criando produto duplicado, já que não há unique em shopId+ifoodItemId).
+const inFlightPolls = new Map<string, Promise<{ eventsProcessed: number }>>();
+
+export function pollShopEvents(shopId: string): Promise<{ eventsProcessed: number }> {
+  const existing = inFlightPolls.get(shopId);
+  if (existing) return existing;
+  const run = doPollShopEvents(shopId).finally(() => inFlightPolls.delete(shopId));
+  inFlightPolls.set(shopId, run);
+  return run;
+}
+
+async function doPollShopEvents(shopId: string): Promise<{ eventsProcessed: number }> {
   const { accessToken, merchantId } = await getValidAccessToken(shopId);
   const events: IfoodEvent[] = await getMerchantEvents(accessToken, merchantId);
-  if (events.length === 0) return { eventsProcessed: 0 };
 
+  // Ordem cronológica: lote fora de ordem fazia o status regredir
+  // (ex.: CONFIRMED gravado por cima de DISPATCHED).
+  events.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+  // Só confirma pra iFood o que foi processado com sucesso - evento
+  // confirmado não volta. Antes um erro passageiro (timeout, 5xx, banco)
+  // num CONCLUDED era engolido e confirmado mesmo assim: o pedido sumia do
+  // faturamento pra sempre. Sem confirmação, a iFood reenvia no próximo poll.
+  const handledIds: string[] = [];
   for (const event of events) {
-    const status = eventStatus(event);
-    if (ORDER_STATUS_CODES.has(status)) {
-      await trackRecentIfoodOrderEvent(shopId, event.orderId, status);
-    }
+    try {
+      const status = eventStatus(event);
+      if (ORDER_STATUS_CODES.has(status)) {
+        await trackRecentIfoodOrderEvent(shopId, event.orderId, status);
+      }
 
-    if (CONCLUDED_CODES.has(status)) {
-      await processOrder(shopId, accessToken, event.orderId).catch(() => {
-        // Loja fica sem esse pedido processado até o próximo polling tentar
-        // de novo - não deixa um pedido com erro travar os outros do lote.
+      if (CONCLUDED_CODES.has(status)) {
+        await processOrder(shopId, accessToken, event.orderId, new Date(event.createdAt));
+      } else if (CANCELLED_CODES.has(status)) {
+        await prisma.order.deleteMany({ where: { shopId, ifoodOrderId: event.orderId } });
+      }
+      handledIds.push(event.id);
+    } catch (err) {
+      console.error('[ifood] falha ao processar evento, fica sem confirmar pra iFood reenviar', {
+        shopId,
+        eventId: event.id,
+        orderId: event.orderId,
+        err,
       });
-    } else if (CANCELLED_CODES.has(status)) {
-      await prisma.order.deleteMany({ where: { shopId, ifoodOrderId: event.orderId } });
     }
   }
 
-  await acknowledgeEvents(accessToken, events.map((e) => e.id));
-  return { eventsProcessed: events.length };
+  await acknowledgeEvents(accessToken, handledIds);
+
+  // Sem isso o shop-sync-watchdog achava toda loja iFood "parada" (só o
+  // runShopSync gravava lastSyncedAt) e rodava sync extra a cada 3h.
+  await prisma.shop.update({ where: { id: shopId }, data: { lastSyncedAt: new Date() } });
+
+  return { eventsProcessed: handledIds.length };
 }
 
 export async function runShopSync(shopId: string) {

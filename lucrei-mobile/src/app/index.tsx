@@ -112,7 +112,7 @@ export default function InicioScreen() {
           // não dá pra retomar de onde parou.
           showAlert(
             'O link de conexão expirou',
-            'Demorou demais pra terminar o login na Shopee e o link venceu. Toque em "Conectar outra loja" e tente de novo.'
+            'Demorou demais pra terminar o login na Shopee e o link venceu. Toque em "Conectar marketplace" e tente de novo.'
           );
         } else if (result.reason === 'exchange_failed') {
           showAlert(
@@ -167,7 +167,7 @@ export default function InicioScreen() {
         } else if (result.reason === 'invalid_state') {
           showAlert(
             'O link de conexão expirou',
-            'Demorou demais pra terminar o login no Mercado Livre e o link venceu. Toque em "Conectar Mercado Livre" e tente de novo.'
+            'Demorou demais pra terminar o login no Mercado Livre e o link venceu. Toque em "Conectar marketplace" e tente de novo.'
           );
         } else if (result.reason === 'exchange_failed') {
           showAlert(
@@ -206,7 +206,7 @@ export default function InicioScreen() {
         } else if (result.reason === 'invalid_state') {
           showAlert(
             'O link de conexão expirou',
-            'Demorou demais pra terminar a autorização no TikTok Shop e o link venceu. Toque em "TikTok" e tente de novo.'
+            'Demorou demais pra terminar a autorização no TikTok Shop e o link venceu. Toque em "Conectar marketplace" e tente de novo.'
           );
         } else if (result.reason === 'exchange_failed') {
           showAlert(
@@ -219,7 +219,7 @@ export default function InicioScreen() {
             'Essa autorização não liberou nenhuma loja TikTok Shop. Confira se você está logado na conta de vendedor certa.'
           );
         } else if (result.reason === 'denied') {
-          showAlert('Autorização recusada', 'A autorização foi recusada na tela do TikTok Shop. Toque em "TikTok" pra tentar de novo.');
+          showAlert('Autorização recusada', 'A autorização foi recusada na tela do TikTok Shop. Toque em "Conectar marketplace" pra tentar de novo.');
         } else {
           showAlert('Não foi possível conectar', 'Tente novamente em instantes.');
         }

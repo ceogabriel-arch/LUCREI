@@ -40,12 +40,10 @@ export async function ifoodRoutes(app: FastifyInstance) {
   // Parceiro. O verifier volta pro app só dentro de um JWT assinado e
   // cifrado (linkToken) - assim o backend não precisa guardar estado entre
   // os dois passos e o app nunca vê o verifier em texto puro.
+  // Sem checar o limite do plano aqui: ainda não dá pra saber se é loja nova
+  // ou a reconexão de uma já conectada (que não pode ser barrada) - o limite
+  // é conferido em /ifood/connect, depois de saber qual é a loja.
   app.post('/ifood/user-code', { onRequest: [app.authenticate] }, async (request, reply) => {
-    const limitMessage = await integrationsLimitMessage(request.user.sub);
-    if (limitMessage) {
-      return reply.status(403).send({ message: limitMessage, code: 'integrations_limit_reached' });
-    }
-
     try {
       const userCode = await requestUserCode();
       const linkToken = app.jwt.sign(
@@ -83,14 +81,9 @@ export async function ifoodRoutes(app: FastifyInstance) {
       verifier = decrypt(payload.verifier);
     } catch {
       return reply.status(400).send({
-        message: 'O código de vínculo venceu (vale 10 minutos). Feche esta janela e toque em "iFood" de novo.',
+        message: 'O código de vínculo venceu (vale 10 minutos). Feche esta janela e conecte o iFood de novo pelo "Conectar marketplace".',
         code: 'link_expired',
       });
-    }
-
-    const limitMessage = await integrationsLimitMessage(userId);
-    if (limitMessage) {
-      return reply.status(403).send({ message: limitMessage, code: 'integrations_limit_reached' });
     }
 
     try {
@@ -133,9 +126,29 @@ export async function ifoodRoutes(app: FastifyInstance) {
         });
       }
 
+      // Reconectar a própria loja ativa (ex.: depois de "autorização
+      // vencida") não conta como loja nova - antes o limite contava ela
+      // mesma e, no plano de 1 loja, impedia reconectar.
+      const reconnectingOwnShop = existingShop?.status === 'active' && existingShop.userId === userId;
+      if (!reconnectingOwnShop) {
+        const limitMessage = await integrationsLimitMessage(userId);
+        if (limitMessage) {
+          return reply.status(403).send({ message: limitMessage, code: 'integrations_limit_reached' });
+        }
+      }
+
       const shop = await prisma.shop.upsert({
         where: { ifoodShopId },
-        update: { userId, status: 'active', disconnectedAt: null, shopName: merchant.name },
+        // syncStatus/syncError limpos: tira a loja do estado "reconecte"
+        // (IFOOD_RECONNECT_MESSAGE), que fazia o watchdog pular ela.
+        update: {
+          userId,
+          status: 'active',
+          disconnectedAt: null,
+          shopName: merchant.name,
+          syncStatus: null,
+          syncError: null,
+        },
         create: {
           ifoodShopId,
           provider: 'ifood',

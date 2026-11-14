@@ -114,9 +114,13 @@ export async function exchangeAuthorizationCode(authorizationCode: string, autho
   return body;
 }
 
+// 4xx no refresh = autorização revogada/vencida, não adianta tentar de novo
+// (ver IFOOD_RECONNECT_MESSAGE em lib/ifood-token.ts).
+export class IfoodRefreshRejectedError extends Error {}
+
 export async function refreshAccessToken(refreshToken: string) {
   const { clientId, clientSecret } = getConfig();
-  const { ok, body } = await fetchJson<TokenResponse>(`${API_HOST}/authentication/v1.0/oauth/token`, {
+  const { ok, status, body } = await fetchJson<TokenResponse>(`${API_HOST}/authentication/v1.0/oauth/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
     body: new URLSearchParams({
@@ -127,7 +131,9 @@ export async function refreshAccessToken(refreshToken: string) {
     }).toString(),
   });
   if (!ok || !body.accessToken) {
-    throw new Error(ifoodErrorMessage(body, 'Falha ao renovar o token da iFood.'));
+    const message = ifoodErrorMessage(body, 'Falha ao renovar o token da iFood.');
+    if (status >= 400 && status < 500) throw new IfoodRefreshRejectedError(message);
+    throw new Error(message);
   }
   return body;
 }
@@ -183,11 +189,16 @@ export async function getMerchantEvents(accessToken: string, merchantId: string)
 // próxima consulta de polling.
 export async function acknowledgeEvents(accessToken: string, eventIds: string[]) {
   if (eventIds.length === 0) return;
-  await fetchJson(`${API_HOST}/order/v1.0/events/acknowledgment`, {
+  // Falha aqui só faz a iFood reenviar (reprocessar é idempotente), mas
+  // fica no log pra não passar despercebido.
+  const { ok, status } = await fetchJson(`${API_HOST}/order/v1.0/events/acknowledgment`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(eventIds.map((id) => ({ id }))),
   });
+  if (!ok) {
+    console.error('[ifood] acknowledgment não confirmado', { status, events: eventIds.length });
+  }
 }
 
 export type IfoodOrderItem = {

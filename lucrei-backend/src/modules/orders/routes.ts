@@ -90,7 +90,13 @@ export async function orderRoutes(app: FastifyInstance) {
       });
 
       const marketplaceLabel =
-        shop.provider === 'mercado_livre' ? 'Mercado Livre' : shop.provider === 'tiktok_shop' ? 'TikTok Shop' : 'Shopee';
+        shop.provider === 'mercado_livre'
+          ? 'Mercado Livre'
+          : shop.provider === 'tiktok_shop'
+            ? 'TikTok Shop'
+            : shop.provider === 'ifood'
+              ? 'iFood'
+              : 'Shopee';
       const header = [
         'Data do pedido',
         'Nº do pedido',

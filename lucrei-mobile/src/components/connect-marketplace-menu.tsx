@@ -7,6 +7,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  StyleSheet,
   Text,
   useWindowDimensions,
   View,
@@ -37,7 +38,7 @@ const DEFAULT_AVAILABILITY: MarketplaceAvailability = {
 };
 
 const MENU_GAP = 8;
-const ESTIMATED_MENU_HEIGHT = 330;
+const ESTIMATED_MENU_HEIGHT = 360;
 const SCREEN_MARGIN = 16;
 
 type Anchor = { left: number; width: number; top?: number; bottom?: number; above: boolean };
@@ -64,6 +65,7 @@ export function ConnectMarketplaceMenu({
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<Anchor | null>(null);
   const [availability, setAvailability] = useState<MarketplaceAvailability>(DEFAULT_AVAILABILITY);
+  const closingRef = useRef(false);
 
   function animateTo(value: 0 | 1, done?: () => void) {
     Animated.timing(progress, {
@@ -75,6 +77,7 @@ export function ConnectMarketplaceMenu({
   }
 
   function openMenu() {
+    closingRef.current = false;
     getMarketplaceAvailability(token)
       .then(setAvailability)
       .catch(() => setAvailability(DEFAULT_AVAILABILITY));
@@ -104,7 +107,12 @@ export function ConnectMarketplaceMenu({
     });
   }
 
+  // Trava contra duplo clique: um segundo toque durante a animação de
+  // fechar interrompia a primeira, e o callback do .start() roda mesmo
+  // interrompido - abria duas sessões de conexão.
   function handleSelect(marketplace: Marketplace) {
+    if (closingRef.current) return;
+    closingRef.current = true;
     closeMenu(() => onSelect(marketplace));
   }
 
@@ -136,8 +144,25 @@ export function ConnectMarketplaceMenu({
         )}
       </Pressable>
 
-      <Modal visible={open} transparent animationType="none" onRequestClose={() => closeMenu()}>
-        <Pressable className="flex-1" onPress={() => closeMenu()} accessibilityLabel="Fechar menu">
+      <Modal
+        visible={open}
+        transparent
+        animationType="none"
+        statusBarTranslucent
+        navigationBarTranslucent
+        onRequestClose={() => closeMenu()}>
+        {/* Fundo como irmão do card (não envolvendo ele): envolvido, o leitor
+            de tela juntava tudo num elemento "Fechar menu" e não chegava nas
+            opções. statusBarTranslucent: sem isso, no Android edge-to-edge o
+            conteúdo do Modal começa abaixo da status bar e o menu aparecia
+            deslocado em relação ao y medido por measureInWindow. */}
+        <View className="flex-1">
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => closeMenu()}
+            accessibilityRole="button"
+            accessibilityLabel="Fechar menu"
+          />
           {anchor && (
             <Animated.View
               style={{
@@ -155,6 +180,7 @@ export function ConnectMarketplaceMenu({
               {/* Pressable vazio só pra engolir o toque dentro do card - sem
                   isso, tocar no espaço entre as linhas fechava o menu. */}
               <Pressable
+                accessible={false}
                 className="rounded-3xl border border-lucrei-border bg-lucrei-surface p-2"
                 style={{
                   shadowColor: '#000',
@@ -177,7 +203,7 @@ export function ConnectMarketplaceMenu({
               </Pressable>
             </Animated.View>
           )}
-        </Pressable>
+        </View>
       </Modal>
     </>
   );

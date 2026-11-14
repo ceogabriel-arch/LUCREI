@@ -1,7 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Clipboard from 'expo-clipboard';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { TextField } from '@/components/text-field';
@@ -32,6 +33,11 @@ export function IfoodConnectModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (copiedTimer.current) clearTimeout(copiedTimer.current);
+  }, []);
 
   const fetchLink = useCallback(
     () =>
@@ -60,9 +66,16 @@ export function IfoodConnectModal({
 
   async function handleCopy() {
     if (!link) return;
-    await Clipboard.setStringAsync(link.userCode);
+    // Pode rejeitar no web sem HTTPS/permissão - o código continua visível
+    // na tela pra digitar à mão, então só não mostra o "copiado".
+    try {
+      await Clipboard.setStringAsync(link.userCode);
+    } catch {
+      return;
+    }
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (copiedTimer.current) clearTimeout(copiedTimer.current);
+    copiedTimer.current = setTimeout(() => setCopied(false), 2000);
   }
 
   async function handleConnect() {
@@ -82,15 +95,20 @@ export function IfoodConnectModal({
   return (
     <Modal visible animationType="slide" transparent onRequestClose={onClose}>
       <View className={`flex-1 ${modal.overlayClassName} ${modal.overlayBgClassName}`}>
+        {/* Mesmo padrão de configuracoes.tsx: no celular o painel é um
+            bottom-sheet e o teclado cobria o campo do código e o "Conectar". */}
+        <KeyboardAvoidingView
+          behavior="padding"
+          style={modal.isDesktop ? { ...modal.panelWidthStyle, height: '100%', justifyContent: 'center' } : modal.panelWidthStyle}>
         <SafeAreaView edges={['bottom']} style={{ maxHeight: '90%', ...modal.panelWidthStyle }} className={`${modal.panelClassName} bg-lucrei-bg`}>
           <View className="flex-row items-center justify-between border-b border-lucrei-border px-5 py-4">
             <Text className="text-base font-semibold text-lucrei-text">Conectar loja iFood</Text>
-            <Pressable onPress={onClose} hitSlop={8}>
+            <Pressable onPress={onClose} hitSlop={8} accessibilityRole="button" accessibilityLabel="Fechar">
               <Ionicons name="close" size={22} color={Colors.textMuted} />
             </Pressable>
           </View>
 
-          <ScrollView contentContainerClassName="p-6" keyboardShouldPersistTaps="handled">
+          <ScrollView style={{ flexShrink: 1 }} contentContainerClassName="p-6" keyboardShouldPersistTaps="handled">
             <Text className="text-sm font-semibold text-lucrei-text">1. Digite este código no Portal do Parceiro</Text>
             <Text className="mt-1 text-sm text-lucrei-textMuted">
               No Portal do Parceiro iFood, vá em Integrações e toque em &quot;Ativar integração por código&quot;.
@@ -104,6 +122,8 @@ export function IfoodConnectModal({
               <>
                 <Pressable
                   onPress={handleCopy}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Código de vínculo ${link.userCode}. Toque para copiar`}
                   className="mt-4 flex-row items-center justify-center gap-3 rounded-2xl border border-lucrei-border bg-lucrei-surface py-4">
                   <Text className="text-2xl font-bold tracking-widest text-lucrei-text">{link.userCode}</Text>
                   <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={18} color={copied ? Colors.success : Colors.gold} />
@@ -133,6 +153,8 @@ export function IfoodConnectModal({
                   placeholder="XXXX-XXXX"
                   autoCapitalize="characters"
                   autoCorrect={false}
+                  returnKeyType="go"
+                  onSubmitEditing={handleConnect}
                 />
 
                 <Pressable
@@ -147,11 +169,20 @@ export function IfoodConnectModal({
                   )}
                 </Pressable>
               </>
-            ) : null}
+            ) : (
+              // Sem esse botão, falha ao gerar o código deixava só a mensagem
+              // de erro, sem saída além de fechar e abrir de novo.
+              <Pressable
+                onPress={generateLink}
+                className="mt-4 items-center rounded-xl border border-lucrei-border bg-lucrei-surface py-3.5">
+                <Text className="text-sm font-semibold text-lucrei-text">Tentar novamente</Text>
+              </Pressable>
+            )}
 
             {error ? <Text className="mt-4 text-center text-sm text-lucrei-danger">{error}</Text> : null}
           </ScrollView>
         </SafeAreaView>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );

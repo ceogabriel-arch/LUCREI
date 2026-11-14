@@ -48,18 +48,20 @@ export function groupTiktokLineItems(lineItems: TiktokLineItem[]): TiktokGrouped
 export type TiktokOrderCosts = { totalFee: number; shippingCost: number };
 
 // Taxa da plataforma e frete do vendedor vêm do extrato financeiro do pedido
-// (formato não confirmado). Os valores podem vir negativos (débito) - usa o
-// absoluto. Sem extrato ainda (pedido não repassado) = 0, o que superestima o
+// (formato não confirmado). Débito vem negativo, estorno/subsídio positivo -
+// soma com sinal e inverte (débito vira custo positivo). Usar o absoluto de
+// cada transação somava estorno como mais custo. Piso 0 só no total do
+// pedido. Sem extrato ainda (pedido não repassado) = 0, o que superestima o
 // lucro até o próximo sync dentro da janela reprocessar o pedido com o
 // extrato pronto.
 export function computeTiktokOrderCosts(transactions: TiktokStatementTransaction[]): TiktokOrderCosts {
-  let totalFee = 0;
-  let shippingCost = 0;
+  let feeSum = 0;
+  let shippingSum = 0;
   for (const t of transactions) {
-    totalFee += Math.abs(toAmount(t.fee_amount));
-    shippingCost += Math.abs(toAmount(t.shipping_cost_amount));
+    feeSum += toAmount(t.fee_amount);
+    shippingSum += toAmount(t.shipping_cost_amount);
   }
-  return { totalFee, shippingCost };
+  return { totalFee: Math.max(0, -feeSum), shippingCost: Math.max(0, -shippingSum) };
 }
 
 // Mesma alocação proporcional por valor de item que a Shopee usa - taxa e
