@@ -7,13 +7,31 @@ import { trackRecentIfoodOrderEvent } from '../../lib/recent-order-events';
 import { allocateIfoodLineItem, computeIfoodOrderTotals } from './ifood-order-math';
 import { computeLineProfit, computeTaxAllocated } from './order-math';
 
-// Códigos de evento de polling ainda não confirmados contra a documentação
-// de verdade (ver aviso em ifood-client/index.ts) - "CONCLUDED" é quando o
-// pedido finaliza (equivalente ao COMPLETED da Shopee/"paid" do ML),
-// "CANCELLED" é cancelamento. Qualquer outro código só alimenta o rastro de
-// "pedido em processamento" (RecentOrderEvent), sem sincronizar de verdade.
+// Confirmado com pedido de teste real (14/11/2026): o evento traz a sigla em
+// "code" (PLC, CFM, CON, CAN, DDCR...) e o nome completo em "fullCode"
+// (PLACED, CONFIRMED, CONCLUDED, CANCELLED...). Comparar "code" com o nome
+// completo nunca batia - nenhum pedido era processado. "CONCLUDED" é quando
+// o pedido finaliza (equivalente ao COMPLETED da Shopee/"paid" do ML).
 const CONCLUDED_CODES = new Set(['CONCLUDED']);
 const CANCELLED_CODES = new Set(['CANCELLED']);
+
+// Só esses viram status do pedido no rastro de "em processamento" - a iFood
+// também manda eventos que não são status (ex.: DDCR, pedido de código de
+// entrega), que sobrescreveriam o status com algo que o app não conhece.
+const ORDER_STATUS_CODES = new Set([
+  'PLACED',
+  'CONFIRMED',
+  'SEPARATION_STARTED',
+  'SEPARATION_ENDED',
+  'READY_TO_PICKUP',
+  'DISPATCHED',
+  'CONCLUDED',
+  'CANCELLED',
+]);
+
+function eventStatus(event: IfoodEvent) {
+  return event.fullCode ?? event.code;
+}
 
 // Usado por pending-orders.ts pra decidir o que ainda conta como "em
 // processamento" - mesmo papel de ML_RESOLVED_STATUSES.
@@ -144,14 +162,17 @@ export async function pollShopEvents(shopId: string): Promise<{ eventsProcessed:
   if (events.length === 0) return { eventsProcessed: 0 };
 
   for (const event of events) {
-    await trackRecentIfoodOrderEvent(shopId, event.orderId, event.code);
+    const status = eventStatus(event);
+    if (ORDER_STATUS_CODES.has(status)) {
+      await trackRecentIfoodOrderEvent(shopId, event.orderId, status);
+    }
 
-    if (CONCLUDED_CODES.has(event.code)) {
+    if (CONCLUDED_CODES.has(status)) {
       await processOrder(shopId, accessToken, event.orderId).catch(() => {
         // Loja fica sem esse pedido processado até o próximo polling tentar
         // de novo - não deixa um pedido com erro travar os outros do lote.
       });
-    } else if (CANCELLED_CODES.has(event.code)) {
+    } else if (CANCELLED_CODES.has(status)) {
       await prisma.order.deleteMany({ where: { shopId, ifoodOrderId: event.orderId } });
     }
   }

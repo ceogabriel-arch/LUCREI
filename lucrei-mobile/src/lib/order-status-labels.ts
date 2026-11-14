@@ -40,12 +40,16 @@ export const TIKTOKSHOP_ORDER_STATUS_LABELS: Record<string, string> = {
   CANCELLED: 'Cancelado',
 };
 
-// Status de evento de pedido da iFood - nomes ainda não confirmados contra a
-// documentação oficial (exige login, ver aviso em ifood-client/index.ts no
-// backend), usado só no detalhe da previsão de lucro.
+// Status de evento de pedido da iFood ("fullCode" do evento de polling -
+// PLACED/CONFIRMED confirmados com pedido de teste real), usado só no
+// detalhe da previsão de lucro. Separação/pronto pra retirada aparecem em
+// pedido de mercado (GROCERY).
 export const IFOOD_ORDER_STATUS_LABELS: Record<string, string> = {
   PLACED: 'Pedido recebido',
   CONFIRMED: 'Confirmado',
+  SEPARATION_STARTED: 'Em separação',
+  SEPARATION_ENDED: 'Separado',
+  READY_TO_PICKUP: 'Pronto pra retirada',
   DISPATCHED: 'Saiu pra entrega',
   CONCLUDED: 'Concluído',
   CANCELLED: 'Cancelado',

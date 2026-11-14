@@ -3,14 +3,21 @@ export type IfoodOrderItem = {
   name: string;
   quantity: number;
   unitPrice: number;
+  // Já inclui opções/adicionais (unitPrice + optionsPrice) × quantidade -
+  // confirmado no pedido de teste real. Ausente = cai no unitPrice × qtd.
+  totalPrice?: number;
 };
 
 export type IfoodOrderTotals = {
   totalItemValue: number;
 };
 
+function itemValue(item: IfoodOrderItem) {
+  return item.totalPrice ?? item.unitPrice * item.quantity;
+}
+
 export function computeIfoodOrderTotals(items: IfoodOrderItem[]): IfoodOrderTotals {
-  const totalItemValue = items.reduce((sum, it) => sum + it.unitPrice * it.quantity, 0);
+  const totalItemValue = items.reduce((sum, it) => sum + itemValue(it), 0);
   return { totalItemValue };
 }
 
@@ -26,7 +33,7 @@ export function allocateIfoodLineItem(
   commissionPercent: number,
   deliveryFeeToSeller: number
 ) {
-  const lineValue = item.unitPrice * item.quantity;
+  const lineValue = itemValue(item);
   const share = totals.totalItemValue > 0 ? lineValue / totals.totalItemValue : 0;
 
   return {
