@@ -180,6 +180,10 @@ export type Shop = {
   // null até o lojista configurar - a iFood não manda a comissão dela no
   // pedido, então só o cálculo de lucro de loja iFood usa isso.
   ifoodCommissionPercent: number | null;
+  // false (padrão) = Plano Entrega (iFood entrega, sem custo ao lojista).
+  // true = Plano Básico (o próprio lojista entrega, desconta o deliveryFee
+  // do pedido do lucro). Só loja iFood usa.
+  ifoodDeliveryBySeller: boolean;
 };
 
 export function getShops(token: string) {
@@ -227,6 +231,14 @@ export function updateShopIfoodCommission(token: string, shopId: string, ifoodCo
     method: 'PATCH',
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify({ ifoodCommissionPercent }),
+  });
+}
+
+export function updateShopIfoodDeliveryBySeller(token: string, shopId: string, ifoodDeliveryBySeller: boolean) {
+  return request<{ id: string; ifoodDeliveryBySeller: boolean }>(`/shops/${shopId}/ifood-delivery-by-seller`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ ifoodDeliveryBySeller }),
   });
 }
 

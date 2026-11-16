@@ -53,11 +53,11 @@ async function processOrder(shopDbId: string, accessToken: string, orderId: stri
 
   const commissionPercent = shop.ifoodCommissionPercent != null ? Number(shop.ifoodCommissionPercent) : 0;
   const taxRatePercent = shop.taxRatePercent != null ? Number(shop.taxRatePercent) : 0;
-  // Entrega feita pela própria iFood não custa nada ao lojista - só
-  // descontaria quando a própria loja banca a entrega, caso ainda não
-  // confirmado no payload (ver aviso no cliente) - 0 nunca superestima o
-  // custo do lojista, só pode subestimar até isso ser confirmado.
-  const deliveryFeeToSeller = 0;
+  // Plano Entrega (iFood entrega) = sem custo ao lojista, deliveryFeeToSeller
+  // fica 0. Plano Básico (lojista entrega, ver Shop.ifoodDeliveryBySeller) =
+  // desconta o total.deliveryFee do próprio pedido, que é o valor que a
+  // iFood cobrou do cliente e repassaria à entrega.
+  const deliveryFeeToSeller = shop.ifoodDeliveryBySeller ? order.total?.deliveryFee ?? 0 : 0;
 
   const totals = computeIfoodOrderTotals(items);
   const completedAt = concludedAt ?? (order.createdAt ? new Date(order.createdAt) : new Date());

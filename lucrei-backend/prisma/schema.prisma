@@ -197,6 +197,11 @@ model Shop {
   // null = nenhum desconto de comissão aplicado ainda. Só loja iFood usa.
   ifoodCommissionPercent Decimal? @db.Decimal(5, 2)
 
+  // false (padrão) = entrega feita pela própria iFood, sem custo ao lojista
+  // (Plano Entrega). true = o lojista banca a própria entrega (Plano Básico)
+  // - nesse caso o total.deliveryFee do pedido é descontado do lucro.
+  ifoodDeliveryBySeller Boolean @default(false)
+
   // Backfill de histórico (botão em Relatórios) roda em segundo plano porque
   // pode levar minutos - esses campos são o estado que o app faz polling pra
   // mostrar progresso, em vez de segurar a requisição HTTP aberta o tempo todo.

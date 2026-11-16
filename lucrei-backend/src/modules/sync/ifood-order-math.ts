@@ -26,7 +26,8 @@ export function computeIfoodOrderTotals(items: IfoodOrderItem[]): IfoodOrderTota
 // manualmente (Shop.ifoodCommissionPercent) e aplicada aqui como % sobre o
 // valor de cada item, igual o imposto (computeTaxAllocated em order-math.ts)
 // já faz. A taxa de entrega só entra no cálculo quando o PRÓPRIO lojista
-// banca a entrega (deliveryFeeToSeller vem 0 pra entrega feita pela iFood).
+// banca a entrega (Shop.ifoodDeliveryBySeller) - deliveryFeeToSeller vem 0
+// pra loja no Plano Entrega (iFood entrega, sem custo ao lojista).
 export function allocateIfoodLineItem(
   item: IfoodOrderItem,
   totals: IfoodOrderTotals,

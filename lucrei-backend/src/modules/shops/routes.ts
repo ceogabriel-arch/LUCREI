@@ -227,6 +227,7 @@ export async function shopRoutes(app: FastifyInstance) {
         historyBackfillStatus: true,
         taxRatePercent: true,
         ifoodCommissionPercent: true,
+        ifoodDeliveryBySeller: true,
         taxpayerType: true,
         syncStatus: true,
       },
@@ -319,6 +320,36 @@ export async function shopRoutes(app: FastifyInstance) {
         id: updated.id,
         ifoodCommissionPercent: updated.ifoodCommissionPercent != null ? Number(updated.ifoodCommissionPercent) : null,
       };
+    }
+  );
+
+  // Separado do endpoint de comissão acima porque o lojista pode trocar de
+  // plano (Básico ↔ Entrega) sem alterar a %. Usado por ifood-service.ts
+  // pra decidir se desconta o total.deliveryFee do pedido do lucro.
+  app.patch<{ Params: { shopId: string }; Body: { ifoodDeliveryBySeller: boolean } }>(
+    '/shops/:shopId/ifood-delivery-by-seller',
+    {
+      onRequest: [app.authenticate],
+      schema: {
+        body: {
+          type: 'object',
+          required: ['ifoodDeliveryBySeller'],
+          properties: { ifoodDeliveryBySeller: { type: 'boolean' } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const shop = await prisma.shop.findFirst({
+        where: { id: request.params.shopId, userId: request.user.sub },
+      });
+      if (!shop) return reply.status(404).send({ message: 'Loja não encontrada.' });
+
+      const updated = await prisma.shop.update({
+        where: { id: shop.id },
+        data: { ifoodDeliveryBySeller: request.body.ifoodDeliveryBySeller },
+      });
+
+      return { id: updated.id, ifoodDeliveryBySeller: updated.ifoodDeliveryBySeller };
     }
   );
 

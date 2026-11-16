@@ -1,9 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, Switch, Text, TextInput, View } from 'react-native';
 
 import { ToastBanner, useToast } from '@/components/toast';
-import { updateShopIfoodCommission, type Shop } from '@/lib/api';
+import { updateShopIfoodCommission, updateShopIfoodDeliveryBySeller, type Shop } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useColors } from '@/lib/theme';
 
@@ -25,6 +25,9 @@ export function ShopIfoodCommissionField({ shop, compact = false }: { shop: Shop
   const invalid = parsed !== null && (Number.isNaN(parsed) || parsed < 0 || parsed > 100);
   const dirty = !invalid && parsed !== shop.ifoodCommissionPercent;
 
+  const [deliveryBySeller, setDeliveryBySeller] = useState(shop.ifoodDeliveryBySeller);
+  const [savingDelivery, setSavingDelivery] = useState(false);
+
   async function handleSave() {
     if (state.status !== 'authenticated') return;
     setSaving(true);
@@ -35,6 +38,21 @@ export function ShopIfoodCommissionField({ shop, compact = false }: { shop: Shop
       show({ title: 'Não foi possível salvar', message: 'Tenta de novo em instantes.', tone: 'error' });
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleToggleDelivery(value: boolean) {
+    if (state.status !== 'authenticated') return;
+    setDeliveryBySeller(value);
+    setSavingDelivery(true);
+    try {
+      await updateShopIfoodDeliveryBySeller(state.token, shop.id, value);
+      show({ title: 'Plano salvo', message: 'Vale a partir da próxima sincronização.', tone: 'success' });
+    } catch {
+      setDeliveryBySeller(!value);
+      show({ title: 'Não foi possível salvar', message: 'Tenta de novo em instantes.', tone: 'error' });
+    } finally {
+      setSavingDelivery(false);
     }
   }
 
@@ -101,6 +119,22 @@ export function ShopIfoodCommissionField({ shop, compact = false }: { shop: Shop
         </Pressable>
       </View>
       {invalid && <Text className="mt-1.5 text-[11px] text-lucrei-danger">Digite um valor entre 0 e 100, ou deixe em branco.</Text>}
+
+      <View className="mt-3 flex-row items-center justify-between gap-2 border-t border-lucrei-border pt-2.5">
+        <View className="flex-1">
+          <Text className="text-[11px] text-lucrei-text">Quem faz a entrega?</Text>
+          <Text className="text-[11px] text-lucrei-textMuted">
+            {deliveryBySeller ? 'Minha loja entrega (Plano Básico) - desconta a taxa de entrega do lucro.' : 'A iFood entrega (Plano Entrega) - sem custo de entrega pra mim.'}
+          </Text>
+        </View>
+        <Switch
+          value={deliveryBySeller}
+          onValueChange={handleToggleDelivery}
+          disabled={savingDelivery}
+          trackColor={{ false: Colors.border, true: Colors.gold }}
+          thumbColor={Colors.onGold}
+        />
+      </View>
     </View>
   );
 }
