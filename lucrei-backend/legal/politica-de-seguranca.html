@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Política de Segurança da Informação — Lucrei</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #0A0A0B;
+    color: #FFFFFF;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 48px 24px 96px; }
+  h1 { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
+  .updated { color: #9B9BA1; font-size: 13px; margin-bottom: 32px; }
+  .nav { margin-bottom: 32px; font-size: 13px; }
+  .nav a { color: #F5C518; text-decoration: none; }
+  h2 { font-size: 18px; font-weight: 600; margin-top: 36px; margin-bottom: 8px; color: #F5C518; }
+  p, li { color: #E4E4E6; font-size: 15px; }
+  ul { padding-left: 20px; }
+  a { color: #F5C518; }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #2A2A2D; color: #E4E4E6; vertical-align: top; }
+  th { color: #9B9BA1; font-weight: 500; }
+  .footer { margin-top: 56px; padding-top: 24px; border-top: 1px solid #2A2A2D; color: #9B9BA1; font-size: 13px; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="nav"><a href="/privacidade">Política de Privacidade</a> · <a href="/termos">Termos de Uso</a></div>
+    <h1>Política de Segurança da Informação do Lucrei</h1>
+    <div class="updated">Última atualização: 16 de novembro de 2026</div>
+
+    <p>
+      Esta Política de Segurança da Informação define como
+      LUCREI SISTEMAS INTELIGENTES LTDA (CNPJ 69.323.846/0001-69)
+      ("Lucrei", "nós") protege as informações dos seus usuários e dos
+      marketplaces integrados (Shopee, Mercado Livre, iFood e TikTok Shop).
+      Ela complementa a nossa <a href="/privacidade">Política de Privacidade</a>
+      e segue a Lei Geral de Proteção de Dados (Lei nº 13.709/2018 — LGPD).
+    </p>
+
+    <h2>1. Objetivo e abrangência</h2>
+    <p>
+      Esta política vale para todas as pessoas que trabalham no Lucrei ou
+      prestam serviços a ele, para os sistemas que operam o aplicativo
+      (aplicativo móvel, site app.lucreiapp.com, servidores e banco de dados)
+      e para todos os dados tratados por eles.
+    </p>
+
+    <h2>2. Responsabilidades</h2>
+    <ul>
+      <li>A diretoria do Lucrei aprova esta política e garante os recursos para cumpri-la.</li>
+      <li>O responsável técnico mantém os controles descritos aqui, revisa os acessos e conduz a resposta a incidentes.</li>
+      <li>Todas as pessoas com acesso a dados devem conhecer e seguir esta política.</li>
+    </ul>
+
+    <h2>3. Classificação dos dados</h2>
+    <table>
+      <tr><th>Classe</th><th>Exemplos</th><th>Regras</th></tr>
+      <tr><td>Pública</td><td>Site, páginas de ajuda, termos e políticas</td><td>Pode ser divulgada livremente.</td></tr>
+      <tr><td>Interna</td><td>Documentação técnica, código-fonte</td><td>Acesso restrito à equipe do Lucrei.</td></tr>
+      <tr><td>Confidencial</td><td>Dados das lojas dos usuários: pedidos, faturamento, taxas, custos e relatórios</td><td>Acesso só pelo próprio usuário e, quando necessário para suporte ou manutenção, pelo responsável técnico. Criptografia em trânsito e em repouso.</td></tr>
+      <tr><td>Restrita</td><td>Senhas, tokens de acesso aos marketplaces, chaves de API e credenciais de infraestrutura; dados pessoais de compradores contidos nos pedidos</td><td>Criptografia adicional na aplicação, nunca exibidos em telas ou registros, acesso apenas pelos sistemas que precisam deles.</td></tr>
+    </table>
+
+    <h2>4. Controle de acesso e privilégio mínimo</h2>
+    <ul>
+      <li>Cada pessoa usa uma conta individual; contas compartilhadas não são permitidas.</li>
+      <li>O acesso aos sistemas de produção (repositório de código, servidores e banco de dados) é restrito ao responsável técnico e protegido por autenticação de dois fatores (MFA).</li>
+      <li>Cada pessoa recebe apenas os acessos necessários para a sua função (princípio do privilégio mínimo).</li>
+      <li>Os acessos são revisados periodicamente e removidos imediatamente quando a pessoa deixa a função ou a empresa.</li>
+      <li>No aplicativo, cada usuário acessa somente os dados das lojas conectadas à própria conta. Toda requisição é autenticada por token e verificada contra o dono da loja.</li>
+    </ul>
+
+    <h2>5. Criptografia</h2>
+    <ul>
+      <li><strong>Em trânsito:</strong> todo o tráfego entre aplicativo, site, servidores, banco de dados e marketplaces usa HTTPS/TLS.</li>
+      <li><strong>Em repouso:</strong> o banco de dados é criptografado pelo provedor de infraestrutura.</li>
+      <li><strong>Camada adicional:</strong> os tokens de acesso aos marketplaces são cifrados pela própria aplicação com AES-256-GCM antes de serem gravados.</li>
+      <li><strong>Senhas:</strong> armazenadas apenas como hash (bcrypt); nunca guardamos a senha em texto.</li>
+    </ul>
+
+    <h2>6. Infraestrutura e rede</h2>
+    <ul>
+      <li>O Lucrei roda em provedores de nuvem gerenciada (Railway para a aplicação e Neon para o banco de dados PostgreSQL), isolados da rede de escritório.</li>
+      <li>O banco de dados só aceita conexões autenticadas e criptografadas, com credenciais restritas ao servidor da aplicação.</li>
+      <li>Credenciais e chaves ficam em variáveis de ambiente protegidas pelos provedores e não são incluídas no código-fonte.</li>
+      <li>Os provedores monitoram e protegem a rede e o hardware da infraestrutura.</li>
+    </ul>
+
+    <h2>7. Segurança da aplicação</h2>
+    <ul>
+      <li>Limite de tentativas de login, cadastro e de requisições em geral, para dificultar ataques automatizados.</li>
+      <li>Validação dos dados recebidos pela API.</li>
+      <li>Trocar ou redefinir a senha encerra todas as sessões abertas da conta, em qualquer aparelho.</li>
+      <li>Toda mudança de código passa por verificação antes de ir para produção, e as dependências são mantidas atualizadas.</li>
+    </ul>
+
+    <h2>8. Estações de trabalho</h2>
+    <ul>
+      <li>Computadores usados no trabalho têm senha, bloqueio de tela automático e antivírus ativo e atualizado.</li>
+      <li>Sistema operacional e navegadores com atualizações automáticas ativadas.</li>
+      <li>Política de mesa limpa: informações confidenciais não ficam expostas em telas, papéis ou anotações sem supervisão.</li>
+    </ul>
+
+    <h2>9. Dados dos marketplaces e dos compradores</h2>
+    <ul>
+      <li>O Lucrei acessa os marketplaces apenas pelas integrações oficiais, com autorização do próprio lojista, e somente para leitura das informações necessárias ao cálculo de faturamento, taxas e lucro.</li>
+      <li>Dados pessoais de compradores que venham nos pedidos não são usados para nenhuma outra finalidade, não são exibidos além do necessário e não são vendidos nem compartilhados.</li>
+      <li>Coletamos apenas os dados necessários (minimização de dados).</li>
+    </ul>
+
+    <h2>10. Retenção e exclusão</h2>
+    <p>
+      Os dados são mantidos enquanto a conta estiver ativa ou pelo prazo exigido
+      em lei. O usuário pode desconectar uma loja a qualquer momento e pode
+      solicitar a exclusão da conta e dos dados pelo aplicativo ou pela página
+      <a href="/exclusao-de-conta">Exclusão de conta</a>.
+    </p>
+
+    <h2>11. Resposta a incidentes</h2>
+    <ul>
+      <li>Qualquer suspeita de incidente de segurança é tratada imediatamente: identificação, contenção, investigação da causa e correção.</li>
+      <li>Credenciais possivelmente expostas são revogadas e trocadas.</li>
+      <li>Quando houver risco ou dano relevante aos titulares, comunicamos os usuários afetados, os marketplaces envolvidos e a Autoridade Nacional de Proteção de Dados (ANPD), conforme a LGPD.</li>
+      <li>Depois de cada incidente, registramos o ocorrido e as medidas adotadas para evitar que se repita.</li>
+    </ul>
+
+    <h2>12. Fornecedores</h2>
+    <p>
+      Trabalhamos apenas com fornecedores que adotam práticas reconhecidas de
+      segurança, como os provedores de nuvem (Railway e Neon), os marketplaces
+      integrados e os meios de pagamento. Compartilhamos com eles apenas o
+      necessário para o funcionamento do serviço.
+    </p>
+
+    <h2>13. Revisão desta política</h2>
+    <p>
+      Esta política é revisada pelo menos uma vez por ano, ou antes disso em
+      caso de mudança relevante nos sistemas, nas leis ou após um incidente.
+    </p>
+
+    <h2>14. Contato e relato de vulnerabilidades</h2>
+    <p>
+      Dúvidas sobre esta política ou relatos de possíveis falhas de segurança:
+      <a href="mailto:suporte@lucreiapp.com">suporte@lucreiapp.com</a>.
+      Agradecemos relatos responsáveis e respondemos o mais rápido possível.
+    </p>
+
+    <div class="footer">Lucrei · <a href="/privacidade">Política de Privacidade</a> · <a href="/termos">Termos de Uso</a></div>
+  </div>
+</body>
+</html>

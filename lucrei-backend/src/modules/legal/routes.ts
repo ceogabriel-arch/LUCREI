@@ -7,6 +7,7 @@ const LEGAL_DIR = path.join(__dirname, '..', '..', '..', 'legal');
 
 const TERMS_HTML = readFileSync(path.join(LEGAL_DIR, 'termos-de-uso.html'), 'utf-8');
 const PRIVACY_HTML = readFileSync(path.join(LEGAL_DIR, 'politica-de-privacidade.html'), 'utf-8');
+const SECURITY_HTML = readFileSync(path.join(LEGAL_DIR, 'politica-de-seguranca.html'), 'utf-8');
 const ACCOUNT_DELETION_HTML = readFileSync(path.join(LEGAL_DIR, 'exclusao-de-conta.html'), 'utf-8');
 const ABOUT_HTML = readFileSync(path.join(LEGAL_DIR, 'sobre.html'), 'utf-8');
 const SHOPEE_CONNECT_HELP_HTML = readFileSync(path.join(LEGAL_DIR, 'como-conectar-shopee.html'), 'utf-8');
@@ -42,6 +43,13 @@ export async function legalRoutes(app: FastifyInstance) {
 
   app.get('/privacidade', async (_req, reply) => {
     reply.type('text/html; charset=utf-8').send(PRIVACY_HTML);
+  });
+
+  // Pedida no questionário de segurança e privacidade do TikTok Shop Partner
+  // Center (política de segurança, controle de acesso e classificação de
+  // dados publicadas).
+  app.get('/seguranca', async (_req, reply) => {
+    reply.type('text/html; charset=utf-8').send(SECURITY_HTML);
   });
 
   app.get('/exclusao-de-conta', async (_req, reply) => {
