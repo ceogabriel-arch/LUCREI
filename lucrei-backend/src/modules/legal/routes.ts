@@ -15,7 +15,10 @@ const SHOPEE_CONNECT_HELP_HTML = readFileSync(path.join(LEGAL_DIR, 'como-conecta
 // Imagens usadas em avisos da tela "Novidades" (ver admin/routes.ts) - ficam
 // aqui, fora de public/, porque o export web apaga e recria public/ inteiro
 // a cada deploy (ver compress:public no README/CLAUDE.md).
-const GOOGLE_PLAY_BADGE_PNG = readFileSync(path.join(LEGAL_DIR, 'images', 'google-play-badge.png'));
+// Recorte quadrado do ícone (não o selo largo "Disponível no Google Play"),
+// porque o avatar do aviso é renderizado 56x56 com crop central - o selo
+// largo ficaria cortado (announcements-banner.tsx usa contentFit="cover").
+const GOOGLE_PLAY_ICON_PNG = readFileSync(path.join(LEGAL_DIR, 'images', 'google-play-icon.png'));
 
 // Prova de dono do domínio pro Android App Links (Play Console > "Adicionar
 // domínio") - gerado por eles mesmos com o fingerprint certo do certificado
@@ -70,6 +73,6 @@ export async function legalRoutes(app: FastifyInstance) {
   });
 
   app.get('/novidades/google-play-badge.png', async (_req, reply) => {
-    reply.type('image/png').header('Cache-Control', 'public, max-age=31536000, immutable').send(GOOGLE_PLAY_BADGE_PNG);
+    reply.type('image/png').header('Cache-Control', 'public, max-age=31536000, immutable').send(GOOGLE_PLAY_ICON_PNG);
   });
 }
