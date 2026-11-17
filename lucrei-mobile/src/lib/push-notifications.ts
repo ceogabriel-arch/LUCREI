@@ -12,6 +12,19 @@ Notifications.setNotificationHandler({
   }),
 });
 
+// Token de push DESTE aparelho, guardado quando o _layout registra ele no
+// backend - o logout (auth.tsx) usa pra desvincular só esse aparelho da
+// conta. Só em memória: o registro roda de novo a cada abertura logada.
+let registeredPushToken: string | null = null;
+
+export function rememberRegisteredPushToken(pushToken: string | null) {
+  registeredPushToken = pushToken;
+}
+
+export function getRegisteredPushToken(): string | null {
+  return registeredPushToken;
+}
+
 // Retorna null (em vez de lançar) sempre que não dá pra registrar - simulador,
 // permissão negada, ou projeto sem EAS configurado (`eas init`) ainda. Quem
 // chama só decide o que fazer com o token quando ele existe.

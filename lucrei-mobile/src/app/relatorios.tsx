@@ -16,7 +16,7 @@ import {
 import { BlurredValue } from '@/components/blurred-value';
 import { DailyProfitChart } from '@/components/daily-profit-chart';
 import { GlassCard } from '@/components/glass-card';
-import { HistoryBackfillCard } from '@/components/history-backfill-card';
+import { HistoryBackfillCard, supportsHistoryBackfill } from '@/components/history-backfill-card';
 import { MissingCostList } from '@/components/missing-cost-list';
 import { PastDueBanner } from '@/components/past-due-banner';
 import { PendingOrdersModal } from '@/components/pending-orders-modal';
@@ -47,7 +47,7 @@ import { useAuth } from '@/lib/auth';
 import { useDataRefresh } from '@/lib/data-refresh';
 import { exportOrdersCsv, exportOrdersExcel, exportProductExcel, exportProductsExcel } from '@/lib/export-csv';
 import { formatBRL } from '@/lib/format';
-import { MARKETPLACE_LABELS_LOWER } from '@/lib/marketplace';
+import { MARKETPLACE_LABELS_LOWER, type Marketplace } from '@/lib/marketplace';
 import {
   IFOOD_ORDER_STATUS_LABELS,
   MERCADO_LIVRE_ORDER_STATUS_LABELS,
@@ -558,7 +558,7 @@ function ReportRangeCard({
   token,
   shopId,
   connectedAt,
-  isShopee,
+  provider,
   overLimit,
 }: {
   token: string;
@@ -566,10 +566,10 @@ function ReportRangeCard({
   // duas ações continuam sendo por loja só).
   shopId: string | null;
   connectedAt: string;
-  // Backfill de histórico só existe pra Shopee (ML ainda não sincroniza
-  // pedido) - mostrar o botão pra uma loja ML garantia falha, com um texto
-  // que ainda por cima dizia "na Shopee" pra loja errada.
-  isShopee: boolean;
+  // Marketplace da loja selecionada (null em "Todas as lojas") - decide se
+  // o backfill de histórico aparece (ver supportsHistoryBackfill: iFood não
+  // tem histórico pra puxar) e o nome do marketplace no texto do card.
+  provider: Marketplace | null;
   // Vem já calculado do pai (RelatoriosScreen), que já busca getSalesUsage()
   // uma vez só pra tela inteira - evita essa card repetir a mesma chamada.
   overLimit: boolean;
@@ -588,6 +588,10 @@ function ReportRangeCard({
   const [forecast, setForecast] = useState<OrderForecast | null>(null);
   const [pendingOrdersOpen, setPendingOrdersOpen] = useState(false);
   const prevShopIdRef = useRef<string | null>(shopId);
+  // Mesma guarda de resposta fora de ordem da Início (summaryRequestIdRef):
+  // trocar de mês/ano rápido deixava uma busca velha terminar DEPOIS da
+  // nova e sobrescrever o resumo certo com o do mês anterior.
+  const loadRequestIdRef = useRef(0);
 
   const range = useMemo(() => {
     if (mode === 'lifetime') return { from: new Date(connectedAt), to: new Date() };
@@ -596,6 +600,8 @@ function ReportRangeCard({
   }, [mode, year, month, connectedAt]);
 
   const load = useCallback(async () => {
+    const requestId = ++loadRequestIdRef.current;
+    const isStale = () => loadRequestIdRef.current !== requestId;
     if (prevShopIdRef.current !== shopId) {
       prevShopIdRef.current = shopId;
       setSummary(null);
@@ -612,11 +618,13 @@ function ReportRangeCard({
               await getCombinedSummary(token, 'all')
             : await getCombinedSummaryRange(token, range.from, range.to)
           : await getSummaryRange(token, shopId, range.from, range.to);
+      if (isStale()) return;
       setSummary(s);
     } catch {
+      if (isStale()) return;
       setSummary(null);
     } finally {
-      setLoading(false);
+      if (!isStale()) setLoading(false);
     }
   }, [token, shopId, range, mode]);
 
@@ -830,11 +838,11 @@ function ReportRangeCard({
         </Pressable>
       </View>
 
-      {/* Backfill de histórico continua sendo ação de uma loja Shopee só -
-          com "Todas as lojas" (shopId null) não tem pra qual loja apontar. */}
-      {shopId !== null && isShopee && (
+      {/* Backfill de histórico continua sendo ação de uma loja só - com
+          "Todas as lojas" (shopId null) não tem pra qual loja apontar. */}
+      {shopId !== null && provider !== null && supportsHistoryBackfill(provider) && (
         <View className="mt-2">
-          <HistoryBackfillCard token={token} shopId={shopId} onSynced={load} prominent />
+          <HistoryBackfillCard token={token} shopId={shopId} provider={provider} onSynced={load} prominent />
         </View>
       )}
     </GlassCard>
@@ -1002,7 +1010,7 @@ export default function RelatoriosScreen() {
 
       {loadState === 'no-shop' && (
         <Text className="mt-8 text-sm text-lucrei-textMuted">
-          Conecte uma loja Shopee ou Mercado Livre na tela Início pra ver seus relatórios aqui.
+          Conecte uma loja Shopee, Mercado Livre, iFood ou TikTok Shop na tela Início pra ver seus relatórios aqui.
         </Text>
       )}
 
@@ -1033,7 +1041,7 @@ export default function RelatoriosScreen() {
               token={token}
               shopId={viewingAll ? null : selectedShop!.id}
               connectedAt={viewingAll ? (selectedShop?.connectedAt ?? new Date().toISOString()) : selectedShop!.connectedAt}
-              isShopee={viewingAll ? false : selectedShop!.provider !== 'mercado_livre'}
+              provider={viewingAll ? null : selectedShop!.provider}
               overLimit={isOverLimit}
             />
           )}

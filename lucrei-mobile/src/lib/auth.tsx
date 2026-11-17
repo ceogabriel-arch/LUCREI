@@ -7,22 +7,30 @@ import {
   appleAuth as apiAppleAuth,
   cancelPlan as apiCancelPlan,
   changePassword as apiChangePassword,
+  clearPushToken as apiClearPushToken,
   deleteAccount as apiDeleteAccount,
   googleAuth as apiGoogleAuth,
   login as apiLogin,
   me as apiMe,
   selectPlan as apiSelectPlan,
+  setUnauthorizedHandler,
   signup as apiSignup,
   updateDailyGoal as apiUpdateDailyGoal,
   updateName as apiUpdateName,
   verifyApplePurchase as apiVerifyApplePurchase,
 } from '@/lib/api';
+import { showAlert } from '@/lib/alert';
 import { forgetGoogleWebSession } from '@/lib/google-web-session';
+import { getRegisteredPushToken, rememberRegisteredPushToken } from '@/lib/push-notifications';
 import { clearToken, getToken, setToken } from '@/lib/token-storage';
 
 type AuthState =
   | { status: 'loading' }
   | { status: 'unauthenticated' }
+  // Tem token salvo, mas o servidor não respondeu na abertura do app (sem
+  // internet, deploy, timeout) - NÃO é sessão inválida. Mostra uma tela de
+  // "sem conexão / Tentar de novo" em vez de jogar a pessoa no login.
+  | { status: 'offline'; token: string }
   | { status: 'authenticated'; token: string; user: AuthUser };
 
 type AuthResult = { ok: true } | { ok: false; message: string };
@@ -37,6 +45,8 @@ type AuthContextValue = {
   loginWithApple: (identityToken: string, fullName?: string) => Promise<AuthResult>;
   signup: (name: string, email: string, password: string) => Promise<AuthResult>;
   logout: () => Promise<void>;
+  // Tenta de novo restaurar a sessão salva a partir do estado 'offline'.
+  retryRestore: () => Promise<void>;
   updateName: (name: string) => Promise<AuthResult>;
   updateDailyGoal: (dailyProfitGoal: number | null) => Promise<AuthResult>;
   changePassword: (currentPassword: string | undefined, newPassword: string) => Promise<AuthResult>;
@@ -68,6 +78,38 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const tokenRef = useRef(token);
   tokenRef.current = token;
 
+  const restoreSession = useCallback(async (token: string) => {
+    // Reclamado ao vivo: "toda hora tem que ficar pondo a senha". Causa:
+    // qualquer falha aqui (rede instável, deploy do backend, um 500
+    // passageiro) derrubava a sessão igual a um token inválido de verdade -
+    // só um 401 de verdade (token/tokenVersion realmente inválidos)
+    // justifica apagar o token salvo. Pras demais falhas, tenta mais
+    // algumas vezes (rede/servidor costuma voltar em segundos) antes de
+    // desistir - e mesmo desistindo, mantém o token salvo pra próxima
+    // abertura do app tentar de novo sozinha, em vez de pedir senha à toa.
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const user = await apiMe(token);
+        setState({ status: 'authenticated', token, user });
+        return;
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 401) {
+          await clearToken();
+          setState({ status: 'unauthenticated' });
+          return;
+        }
+        if (attempt === 3) {
+          // Antes caía em 'unauthenticated' aqui - quem abria o app sem
+          // internet via a tela de login e achava que tinha sido
+          // deslogado (o token continuava salvo, mas nada dizia isso).
+          setState({ status: 'offline', token });
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
+      }
+    }
+  }, []);
+
   useEffect(() => {
     (async () => {
       const token = await getToken();
@@ -75,33 +117,47 @@ export function AuthProvider({ children }: PropsWithChildren) {
         setState({ status: 'unauthenticated' });
         return;
       }
-      // Reclamado ao vivo: "toda hora tem que ficar pondo a senha". Causa:
-      // qualquer falha aqui (rede instável, deploy do backend, um 500
-      // passageiro) derrubava a sessão igual a um token inválido de verdade -
-      // só um 401 de verdade (token/tokenVersion realmente inválidos)
-      // justifica apagar o token salvo. Pras demais falhas, tenta mais
-      // algumas vezes (rede/servidor costuma voltar em segundos) antes de
-      // desistir - e mesmo desistindo, mantém o token salvo pra próxima
-      // abertura do app tentar de novo sozinha, em vez de pedir senha à toa.
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          const user = await apiMe(token);
-          setState({ status: 'authenticated', token, user });
-          return;
-        } catch (err) {
-          if (err instanceof ApiError && err.status === 401) {
-            await clearToken();
-            setState({ status: 'unauthenticated' });
-            return;
-          }
-          if (attempt === 3) {
-            setState({ status: 'unauthenticated' });
-            return;
-          }
-          await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
-        }
-      }
+      await restoreSession(token);
     })();
+  }, [restoreSession]);
+
+  const retryRestore = useCallback(async () => {
+    const token = await getToken();
+    if (!token) {
+      setState({ status: 'unauthenticated' });
+      return;
+    }
+    await restoreSession(token);
+  }, [restoreSession]);
+
+  // 401 em qualquer requisição autenticada (ver setUnauthorizedHandler em
+  // api.ts). Sem isso, trocar a senha em outro aparelho (tokenVersion novo
+  // no backend) deixava este aqui "logado mas quebrado": toda tela dava erro
+  // e nada mandava pro login. Várias rotas devolvem 401 por motivo de
+  // negócio (senha atual errada, compra Apple inválida), então confere com
+  // /auth/me antes de derrubar a sessão - só 401 ali é token inválido de
+  // verdade. Falha de rede/timeout (status undefined) nunca derruba nada.
+  const checkingUnauthorizedRef = useRef(false);
+  useEffect(() => {
+    setUnauthorizedHandler(async (usedToken) => {
+      // Token antigo (ex: requisição que saiu antes de changePassword trocar
+      // o token) - não diz nada sobre a sessão atual.
+      if (usedToken !== tokenRef.current || checkingUnauthorizedRef.current) return;
+      checkingUnauthorizedRef.current = true;
+      try {
+        await apiMe(usedToken);
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 401 && tokenRef.current === usedToken) {
+          await clearToken();
+          rememberRegisteredPushToken(null);
+          setState({ status: 'unauthenticated' });
+          showAlert('Sessão expirada', 'Sua sessão expirou (por exemplo, a senha foi trocada). Entre de novo.');
+        }
+      } finally {
+        checkingUnauthorizedRef.current = false;
+      }
+    });
+    return () => setUnauthorizedHandler(null);
   }, []);
 
   const login = useCallback(async (email: string, password: string, rememberMe = true): Promise<AuthResult> => {
@@ -155,9 +211,21 @@ export function AuthProvider({ children }: PropsWithChildren) {
     // entender por que isso é necessário na web (o SDK nativo do Google já
     // se resolve sozinho em signInWithGoogle, não precisa disso aqui).
     forgetGoogleWebSession(email);
+    // Desvincula o push DESTE aparelho da conta antes de apagar o token -
+    // sem isso o celular continuava recebendo as vendas da conta anterior
+    // depois de sair. Best-effort e com teto de tempo: sem internet, sair
+    // da conta não pode travar esperando o servidor.
+    const pushToken = getRegisteredPushToken();
+    if (token && pushToken) {
+      await Promise.race([
+        apiClearPushToken(token, pushToken).catch(() => {}),
+        new Promise((resolve) => setTimeout(resolve, 4000)),
+      ]);
+    }
+    rememberRegisteredPushToken(null);
     await clearToken();
     setState({ status: 'unauthenticated' });
-  }, [email]);
+  }, [email, token]);
 
   const updateName = useCallback(
     async (name: string): Promise<AuthResult> => {
@@ -298,6 +366,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       loginWithApple,
       signup,
       logout,
+      retryRestore,
       updateName,
       updateDailyGoal,
       changePassword,
@@ -314,6 +383,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       loginWithApple,
       signup,
       logout,
+      retryRestore,
       updateName,
       updateDailyGoal,
       changePassword,

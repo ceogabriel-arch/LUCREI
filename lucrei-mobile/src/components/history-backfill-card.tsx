@@ -4,7 +4,17 @@ import { Pressable, Text, View } from 'react-native';
 
 import { ApiError, getSyncHistoryStatus, startSyncHistory } from '@/lib/api';
 import { showAlert } from '@/lib/alert';
+import { marketplaceLabel, type Marketplace } from '@/lib/marketplace';
 import { useColors } from '@/lib/theme';
+
+// Backfill existe de verdade no backend pra Shopee (último ano, em janelas de
+// 15 dias), Mercado Livre e TikTok Shop (histórico inteiro, sem janela). Na
+// iFood ele é um no-op - a API dela só expõe pedidos recentes - então o card
+// não aparece pra loja iFood (mostrar o botão só gerava um "0 pedidos"
+// confuso).
+export function supportsHistoryBackfill(provider: Marketplace): boolean {
+  return provider === 'shopee' || provider === 'mercado_livre' || provider === 'tiktok_shop';
+}
 
 // Botão + acompanhamento de progresso do backfill de histórico (varre até 1
 // ano pra trás, em blocos de 15 dias - limite da própria API da Shopee).
@@ -14,11 +24,13 @@ import { useColors } from '@/lib/theme';
 export function HistoryBackfillCard({
   token,
   shopId,
+  provider,
   onSynced,
   prominent = false,
 }: {
   token: string;
   shopId: string;
+  provider: Marketplace;
   // Chamado quando o backfill termina com sucesso, pra tela dona recarregar
   // os próprios dados (ex: o resumo do período em Relatórios).
   onSynced?: () => void;
@@ -30,6 +42,10 @@ export function HistoryBackfillCard({
   const [backfilling, setBackfilling] = useState(false);
   const [backfillSynced, setBackfillSynced] = useState(0);
   const [backfillProgress, setBackfillProgress] = useState({ done: 0, total: 0 });
+  const label = marketplaceLabel(provider);
+  // Só a Shopee limita a busca ao último ano (limite da própria API dela) -
+  // ML/TikTok Shop varrem o histórico inteiro do vendedor.
+  const rangeLabel = provider === 'shopee' ? 'do último ano' : 'do histórico';
 
   const pollBackfillUntilDone = useCallback(async () => {
     setBackfilling(true);
@@ -64,8 +80,8 @@ export function HistoryBackfillCard({
         if (status.status === 'done') {
           const base =
             status.ordersSynced === 0
-              ? 'Nenhum pedido novo encontrado no último ano.'
-              : `${status.ordersSynced} pedido(s) do último ano foram trazidos pro Lucrei.`;
+              ? `Nenhum pedido novo encontrado ${rangeLabel}.`
+              : `${status.ordersSynced} pedido(s) ${rangeLabel} foram trazidos pro Lucrei.`;
           showAlert('Histórico sincronizado', status.error ? `${base}\n\n${status.error}` : base);
           onSynced?.();
           break;
@@ -78,7 +94,7 @@ export function HistoryBackfillCard({
     } finally {
       setBackfilling(false);
     }
-  }, [token, shopId, onSynced]);
+  }, [token, shopId, onSynced, rangeLabel]);
 
   // Se a tela recarregar (ou a pessoa voltar pra essa tela) no meio de um
   // backfill que já estava rodando, volta a acompanhar em vez de deixar o
@@ -121,7 +137,7 @@ export function HistoryBackfillCard({
         style={prominent ? { borderColor: Colors.gold, backgroundColor: Colors.surfaceAlt } : undefined}>
         <View className="flex-row items-center justify-between">
           <Text className={prominent ? 'text-sm font-medium text-lucrei-text' : 'text-xs text-lucrei-textMuted'}>
-            Buscando histórico na Shopee...
+            Buscando histórico {provider === 'shopee' ? 'na' : 'no'} {label}...
           </Text>
           <Text className="text-xs font-medium text-lucrei-text">
             {backfillProgress.total > 0 ? `${Math.round((backfillProgress.done / backfillProgress.total) * 100)}%` : ''}
@@ -157,10 +173,10 @@ export function HistoryBackfillCard({
           <Ionicons name="time-outline" size={18} color={Colors.onGold} />
         </View>
         <View className="flex-1">
-          <Text className="text-sm font-semibold text-lucrei-text">Puxar pedidos antigos da Shopee</Text>
+          <Text className="text-sm font-semibold text-lucrei-text">Puxar pedidos antigos {provider === 'shopee' ? 'da' : 'do'} {label}</Text>
           <Text className="mt-0.5 text-xs leading-4 text-lucrei-textMuted">
-            Conectar a loja só traz pedido novo daqui pra frente. Toque aqui pra buscar o último ano de vendas de
-            uma vez.
+            Conectar a loja só traz pedido novo daqui pra frente. Toque aqui pra buscar{' '}
+            {provider === 'shopee' ? 'o último ano de vendas' : 'seu histórico de vendas'} de uma vez.
           </Text>
         </View>
         <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
@@ -172,10 +188,10 @@ export function HistoryBackfillCard({
     <View className="mt-2">
       <Pressable onPress={handleBackfill} className="flex-row items-center justify-center gap-2 rounded-xl px-4 py-3">
         <Ionicons name="time-outline" size={16} color={Colors.textMuted} />
-        <Text className="text-xs text-lucrei-textMuted">Sincronizar histórico completo (último ano)</Text>
+        <Text className="text-xs text-lucrei-textMuted">Sincronizar histórico completo{provider === 'shopee' ? ' (último ano)' : ''}</Text>
       </Pressable>
       <Text className="mt-1 text-center text-xs text-lucrei-textMuted">
-        Busca pedido por pedido na Shopee - em lojas com muitas vendas pode demorar vários minutos.
+        Busca pedido por pedido {provider === 'shopee' ? 'na' : 'no'} {label} - em lojas com muitas vendas pode demorar vários minutos.
       </Text>
     </View>
   );

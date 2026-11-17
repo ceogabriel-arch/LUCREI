@@ -376,6 +376,24 @@ export async function authRoutes(app: FastifyInstance) {
     }
   );
 
+  // Logout no app: sem isso o aparelho continuava recebendo as vendas da
+  // conta anterior depois de "Sair da conta" (o pushToken ficava gravado na
+  // conta antiga até OUTRA conta logar no mesmo aparelho). Só limpa se o
+  // token salvo ainda for o deste aparelho - a conta tem um pushToken só,
+  // e sair da conta num aparelho não pode cortar o push de outro que
+  // registrou depois.
+  app.delete<{ Body: PushTokenBody }>(
+    '/auth/push-token',
+    { onRequest: [app.authenticate], schema: { body: pushTokenSchema } },
+    async (request, reply) => {
+      await prisma.user.updateMany({
+        where: { id: request.user.sub, pushToken: request.body.token },
+        data: { pushToken: null },
+      });
+      return reply.send({ ok: true });
+    }
+  );
+
   // Manda uma notificação de teste pro token já registrado da própria
   // conta - só pra confirmar que o dispositivo está recebendo push de
   // verdade, sem mexer em pedido/dado nenhum.

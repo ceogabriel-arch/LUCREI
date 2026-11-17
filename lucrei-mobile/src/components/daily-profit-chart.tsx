@@ -7,7 +7,13 @@ import { useColors } from '@/lib/theme';
 
 type DayPoint = { date: string; profit: number };
 
-const dayFormatter = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' });
+// "2026-10-19" -> "19/10" direto da string, igual sparkline.tsx - new
+// Date("YYYY-MM-DD") é interpretado como meia-noite UTC, que no fuso do
+// Brasil (UTC-3) cai no dia ANTERIOR, então o rótulo mostrava 18/10.
+function formatShortDate(isoDate: string) {
+  const [, month, day] = isoDate.split('-');
+  return `${day}/${month}`;
+}
 
 export function DailyProfitChart({ data, height = 140 }: { data: DayPoint[]; height?: number }) {
   const Colors = useColors();
@@ -29,7 +35,7 @@ export function DailyProfitChart({ data, height = 140 }: { data: DayPoint[]; hei
     <View>
       <View className="flex-row items-baseline justify-between">
         <Text className="text-xs text-lucrei-textMuted">
-          {selected ? dayFormatter.format(new Date(selected.date)) : ''}
+          {selected ? formatShortDate(selected.date) : ''}
         </Text>
         <Text
           className="text-sm font-semibold"

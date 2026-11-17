@@ -377,7 +377,18 @@ export default function ProdutosScreen() {
       prevShopKeyRef.current = shopKey;
 
       setLoadState((prev) => (prev === 'ready' && !shopChanged ? prev : 'loading'));
-      if (shopChanged) setProducts([]);
+      // Custo digitado e ainda não salvo só é descartado ao trocar de LOJA -
+      // antes setEdits({}) rodava em todo load(), e load() roda a cada foco
+      // da aba, push de pedido novo e no triggerRefresh da Início: quem
+      // digitava vários custos e trocava de aba (ou recebia uma venda)
+      // perdia tudo sem aviso. Recarregar a mesma loja mantém as edições
+      // (chaveadas por shopeeItemId) por cima da lista nova - pendingChanges
+      // já ignora sozinho a edição que ficou igual ao valor salvo.
+      if (shopChanged) {
+        setProducts([]);
+        setEdits({});
+        setSelected(new Set());
+      }
       setReloading(true);
       try {
         // Combinado: busca o catálogo de cada loja ativa em paralelo e marca
@@ -399,8 +410,6 @@ export default function ProdutosScreen() {
         ]);
         setProducts(products);
         setUsage(salesUsage);
-        setEdits({});
-        setSelected(new Set());
         setLoadState('ready');
       } catch {
         setLoadState('error');

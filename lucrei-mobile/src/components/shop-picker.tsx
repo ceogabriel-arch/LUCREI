@@ -16,6 +16,10 @@ export function ShopPicker() {
   const Colors = useColors();
   const modal = useModalPresentation();
   const [open, setOpen] = useState(false);
+  // Só loja ATIVA conta pra abrir o seletor - loja desconectada aparecia
+  // como opção selecionável, mas selectShop numa delas não fazia nada
+  // (selectedShop nunca aponta pra desconectada), parecendo botão quebrado.
+  // Elas continuam listadas, só que desabilitadas.
   const activeShopsCount = shops.filter((s) => s.status === 'active').length;
 
   const displayName = viewingAll ? 'Todas as lojas' : (selectedShop?.shopName ?? 'Nenhuma loja conectada');
@@ -23,8 +27,8 @@ export function ShopPicker() {
   return (
     <>
       <Pressable
-        onPress={() => shops.length > 0 && setOpen(true)}
-        disabled={shops.length <= 1}
+        onPress={() => activeShopsCount > 1 && setOpen(true)}
+        disabled={activeShopsCount <= 1}
         className="mt-2 flex-row items-center self-start gap-1.5 rounded-full border px-3 py-1.5"
         style={{ borderColor: Colors.border, backgroundColor: Colors.surface }}
         hitSlop={8}>
@@ -34,7 +38,7 @@ export function ShopPicker() {
           <Ionicons name="storefront-outline" size={13} color={Colors.textMuted} />
         )}
         <Text className="text-xs font-medium text-lucrei-text">{displayName}</Text>
-        {shops.length > 1 && <Ionicons name="chevron-down" size={13} color={Colors.textMuted} />}
+        {activeShopsCount > 1 && <Ionicons name="chevron-down" size={13} color={Colors.textMuted} />}
       </Pressable>
 
       <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
@@ -61,21 +65,23 @@ export function ShopPicker() {
               )}
               {shops.map((shop) => {
                 const active = !viewingAll && shop.id === selectedShop?.id;
+                const disconnected = shop.status !== 'active';
                 return (
                   <Pressable
                     key={shop.id}
+                    disabled={disconnected}
                     onPress={() => {
                       selectShop(shop.id);
                       setOpen(false);
                     }}
                     className="flex-row items-center justify-between rounded-2xl border p-4"
-                    style={{ borderColor: active ? Colors.gold : Colors.border }}>
+                    style={{ borderColor: active ? Colors.gold : Colors.border, opacity: disconnected ? 0.5 : 1 }}>
                     <View className="flex-1 flex-row items-center gap-2.5 pr-2">
                       <MarketplaceBadge provider={shop.provider} size={20} />
                       <View className="flex-1">
                         <Text className="text-sm text-lucrei-text">{shop.shopName}</Text>
-                        {shop.status !== 'active' && (
-                          <Text className="mt-0.5 text-xs text-lucrei-textMuted">Desconectada</Text>
+                        {disconnected && (
+                          <Text className="mt-0.5 text-xs text-lucrei-textMuted">Desconectada - reconecte na Início</Text>
                         )}
                       </View>
                     </View>

@@ -43,23 +43,67 @@ export class ApiError extends Error {
   }
 }
 
+// Sem resposta nenhuma em 20s, desiste - antes um servidor travado (ou uma
+// rede de celular "pendurada") deixava spinner girando pra sempre, sem erro
+// nem "Tentar de novo".
+const REQUEST_TIMEOUT_MS = 20_000;
+
+// Registrado pelo AuthProvider (auth.tsx) - chamado com o token usado quando
+// uma requisição autenticada volta 401. Quem decide se derruba a sessão é o
+// próprio AuthProvider (confere com /auth/me antes): várias rotas devolvem
+// 401 por motivo de negócio (senha atual errada, compra Apple inválida),
+// não só por token inválido.
+let unauthorizedHandler: ((token: string) => void) | null = null;
+
+export function setUnauthorizedHandler(handler: ((token: string) => void) | null) {
+  unauthorizedHandler = handler;
+}
+
+function bearerTokenOf(headers: HeadersInit | undefined): string | null {
+  if (!headers || Array.isArray(headers) || headers instanceof Headers) return null;
+  const value = (headers as Record<string, string>).Authorization;
+  return value?.startsWith('Bearer ') ? value.slice('Bearer '.length) : null;
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (!API_URL) {
     throw new ApiError('Servidor não configurado (EXPO_PUBLIC_API_URL ausente).');
   }
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   let response: Response;
+  let body: any;
   try {
-    response = await fetch(`${API_URL}${path}`, {
-      ...options,
-      headers: { 'Content-Type': 'application/json', ...options.headers },
-    });
-  } catch {
-    throw new ApiError('Não foi possível conectar ao servidor.');
+    try {
+      response = await fetch(`${API_URL}${path}`, {
+        ...options,
+        // Content-Type só quando tem corpo de verdade - o Fastify devolve 400
+        // ("Body cannot be empty when content-type is set to
+        // 'application/json'") pra DELETE/GET sem corpo com esse header (ex:
+        // excluir aviso no painel admin).
+        headers: options.body != null ? { 'Content-Type': 'application/json', ...options.headers } : options.headers,
+        signal: controller.signal,
+      });
+    } catch {
+      // Timeout cai aqui também (abort) - sem status, igual falha de rede,
+      // pra auth.tsx nunca tratar isso como sessão inválida.
+      throw new ApiError(
+        controller.signal.aborted
+          ? 'O servidor demorou demais pra responder. Tente de novo.'
+          : 'Não foi possível conectar ao servidor.'
+      );
+    }
+    body = await response.json().catch(() => null);
+  } finally {
+    clearTimeout(timeout);
   }
 
-  const body = await response.json().catch(() => null);
   if (!response.ok) {
+    if (response.status === 401) {
+      const usedToken = bearerTokenOf(options.headers);
+      if (usedToken) unauthorizedHandler?.(usedToken);
+    }
     throw new ApiError(body?.message ?? 'Algo deu errado. Tente novamente.', response.status);
   }
   return body as T;
@@ -152,6 +196,16 @@ export function deleteAccount(token: string, password: string | undefined) {
 export function savePushToken(token: string, pushToken: string) {
   return request<{ ok: true }>('/auth/push-token', {
     method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ token: pushToken }),
+  });
+}
+
+// Chamado no logout - manda o token DESTE aparelho pra só desvincular ele
+// (sair da conta pela web não pode cortar o push do celular da pessoa).
+export function clearPushToken(token: string, pushToken: string) {
+  return request<{ ok: true }>('/auth/push-token', {
+    method: 'DELETE',
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify({ token: pushToken }),
   });

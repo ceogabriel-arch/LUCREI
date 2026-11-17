@@ -9,7 +9,7 @@ import { AnnouncementsBanner } from '@/components/announcements-banner';
 import { BlurredValue } from '@/components/blurred-value';
 import { ConnectMarketplaceMenu } from '@/components/connect-marketplace-menu';
 import { GlassCard } from '@/components/glass-card';
-import { HistoryBackfillCard } from '@/components/history-backfill-card';
+import { HistoryBackfillCard, supportsHistoryBackfill } from '@/components/history-backfill-card';
 import { IfoodConnectModal } from '@/components/ifood-connect-modal';
 import { MarketplaceBadge } from '@/components/marketplace-badge';
 import { MissingCostList } from '@/components/missing-cost-list';
@@ -81,6 +81,11 @@ export default function InicioScreen() {
   const [summaryPeriod, setSummaryPeriod] = useState<PeriodLabel | null>(null);
   const summaryRequestIdRef = useRef(0);
   const [summaryLoading, setSummaryLoading] = useState(true);
+  // Falha ao buscar o resumo deixava summary=null e caía no estado vazio de
+  // "Conecte sua loja" (com o rodapé dizendo "Loja conectada: X" ao mesmo
+  // tempo) - parecia que a loja tinha sumido. Erro de verdade agora tem
+  // estado próprio, com "Tentar de novo", igual Pedidos/Relatórios.
+  const [summaryError, setSummaryError] = useState(false);
   const [perShopProfit, setPerShopProfit] = useState<
     { shopId: string; shopName: string; provider: Marketplace; profit: number }[]
   >([]);
@@ -89,7 +94,11 @@ export default function InicioScreen() {
   const [lifetimeProfit, setLifetimeProfit] = useState<number | null>(null);
   const [usage, setUsage] = useState<SalesUsage | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [syncing, setSyncing] = useState(false);
+  // Guarda QUAL loja está sincronizando (não só true/false) - trocar de
+  // loja no meio de um sync não pode deixar o botão da loja nova preso em
+  // "Sincronizando..." (nem apagar o da loja certa ao voltar).
+  const [syncingShopId, setSyncingShopId] = useState<string | null>(null);
+  const syncing = syncingShopId !== null && syncingShopId === selectedShop?.id;
   const [pendingOrdersOpen, setPendingOrdersOpen] = useState(false);
 
   async function handleConnectShopee() {
@@ -282,6 +291,7 @@ export default function InicioScreen() {
       setSummaryPeriod(null);
       setPerShopProfit([]);
       setUsage(null);
+      setSummaryError(false);
       setSummaryLoading(false);
       return;
     }
@@ -289,9 +299,13 @@ export default function InicioScreen() {
     try {
       if (viewingAll) {
         const activeShops = shops.filter((s) => s.status === 'active');
-        const [combined, perShop, salesUsage] = await Promise.all([
+        // allSettled no lucro por loja: uma loja só com problema (token
+        // vencido, marketplace fora do ar) derrubava o Promise.all inteiro e
+        // escondia o resumo combinado de TODAS as lojas. Loja que falhou só
+        // fica de fora da lista "Lucro por loja".
+        const [combined, perShopResults, salesUsage] = await Promise.all([
           getCombinedSummary(token, PERIOD_TO_API[period]),
-          Promise.all(
+          Promise.allSettled(
             activeShops.map((shop) =>
               getSummary(token, shop.id, PERIOD_TO_API[period]).then((s) => ({
                 shopId: shop.id,
@@ -304,10 +318,12 @@ export default function InicioScreen() {
           getSalesUsage(token),
         ]);
         if (isStale()) return;
+        const perShop = perShopResults.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []));
         setSummary(combined);
         setSummaryPeriod(period);
         setPerShopProfit(perShop);
         setUsage(salesUsage);
+        setSummaryError(false);
       } else {
         const [s, salesUsage] = await Promise.all([
           getSummary(token, selectedShop!.id, PERIOD_TO_API[period]),
@@ -318,6 +334,7 @@ export default function InicioScreen() {
         setSummaryPeriod(period);
         setPerShopProfit([]);
         setUsage(salesUsage);
+        setSummaryError(false);
       }
     } catch {
       if (isStale()) return;
@@ -325,6 +342,7 @@ export default function InicioScreen() {
       setSummaryPeriod(null);
       setPerShopProfit([]);
       setUsage(null);
+      setSummaryError(true);
     } finally {
       if (!isStale()) setSummaryLoading(false);
     }
@@ -410,18 +428,57 @@ export default function InicioScreen() {
   // Mesmo botão de "Sincronizar agora" que já existia em Pedidos, mas
   // pedido explicitamente também pra Início - reportado ao vivo que a
   // pessoa não achava onde sincronizar sem entrar em Pedidos primeiro.
-  const pollSyncUntilDone = useCallback(async () => {
+  //
+  // O loop de polling vive vários segundos - antes ele fechava sobre o
+  // selectedShop/loadSummary da loja A, e terminar DEPOIS de trocar pra
+  // loja B recarregava o resumo de A por cima da tela de B (o id novo de
+  // request passava pela guarda de resposta velha do loadSummary). Agora o
+  // loop é amarrado a um shopId fixo, para sozinho se a loja selecionada
+  // mudar (ou a tela desmontar), e sempre chama a versão MAIS RECENTE das
+  // funções de recarga via ref.
+  const selectedShopIdRef = useRef<string | null>(selectedShop?.id ?? null);
+  const tokenRef = useRef(token);
+  const reloadAfterSyncRef = useRef(() => Promise.all([refreshShops(), loadSummary(), loadForecast()]));
+  useEffect(() => {
+    selectedShopIdRef.current = selectedShop?.id ?? null;
+    tokenRef.current = token;
+    reloadAfterSyncRef.current = () => Promise.all([refreshShops(), loadSummary(), loadForecast()]);
+  });
+  // Qual loja tem um loop de polling rodando agora - evita dois loops em
+  // paralelo pra mesma loja (ex: efeito de troca de loja + botão Sincronizar).
+  const pollingShopIdRef = useRef<string | null>(null);
+  // Cada loop ganha um número; trocar de loja incrementa e invalida o loop
+  // anterior de vez - só comparar shopId deixava o loop velho "reviver" se a
+  // pessoa voltasse pra mesma loja antes dele acordar do setTimeout.
+  const pollGenerationRef = useRef(0);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      pollingShopIdRef.current = null;
+    };
+  }, []);
+
+  const pollSyncUntilDone = useCallback(async (shopId: string) => {
+    if (pollingShopIdRef.current === shopId) return;
+    pollingShopIdRef.current = shopId;
+    const generation = ++pollGenerationRef.current;
+    const stillCurrent = () =>
+      mountedRef.current && pollGenerationRef.current === generation && selectedShopIdRef.current === shopId;
     const MAX_CONSECUTIVE_FAILURES = 15;
     let consecutiveFailures = 0;
     try {
       // eslint-disable-next-line no-constant-condition
       while (true) {
         await new Promise((r) => setTimeout(r, 3000));
-        if (!token || !selectedShop) break;
+        const currentToken = tokenRef.current;
+        if (!stillCurrent() || !currentToken) break;
         let status;
         try {
-          status = await getSyncStatus(token, selectedShop.id);
+          status = await getSyncStatus(currentToken, shopId);
         } catch (err) {
+          if (!stillCurrent()) break;
           consecutiveFailures++;
           if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
             showAlert('Não foi possível sincronizar', err instanceof ApiError ? err.message : 'Verifique sua internet e tente de novo.');
@@ -429,9 +486,10 @@ export default function InicioScreen() {
           }
           continue;
         }
+        if (!stillCurrent()) break;
         consecutiveFailures = 0;
         if (status.status === 'done') {
-          await Promise.all([refreshShops(), loadSummary(), loadForecast()]);
+          await reloadAfterSyncRef.current();
           break;
         }
         if (status.status === 'error') {
@@ -440,17 +498,31 @@ export default function InicioScreen() {
         }
       }
     } finally {
-      setSyncing(false);
+      if (pollGenerationRef.current === generation) pollingShopIdRef.current = null;
+      // Só apaga o "Sincronizando..." dessa loja se nenhum loop NOVO já
+      // estiver acompanhando ela (ex: a pessoa voltou pra essa loja).
+      if (mountedRef.current && pollingShopIdRef.current !== shopId) {
+        setSyncingShopId((prev) => (prev === shopId ? null : prev));
+      }
     }
-  }, [token, selectedShop, refreshShops, loadSummary, loadForecast]);
+  }, []);
 
   useEffect(() => {
+    // Trocou de loja: qualquer loop da loja anterior para sozinho (ver
+    // stillCurrent acima); o botão já segue a loja nova sozinho (ver
+    // syncingShopId).
+    pollingShopIdRef.current = null;
+    pollGenerationRef.current++;
     if (!token || !selectedShop) return;
-    getSyncStatus(token, selectedShop.id)
+    const shopId = selectedShop.id;
+    getSyncStatus(token, shopId)
       .then((status) => {
+        if (selectedShopIdRef.current !== shopId || !mountedRef.current) return;
         if (status.status === 'running') {
-          setSyncing(true);
-          pollSyncUntilDone();
+          setSyncingShopId(shopId);
+          pollSyncUntilDone(shopId);
+        } else if (pollingShopIdRef.current !== shopId) {
+          setSyncingShopId((prev) => (prev === shopId ? null : prev));
         }
       })
       .catch(() => {});
@@ -459,15 +531,22 @@ export default function InicioScreen() {
 
   async function handleSync() {
     if (!token || !selectedShop) return;
-    setSyncing(true);
+    const shopId = selectedShop.id;
+    setSyncingShopId(shopId);
     try {
-      await startSync(token, selectedShop.id);
+      await startSync(token, shopId);
     } catch (err) {
-      setSyncing(false);
+      setSyncingShopId((prev) => (prev === shopId ? null : prev));
       showAlert('Não foi possível sincronizar', err instanceof ApiError ? err.message : 'Tenta de novo em instantes.');
       return;
     }
-    pollSyncUntilDone();
+    if (selectedShopIdRef.current !== shopId) {
+      // Trocou de loja enquanto o startSync voltava - não acompanha (a loja
+      // nova confere o próprio status ao ser selecionada).
+      setSyncingShopId((prev) => (prev === shopId ? null : prev));
+      return;
+    }
+    pollSyncUntilDone(shopId);
   }
 
   async function handleRefresh() {
@@ -734,11 +813,14 @@ export default function InicioScreen() {
                       : 0;
                     const showNet =
                       !stillLoading && summary && summary.profit === 0 && summary.itemsMissingCost > 0 && netBeforeProductCost !== 0;
+                    // "Você lucrou R$ -50,00" em dourado lia como lucro -
+                    // prejuízo ganha título e cor de perigo próprios.
+                    const isLoss = !stillLoading && !showNet && !!summary && summary.profit < 0;
                     return (
                       <>
                         <View className="flex-row items-center gap-2">
                           <Text className="text-sm text-lucrei-textMuted">
-                            {showNet ? 'Líquido (falta custo do produto)' : 'Você lucrou'}
+                            {showNet ? 'Líquido (falta custo do produto)' : isLoss ? 'Prejuízo no período' : 'Você lucrou'}
                           </Text>
                           {!stillLoading && summaryLoading && <ActivityIndicator size="small" color={Colors.textMuted} />}
                         </View>
@@ -759,7 +841,7 @@ export default function InicioScreen() {
                           <>
                             <Text
                               className={isDesktop ? 'mt-1 text-6xl font-bold' : 'mt-1 text-5xl font-bold'}
-                              style={{ color: showNet ? Colors.text : Colors.gold }}>
+                              style={{ color: showNet ? Colors.text : isLoss ? Colors.danger : Colors.gold }}>
                               {formatBRL(showNet ? netBeforeProductCost : summary!.profit)}
                             </Text>
                             {/* Mesmo raciocínio do Faturamento: pedido ainda
@@ -833,13 +915,20 @@ export default function InicioScreen() {
                 pedidos antigos" e não sabia que existia um botão pra isso
                 (reportado ao vivo, o botão só existia escondido lá em
                 Relatórios). Só pra loja selecionada de verdade (não "Todas
-                as lojas") e só Shopee (ML ainda não sincroniza pedido) -
-                some sozinho depois que o histórico já foi puxado uma vez. */}
-            {token && !viewingAll && selectedShop && selectedShop.provider !== 'mercado_livre' && selectedShop.historyBackfillStatus !== 'done' && (
+                as lojas") e só marketplace que tem backfill de verdade no
+                backend (Shopee, Mercado Livre, TikTok Shop - iFood não tem
+                histórico pra puxar) - some sozinho depois que o histórico já
+                foi puxado uma vez. */}
+            {token &&
+              !viewingAll &&
+              selectedShop &&
+              supportsHistoryBackfill(selectedShop.provider) &&
+              selectedShop.historyBackfillStatus !== 'done' && (
               <View className="mt-4">
                 <HistoryBackfillCard
                   token={token}
                   shopId={selectedShop.id}
+                  provider={selectedShop.provider}
                   prominent
                   onSynced={() => {
                     refreshShops();
@@ -965,6 +1054,14 @@ export default function InicioScreen() {
               </View>
             )}
           </>
+        ) : hasShop && summaryError ? (
+          <GlassCard className="mt-6 items-center gap-3 px-6 py-10">
+            <Ionicons name="cloud-offline-outline" size={32} color={Colors.textMuted} />
+            <Text className="text-center text-sm text-lucrei-textMuted">Não foi possível carregar seu resumo.</Text>
+            <Pressable onPress={() => loadSummary()} className="rounded-xl bg-lucrei-surface px-4 py-2">
+              <Text className="text-sm text-lucrei-gold">Tentar de novo</Text>
+            </Pressable>
+          </GlassCard>
         ) : (
           // Sem loja conectada ainda - antes mostrava um período/lucro/KPIs
           // de exemplo com números inventados (ex: "R$ 40.250,00"), o que
@@ -973,7 +1070,7 @@ export default function InicioScreen() {
           <GlassCard className="mt-6 items-center px-6 py-12">
             <Ionicons name="storefront-outline" size={32} color={Colors.textMuted} />
             <Text className="mt-3 text-center text-base font-semibold text-lucrei-text">
-              Conecte sua loja Shopee, Mercado Livre ou iFood pra ver seu lucro real aqui
+              Conecte sua loja Shopee, Mercado Livre, iFood ou TikTok Shop pra ver seu lucro real aqui
             </Text>
             <Text className="mt-1 max-w-xs text-center text-sm text-lucrei-textMuted">
               Faturamento, custos e lucro de cada venda aparecem automaticamente assim que você conectar.
@@ -1015,7 +1112,7 @@ export default function InicioScreen() {
             onConnected={handleIfoodConnected}
           />
         )}
-        {!stillLoading && (
+        {!stillLoading && (hasShop || showingRealData) && (
           <Text className="mt-3 text-center text-xs text-lucrei-textMuted">
             {(() => {
               // selectedShop só é lido DENTRO de showingRealData/hasShop -
@@ -1025,7 +1122,7 @@ export default function InicioScreen() {
               // null" pra quem não tem nenhuma loja ativa (só uma
               // desconectada, por exemplo) - selectedShop!.shopName rodava
               // mesmo indo cair no fallback "conecte sua loja" logo depois.
-              if (showingRealData) {
+              if (showingRealData || summaryError) {
                 const shopLabel = viewingAll ? 'Todas as lojas' : selectedShop!.shopName;
                 return `Loja conectada: ${shopLabel}.`;
               }
@@ -1033,7 +1130,9 @@ export default function InicioScreen() {
                 const shopLabel = viewingAll ? 'Todas as lojas' : selectedShop!.shopName;
                 return `Loja conectada: ${shopLabel}. Ainda sem pedidos sincronizados nesse período.`;
               }
-              return 'Os números acima são um exemplo. Conecte sua loja para ver o seu lucro real.';
+              // Sem loja ativa: não tem mais números de exemplo na tela (ver
+              // estado vazio acima), então não mostra rodapé nenhum.
+              return null;
             })()}
           </Text>
         )}

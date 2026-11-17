@@ -6,7 +6,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import * as SystemUI from 'expo-system-ui';
 import { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 import AppTabs from '@/components/app-tabs';
@@ -19,7 +19,7 @@ import { savePushToken } from '@/lib/api';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { DataRefreshProvider, useDataRefresh } from '@/lib/data-refresh';
 import { PeriodProvider } from '@/lib/period';
-import { registerForPushNotifications } from '@/lib/push-notifications';
+import { registerForPushNotifications, rememberRegisteredPushToken } from '@/lib/push-notifications';
 import { SelectedShopProvider } from '@/lib/selected-shop';
 import { TabBarVisibilityProvider } from '@/lib/tab-bar-visibility';
 import { AppThemeProvider, ThemeContext, useAppTheme } from '@/lib/theme';
@@ -36,8 +36,46 @@ Sentry.init({
 
 type AuthScreen = 'login' | 'signup';
 
+// Token salvo, mas o servidor não respondeu na abertura (ver estado
+// 'offline' em auth.tsx) - antes isso caía direto na tela de login, e a
+// pessoa achava que tinha sido deslogada só por estar sem internet.
+function OfflineScreen() {
+  const { retryRestore, logout } = useAuth();
+  const { colors } = useAppTheme();
+  const [retrying, setRetrying] = useState(false);
+
+  async function handleRetry() {
+    setRetrying(true);
+    try {
+      await retryRestore();
+    } finally {
+      setRetrying(false);
+    }
+  }
+
+  return (
+    <View className="flex-1 items-center justify-center gap-3 bg-lucrei-bg px-8">
+      <Text className="text-center text-lg font-semibold text-lucrei-text">Sem conexão com o servidor</Text>
+      <Text className="text-center text-sm text-lucrei-textMuted">
+        Não conseguimos falar com o Lucrei agora. Confira sua internet e tente de novo - você continua conectado.
+      </Text>
+      <Pressable
+        onPress={handleRetry}
+        disabled={retrying}
+        className="mt-2 rounded-xl bg-lucrei-surface px-4 py-2"
+        style={{ opacity: retrying ? 0.6 : 1 }}>
+        {retrying ? <ActivityIndicator size="small" color={colors.gold} /> : <Text className="text-sm text-lucrei-gold">Tentar de novo</Text>}
+      </Pressable>
+      <Pressable onPress={logout} disabled={retrying} hitSlop={8} className="mt-2">
+        <Text className="text-xs text-lucrei-textMuted">Sair da conta</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 function RootNavigator() {
   const { state } = useAuth();
+  const { scheme } = useAppTheme();
   const [screen, setScreen] = useState<AuthScreen>('login');
   const { triggerRefresh } = useDataRefresh();
 
@@ -51,7 +89,11 @@ function RootNavigator() {
     if (state.status !== 'authenticated') return;
     const token = state.token;
     registerForPushNotifications().then((pushToken) => {
-      if (pushToken) savePushToken(token, pushToken).catch(() => {});
+      if (!pushToken) return;
+      // Guarda o token deste aparelho pro logout conseguir desvinculá-lo da
+      // conta (ver logout em auth.tsx).
+      rememberRegisteredPushToken(pushToken);
+      savePushToken(token, pushToken).catch(() => {});
     });
   }, [state.status]);
 
@@ -77,8 +119,18 @@ function RootNavigator() {
   if (state.status === 'authenticated') {
     return (
       <DesktopShell>
+        <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
         <AppTabs />
       </DesktopShell>
+    );
+  }
+
+  if (state.status === 'offline') {
+    return (
+      <>
+        <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+        <OfflineScreen />
+      </>
     );
   }
 
@@ -92,6 +144,10 @@ function RootNavigator() {
   // (cobre o que usa Colors.xxx direto, tipo a logo clara/escura e ícones).
   return (
     <View style={[{ flex: 1 }, vars(DarkCssVars)]}>
+      {/* Status bar clara fixa, acompanhando o visual escuro fixo do login -
+          seguir o tema salvo deixava ícones pretos em cima do fundo preto
+          pra quem usa o tema "Claro". */}
+      <StatusBar style="light" />
       <ThemeContext.Provider
         value={{ preference: 'dark', setPreference: () => {}, scheme: 'dark', colors: DarkColors }}>
         {screen === 'login' ? (
@@ -130,7 +186,6 @@ function ThemedNavigation() {
   return (
     <View style={[{ flex: 1 }, vars(scheme === 'dark' ? DarkCssVars : LightCssVars)]}>
       <NavigationThemeProvider value={navigationTheme}>
-        <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
         <AuthProvider>
           <SelectedShopProvider>
             <PeriodProvider>

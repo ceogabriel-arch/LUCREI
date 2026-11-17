@@ -218,11 +218,14 @@ function PlanCard({
   async function handleViewInvoice() {
     if (state.status !== 'authenticated') return;
     // Mesma restrição do handlePressSubscribe acima - essa fatura também é
-    // um link de pagamento da HyperCash.
+    // um link de pagamento da HyperCash. No iOS a mensagem fica neutra de
+    // propósito: mandar pagar "pelo site" (com o endereço) é exatamente o
+    // tipo de chamada pra compra fora do app que a Apple recusa pela
+    // Guideline 3.1.1 - não pode nem citar o caminho alternativo.
     if (Platform.OS === 'ios') {
       showAlert(
-        'Pague pelo site',
-        'Por enquanto, pra pagar uma fatura em aberto, acesse app.lucreiapp.com pelo navegador. Depois é só abrir o app de novo.'
+        'Pagamento pendente',
+        'Essa assinatura tem um pagamento pendente que não pode ser concluído pelo app no iPhone.'
       );
       return;
     }
@@ -236,12 +239,24 @@ function PlanCard({
       }
       pendingTab?.close();
       showAlert('Nenhuma fatura', 'Não encontramos uma fatura em aberto para esse plano.');
+    } catch (err) {
+      // Sem isso a aba aberta de antemão (openPendingTab, pra não cair no
+      // bloqueador de pop-up) ficava em branco pra sempre e nenhum aviso
+      // aparecia quando a busca da fatura falhava.
+      pendingTab?.close();
+      showAlert('Erro', err instanceof ApiError ? err.message : 'Não foi possível abrir a fatura.');
     } finally {
       setCheckingInvoice(false);
     }
   }
 
-  const showInvoiceLink = isCurrent && (user?.subscriptionStatus === 'trialing' || user?.subscriptionStatus === 'past_due');
+  // No iOS, "Ver fatura / configurar pagamento" durante o teste só levaria
+  // pra um pagamento fora da App Store (ver handleViewInvoice) - quem está
+  // em teste assina pelos botões normais (compra da Apple). Só o aviso de
+  // pagamento pendente continua aparecendo lá.
+  const showInvoiceLink =
+    isCurrent &&
+    (user?.subscriptionStatus === 'past_due' || (user?.subscriptionStatus === 'trialing' && Platform.OS !== 'ios'));
 
   return (
     <GlassCard className="mt-3 p-5" borderRadius={16}>
@@ -373,7 +388,11 @@ function PlanCard({
             <ActivityIndicator size="small" color={Colors.gold} />
           ) : (
             <Text className="text-xs font-medium text-lucrei-gold">
-              {user?.subscriptionStatus === 'past_due' ? 'Pagamento pendente — ver fatura' : 'Ver fatura / configurar pagamento'}
+              {user?.subscriptionStatus === 'past_due'
+                ? Platform.OS === 'ios'
+                  ? 'Pagamento pendente'
+                  : 'Pagamento pendente — ver fatura'
+                : 'Ver fatura / configurar pagamento'}
             </Text>
           )}
         </Pressable>
