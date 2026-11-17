@@ -2,6 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { View } from 'react-native';
 
+import { IfoodLogo } from '@/components/ifood-logo';
 import type { Marketplace } from '@/lib/marketplace';
 import { useColors } from '@/lib/theme';
 
@@ -16,13 +17,7 @@ export function MarketplaceBadge({ provider, size = 22 }: { provider: Marketplac
   const Colors = useColors();
 
   if (provider === 'ifood') {
-    // Sem ícone isolado da iFood ainda (ver os outros dois em
-    // assets/images) - usa um ícone genérico até existir um ifood-icon.png.
-    return (
-      <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-        <Ionicons name="fast-food-outline" size={size * 0.82} color={Colors.text} />
-      </View>
-    );
+    return <IfoodLogo size={size} />;
   }
 
   if (provider === 'tiktok_shop') {
