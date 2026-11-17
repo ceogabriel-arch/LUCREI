@@ -12,6 +12,11 @@ const ACCOUNT_DELETION_HTML = readFileSync(path.join(LEGAL_DIR, 'exclusao-de-con
 const ABOUT_HTML = readFileSync(path.join(LEGAL_DIR, 'sobre.html'), 'utf-8');
 const SHOPEE_CONNECT_HELP_HTML = readFileSync(path.join(LEGAL_DIR, 'como-conectar-shopee.html'), 'utf-8');
 
+// Imagens usadas em avisos da tela "Novidades" (ver admin/routes.ts) - ficam
+// aqui, fora de public/, porque o export web apaga e recria public/ inteiro
+// a cada deploy (ver compress:public no README/CLAUDE.md).
+const GOOGLE_PLAY_BADGE_PNG = readFileSync(path.join(LEGAL_DIR, 'images', 'google-play-badge.png'));
+
 // Prova de dono do domínio pro Android App Links (Play Console > "Adicionar
 // domínio") - gerado por eles mesmos com o fingerprint certo do certificado
 // que assina o app. Rota explícita (não dentro de public/) porque
@@ -62,5 +67,9 @@ export async function legalRoutes(app: FastifyInstance) {
 
   app.get('/como-conectar-shopee', async (_req, reply) => {
     reply.type('text/html; charset=utf-8').send(SHOPEE_CONNECT_HELP_HTML);
+  });
+
+  app.get('/novidades/google-play-badge.png', async (_req, reply) => {
+    reply.type('image/png').header('Cache-Control', 'public, max-age=31536000, immutable').send(GOOGLE_PLAY_BADGE_PNG);
   });
 }
