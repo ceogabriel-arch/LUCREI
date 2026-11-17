@@ -4,6 +4,7 @@ import { encrypt } from '../../lib/crypto';
 import { sendShopReconnectAttemptEmail } from '../../lib/email';
 import { getValidAccessToken as getValidMercadoLivreAccessToken } from '../../lib/mercadolivre-token';
 import { prisma } from '../../lib/prisma';
+import { isSyncBlockedCached } from '../../lib/sync-access';
 import { trackRecentMercadoLivreOrderEvent } from '../../lib/recent-order-events';
 import { exchangeCodeForToken, getAuthorizationUrl, getOrder, getUser } from '../../mercadolivre-client';
 import { ML_CANCELLED_STATUSES, runShopSync, syncOneMercadoLivreOrder } from '../sync/mercadolivre-service';
@@ -195,6 +196,12 @@ export async function mercadolivreRoutes(app: FastifyInstance) {
       where: { mercadoLivreShopId, provider: 'mercado_livre', status: 'active' },
     });
     if (!shop) return;
+
+    // Conta bloqueada (pagamento atrasado / limite de vendas) não sincroniza
+    // nem pelo botão - a notificação já foi respondida 200 lá em cima (a ML
+    // não fica reenviando), e o sync periódico pega esse pedido depois do
+    // pagamento/upgrade.
+    if (await isSyncBlockedCached(shop.userId)) return;
 
     const { accessToken } = await getValidMercadoLivreAccessToken(shop.id);
     const order = await getOrder(accessToken, orderId);

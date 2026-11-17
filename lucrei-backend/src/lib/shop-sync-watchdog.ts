@@ -2,6 +2,7 @@ import type { FastifyBaseLogger } from 'fastify';
 
 import { mapLimit } from './concurrency';
 import { prisma } from './prisma';
+import { isSyncBlockedCached } from './sync-access';
 import { runShopSync } from '../modules/sync/service';
 import { runShopSync as runIfoodShopSync } from '../modules/sync/ifood-service';
 import { runShopSync as runMLShopSync } from '../modules/sync/mercadolivre-service';
@@ -43,13 +44,25 @@ export async function syncStaleShops(logger?: FastifyBaseLogger): Promise<number
   const now = Date.now();
   const candidates = await prisma.shop.findMany({
     where: { status: 'active', syncStatus: { not: 'running' } },
-    select: { id: true, shopName: true, provider: true, status: true, syncStatus: true, lastSyncedAt: true },
+    select: { id: true, userId: true, shopName: true, provider: true, status: true, syncStatus: true, lastSyncedAt: true },
   });
 
   const stale = candidates.filter((shop) => isShopSyncStale(shop, now));
   if (stale.length === 0) return 0;
 
   await mapLimit(stale, SYNC_CONCURRENCY, async (shop) => {
+    // Conta bloqueada (pagamento atrasado / limite de vendas depois da
+    // carência) não sincroniza nem pelo botão - o watchdog não pode ser a
+    // porta dos fundos. lastSyncedAt fica parado de propósito: a loja
+    // continua "stale" e volta a sincronizar sozinha na primeira rodada
+    // depois do pagamento/upgrade.
+    try {
+      if (await isSyncBlockedCached(shop.userId)) return;
+    } catch (err) {
+      logger?.error({ err, shopId: shop.id }, 'watchdog: falha ao checar bloqueio da conta, pulando loja');
+      return;
+    }
+
     logger?.warn(
       { shopId: shop.id, shopName: shop.shopName, lastSyncedAt: shop.lastSyncedAt },
       'watchdog: loja sem sincronizar há tempo demais, sincronizando sozinho'

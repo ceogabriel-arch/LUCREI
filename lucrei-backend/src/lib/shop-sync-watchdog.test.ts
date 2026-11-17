@@ -1,14 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { prismaMock, runShopSyncMock, runMLShopSyncMock } = vi.hoisted(() => ({
+const { prismaMock, runShopSyncMock, runMLShopSyncMock, isSyncBlockedMock } = vi.hoisted(() => ({
   prismaMock: {
     shop: { findMany: vi.fn() },
   },
   runShopSyncMock: vi.fn(),
   runMLShopSyncMock: vi.fn(),
+  isSyncBlockedMock: vi.fn(),
 }));
 
 vi.mock('./prisma', () => ({ prisma: prismaMock }));
+vi.mock('./sync-access', () => ({ isSyncBlockedCached: isSyncBlockedMock }));
 vi.mock('../modules/sync/service', () => ({ runShopSync: runShopSyncMock }));
 vi.mock('../modules/sync/mercadolivre-service', () => ({ runShopSync: runMLShopSyncMock }));
 
@@ -51,6 +53,22 @@ describe('syncStaleShops', () => {
     vi.clearAllMocks();
     vi.useFakeTimers();
     vi.setSystemTime(NOW);
+    isSyncBlockedMock.mockResolvedValue(false);
+  });
+
+  it('skips shops whose account is blocked from syncing', async () => {
+    prismaMock.shop.findMany.mockResolvedValue([
+      { id: 'shop1', userId: 'u1', shopName: 'A', provider: 'shopee', status: 'active', syncStatus: 'done', lastSyncedAt: new Date(NOW - (STALE_SYNC_HOURS + 1) * HOUR_MS) },
+      { id: 'shop2', userId: 'u2', shopName: 'B', provider: 'shopee', status: 'active', syncStatus: 'done', lastSyncedAt: new Date(NOW - (STALE_SYNC_HOURS + 1) * HOUR_MS) },
+    ]);
+    isSyncBlockedMock.mockImplementation(async (userId: string) => userId === 'u1');
+    runShopSyncMock.mockResolvedValue(undefined);
+
+    await syncStaleShops();
+
+    expect(runShopSyncMock).toHaveBeenCalledTimes(1);
+    expect(runShopSyncMock).toHaveBeenCalledWith('shop2');
+    vi.useRealTimers();
   });
 
   it('syncs a stale Shopee shop through the normal Shopee sync path', async () => {

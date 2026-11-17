@@ -6,6 +6,7 @@ import { encrypt } from '../../lib/crypto';
 import { sendShopReconnectAttemptEmail } from '../../lib/email';
 import { prisma } from '../../lib/prisma';
 import { trackRecentOrderEvent } from '../../lib/recent-order-events';
+import { isSyncBlockedCached } from '../../lib/sync-access';
 import { exchangeCodeForToken, getAuthorizationUrl, getShopInfo } from '../../shopee-client';
 import { isEligibleShopeeStatus, runShopSync, SHOPEE_CANCELLED_STATUSES, syncOneOrder } from '../sync/service';
 
@@ -433,7 +434,18 @@ export async function shopRoutes(app: FastifyInstance) {
 
       if (orderSn && status) {
         const shop = await prisma.shop.findUnique({ where: { shopeeShopId: String(shopeeShopId) } });
-        if (shop) {
+        // Conta bloqueada (pagamento atrasado / limite de vendas depois da
+        // carência) não processa o push - mas ainda responde 200 lá embaixo,
+        // senão a Shopee fica reenviando pra sempre. O sync periódico pega
+        // esses pedidos de volta depois do pagamento/upgrade. Falha ao
+        // checar não pode derrubar a resposta do push.
+        const blocked = shop
+          ? await isSyncBlockedCached(shop.userId).catch((err) => {
+              app.log.error(err);
+              return false;
+            })
+          : false;
+        if (shop && !blocked) {
           // Alimenta a previsão de lucro do Início (contagem de pedidos
           // recém-comprados) pra QUALQUER status, não só concluído - nunca
           // deixa isso atrapalhar/atrasar a resposta pra Shopee nem o fluxo

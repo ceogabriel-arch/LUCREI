@@ -48,8 +48,8 @@ export function allocateLineItem(item: IncomeItem, totals: OrderTotals) {
 // Imposto é um % sobre o VALOR DA VENDA do item (não sobre o lucro) - é
 // assim que a alíquota efetiva do Simples Nacional funciona na prática pro
 // pequeno vendedor, que é quem configura esse número. taxRatePercent default
-// 0 (loja sem alíquota configurada, ou chamada vinda do Mercado Livre, que
-// ainda não usa isso) deixa o resultado idêntico a antes dessa coluna existir.
+// 0 (loja sem alíquota configurada) deixa o resultado idêntico a antes dessa
+// coluna existir.
 export function computeTaxAllocated(lineValue: number, taxRatePercent: number): number {
   return lineValue * (taxRatePercent / 100);
 }

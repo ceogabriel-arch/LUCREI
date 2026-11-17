@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 
-import { checkSalesLimitBlock, getSalesLimitStatus } from '../../lib/sales-usage';
-import { checkSubscriptionAccessBlock } from '../../lib/subscription-access';
+import { getSalesLimitStatus } from '../../lib/sales-usage';
+import { checkSyncAccessBlock } from '../../lib/sync-access';
 import { startOfCurrentMonth } from '../../lib/period';
 import { prisma } from '../../lib/prisma';
 import { sendPushNotification } from '../../lib/push-notifications';
@@ -65,21 +65,16 @@ export async function syncRoutes(app: FastifyInstance) {
         include: { plan: true },
       });
 
-      const subscriptionBlock = await checkSubscriptionAccessBlock(request.user.sub);
-      if (subscriptionBlock.blocked) {
-        return reply.status(403).send({ message: subscriptionBlock.message, code: 'subscription_past_due' });
+      const block = await checkSyncAccessBlock(request.user.sub);
+      if (block.blocked) {
+        return reply.status(403).send({ message: block.message, code: block.code });
       }
 
       const effectiveSalesLimit = user?.salesLimitOverride ?? user?.plan?.salesLimit;
       if (user && effectiveSalesLimit != null) {
         const status = await getSalesLimitStatus(user);
 
-        if (status.overLimit) {
-          const block = await checkSalesLimitBlock(user.id);
-          if (block.blocked) {
-            return reply.status(403).send({ message: block.message, code: 'sales_limit_reached' });
-          }
-        } else {
+        if (!status.overLimit) {
           const alreadyWarnedThisMonth =
             user.salesLimitWarnedAt != null && user.salesLimitWarnedAt >= startOfCurrentMonth();
           if (!alreadyWarnedThisMonth && status.ordersThisMonth >= effectiveSalesLimit * WARNING_THRESHOLD) {
@@ -171,14 +166,9 @@ export async function syncRoutes(app: FastifyInstance) {
         });
       }
 
-      const subscriptionBlock = await checkSubscriptionAccessBlock(request.user.sub);
-      if (subscriptionBlock.blocked) {
-        return reply.status(403).send({ message: subscriptionBlock.message, code: 'subscription_past_due' });
-      }
-
-      const block = await checkSalesLimitBlock(request.user.sub);
+      const block = await checkSyncAccessBlock(request.user.sub);
       if (block.blocked) {
-        return reply.status(403).send({ message: block.message, code: 'sales_limit_reached' });
+        return reply.status(403).send({ message: block.message, code: block.code });
       }
 
       // Mercado Livre não tem limite de 15 dias por chamada (ver

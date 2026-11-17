@@ -34,6 +34,11 @@ async function pollAllShops(log: FastifyBaseLogger) {
 
     await mapLimit(shops, POLL_CONCURRENCY, async (shop) => {
       try {
+        // Diferente de Shopee/ML/TikTok, conta bloqueada NÃO para de
+        // consultar aqui: a iFood só guarda os eventos por tempo limitado e
+        // não tem endpoint de histórico - parar perderia pra sempre os
+        // pedidos do período de atraso. O bloqueio continua valendo na tela
+        // (valores borrados) e no "Sincronizar" manual.
         await pollShopEvents(shop.id);
       } catch (err) {
         log.error({ err, shopId: shop.id }, 'Falha no polling de eventos da iFood.');

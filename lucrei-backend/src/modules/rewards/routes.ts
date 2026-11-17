@@ -93,6 +93,10 @@ export async function rewardsRoutes(app: FastifyInstance) {
                   await prisma.orderLineItem.aggregate({
                     _sum: { profit: true },
                     where: {
+                      // Custo negativo gravado antes da validação existir
+                      // inflava o lucro - não pode destravar prêmio físico.
+                      // (Custo null já tem profit null, então não muda nada.)
+                      productCostSnapshot: { gte: 0 },
                       OR: shops.map((shop) => ({
                         order: { shopId: shop.id, orderDate: { gte: shop.connectedAt } },
                       })),

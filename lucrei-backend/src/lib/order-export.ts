@@ -1,5 +1,7 @@
 import ExcelJS from 'exceljs';
 
+import { toBrWallClockDate } from './br-time';
+
 export const STATUS_LABELS: Record<string, string> = {
   UNPAID: 'Aguardando pagamento',
   READY_TO_SHIP: 'Pronto pra envio',
@@ -53,7 +55,9 @@ export async function buildOrdersXlsx(header: string[], rows: (string | number |
   const sheet = workbook.addWorksheet(sheetName);
   sheet.addRow(header);
   sheet.getRow(1).font = { bold: true };
-  for (const row of rows) sheet.addRow(row);
+  // ExcelJS grava a data pelos componentes UTC - converte pro "relógio de
+  // parede" de Brasília antes, senão pedido das 22h BRT saía no dia seguinte.
+  for (const row of rows) sheet.addRow(row.map((cell) => (cell instanceof Date ? toBrWallClockDate(cell) : cell)));
 
   const dateColIndex = header.indexOf('Data do pedido') + 1;
   if (dateColIndex > 0) sheet.getColumn(dateColIndex).numFmt = 'dd/mm/yyyy';

@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { Shop } from '@prisma/client';
 
+import { brDayKey } from '../../lib/br-time';
 import { prisma } from '../../lib/prisma';
 import { rangeStart, type Period } from '../../lib/period';
 
@@ -74,7 +75,9 @@ export async function computeShopSummary(shop: Shop, query: SummaryQuery): Promi
 
   for (const order of orders) {
     const dayBasis = byOrderDate ? order.orderDate : (order.completedAt ?? order.orderDate);
-    const day = dayBasis.toISOString().slice(0, 10);
+    // Dia no horário de Brasília - toISOString() jogava pedido feito depois
+    // das 21h BRT pro dia seguinte no gráfico.
+    const day = brDayKey(dayBasis);
     ordersCountByDay.set(day, (ordersCountByDay.get(day) ?? 0) + 1);
     for (const li of order.lineItems) {
       const sale = Number(li.salePrice);

@@ -5,7 +5,7 @@ import { getValidAccessToken } from '../../lib/mercadolivre-token';
 import { prisma } from '../../lib/prisma';
 import { getOrder, getShipmentCosts, searchOrders } from '../../mercadolivre-client';
 import { trackRecentMercadoLivreOrderEvent } from '../../lib/recent-order-events';
-import { computeLineProfit } from './order-math';
+import { computeLineProfit, computeTaxAllocated } from './order-math';
 import { allocateMLLineItem, computeMLOrderTotals } from './mercadolivre-order-math';
 
 // "paid" é o status "resolvido com sucesso" (equivalente ao COMPLETED da
@@ -29,11 +29,19 @@ export const ML_CANCELLED_STATUSES = new Set(['cancelled', 'invalid']);
 // Usado pelo webhook (Fase 2 em tempo real) - mesmo papel do syncOneOrder da
 // Shopee: sincroniza UM pedido específico sem varrer a loja inteira.
 export async function syncOneMercadoLivreOrder(shopId: string, orderId: number) {
-  const { accessToken } = await getValidAccessToken(shopId);
-  return processOrder(shopId, accessToken, orderId);
+  const [{ accessToken }, taxRatePercent] = await Promise.all([getValidAccessToken(shopId), getShopTaxRate(shopId)]);
+  return processOrder(shopId, accessToken, taxRatePercent, orderId);
 }
 
-async function processOrder(shopDbId: string, accessToken: string, orderId: number) {
+// Mesmo imposto sobre a venda que Shopee/iFood/TikTok já aplicam - antes o
+// Mercado Livre ignorava shop.taxRatePercent e mostrava lucro maior que o
+// real pra quem configurou alíquota.
+async function getShopTaxRate(shopId: string): Promise<number> {
+  const shop = await prisma.shop.findUnique({ where: { id: shopId }, select: { taxRatePercent: true } });
+  return shop?.taxRatePercent != null ? Number(shop.taxRatePercent) : 0;
+}
+
+async function processOrder(shopDbId: string, accessToken: string, taxRatePercent: number, orderId: number) {
   const order = await getOrder(accessToken, orderId);
   const items = order.order_items ?? [];
 
@@ -42,13 +50,22 @@ async function processOrder(shopDbId: string, accessToken: string, orderId: numb
   // sem Mercado Envios (combinado fora da plataforma) não tem shipment.id -
   // sem custo de frete nesse caso, não dá pra travar o pedido inteiro por
   // isso.
+  //
+  // Falha ao buscar o custo do frete NÃO vira frete 0 (antes virava, e o
+  // pedido ficava gravado com lucro inflado sem ninguém perceber) - loga e
+  // propaga, pra esse pedido não ser gravado agora e ser tentado de novo na
+  // próxima sincronização (a versão antiga dele, se existir, fica intacta).
   let shippingCost = 0;
   if (order.shipping?.id) {
     try {
       const costs = await getShipmentCosts(accessToken, order.shipping.id);
       shippingCost = (costs.senders ?? []).reduce((sum, s) => sum + s.cost, 0);
-    } catch {
-      shippingCost = 0;
+    } catch (err) {
+      console.error(
+        `[mercadolivre-sync] Falha ao buscar custo do frete (shipment ${order.shipping.id}) do pedido ${orderId}:`,
+        err
+      );
+      throw err;
     }
   }
 
@@ -94,7 +111,8 @@ async function processOrder(shopDbId: string, accessToken: string, orderId: numb
     const product = productByItemId.get(li.item.id);
 
     const productCostSnapshot = product ? Number(product.costPrice) * li.quantity : null;
-    const profit = computeLineProfit(lineValue, shippingFeeAllocated, feeAllocated, productCostSnapshot);
+    const taxAllocated = computeTaxAllocated(lineValue, taxRatePercent);
+    const profit = computeLineProfit(lineValue, shippingFeeAllocated, feeAllocated, productCostSnapshot, taxAllocated);
 
     if (profit === null) itemsMissingCost++;
     else profitSum += profit;
@@ -111,6 +129,7 @@ async function processOrder(shopDbId: string, accessToken: string, orderId: numb
       // existir) mas é só "taxa do marketplace alocada" - genérico o
       // bastante pra reaproveitar aqui sem precisar de coluna nova.
       shopeeFeeAllocated: feeAllocated,
+      taxAllocated,
       productCostSnapshot: productCostSnapshot ?? undefined,
       profit: profit ?? undefined,
     };
@@ -156,7 +175,12 @@ export const REGULAR_SYNC_WINDOW_DAYS = 15;
 const WINDOW_TIMEOUT_MS = 10 * 60 * 1000;
 
 export async function syncOrdersSince(shopId: string, dateFrom: Date | null) {
-  const { accessToken, mercadoLivreUserId } = await getValidAccessToken(shopId);
+  const [{ accessToken, mercadoLivreUserId }, taxRatePercent] = await Promise.all([
+    getValidAccessToken(shopId),
+    getShopTaxRate(shopId),
+  ]);
+  let ordersFailed = 0;
+  let lastError: unknown = null;
 
   let offset = 0;
   let total = Infinity;
@@ -195,12 +219,34 @@ export async function syncOrdersSince(shopId: string, dateFrom: Date | null) {
     // Mesmo paralelismo da Shopee (lá 15, aqui 10 - um pedido daqui pode
     // disparar 2 chamadas à API, não 1, então um teto um pouco mais
     // conservador pro rate limit do Mercado Livre).
+    //
+    // Um pedido falhar (ex: custo do frete indisponível agora - ver
+    // processOrder) não derruba a página inteira: os outros seguem, e esse
+    // fica pra próxima sincronização (ainda dentro da janela de dias).
     const eligible = page.results.filter((o) => ELIGIBLE_STATUSES.has(o.status));
-    await mapLimit(eligible, 10, (o) => processOrder(shopId, accessToken, o.id));
-    ordersSynced += eligible.length;
+    const results = await mapLimit(eligible, 10, (o) =>
+      processOrder(shopId, accessToken, taxRatePercent, o.id).then(
+        () => true,
+        (err) => {
+          console.error(`[mercadolivre-sync] Falha ao sincronizar pedido ${o.id} da loja ${shopId}:`, err);
+          lastError = err;
+          return false;
+        }
+      )
+    );
+    const okCount = results.filter(Boolean).length;
+    ordersSynced += okCount;
+    ordersFailed += eligible.length - okCount;
 
     if (page.results.length === 0) break;
     offset += PAGE_SIZE;
+  }
+
+  // Tudo que tentou falhou - provavelmente o problema é geral (API fora,
+  // token), não de um pedido só: sobe o erro pra aparecer como falha de
+  // sincronização em vez de "concluído com 0 pedidos".
+  if (ordersFailed > 0 && ordersSynced === 0) {
+    throw lastError instanceof Error ? lastError : new Error('Falha ao sincronizar pedidos do Mercado Livre.');
   }
 
   await prisma.shop.update({ where: { id: shopId }, data: { lastSyncedAt: new Date() } });

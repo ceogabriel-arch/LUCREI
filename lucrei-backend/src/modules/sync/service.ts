@@ -168,13 +168,26 @@ export async function syncOneOrder(shopId: string, orderSn: string, orderStatus:
     getShopTaxRate(shopId),
   ]);
   const [detail] = await getOrderDetail(accessToken, shopeeShopId, [orderSn]);
+
+  // O status do push pode estar velho: a Shopee não garante ordem de
+  // entrega, então um READY_TO_SHIP atrasado chegando DEPOIS do push de
+  // cancelamento recriava como venda um pedido já cancelado (e apagado).
+  // O get_order_detail acabou de ser buscado - é ele que manda. Sem detalhe
+  // (resposta vazia), cai no status do push como antes.
+  const currentStatus = detail?.order_status ?? orderStatus;
+  if (SHOPEE_CANCELLED_STATUSES.has(currentStatus)) {
+    await prisma.order.deleteMany({ where: { shopId, shopeeOrderSn: orderSn } });
+    return null;
+  }
+  if (!isEligibleShopeeStatus(currentStatus)) return null;
+
   return processOrder(
     shopId,
     shopeeShopId,
     accessToken,
     taxRatePercent,
     orderSn,
-    orderStatus,
+    currentStatus,
     detail?.create_time,
     detail?.update_time
   );

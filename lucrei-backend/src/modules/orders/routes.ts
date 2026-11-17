@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 
+import { formatBrDate } from '../../lib/br-time';
 import { buildOrdersXlsx, csvField, csvNumber, STATUS_LABELS } from '../../lib/order-export';
 import { prisma } from '../../lib/prisma';
 import { rangeStart, type Period } from '../../lib/period';
@@ -142,7 +143,7 @@ export async function orderRoutes(app: FastifyInstance) {
 
       const rows: string[] = [header];
       for (const order of orders) {
-        const dateStr = order.orderDate.toLocaleDateString('pt-BR');
+        const dateStr = formatBrDate(order.orderDate);
         const statusStr = STATUS_LABELS[order.orderStatus] ?? order.orderStatus;
         for (const li of order.lineItems) {
           const productName = li.product?.name ?? li.itemName ?? `Item ${li.shopeeItemId ?? '?'}`;
@@ -243,7 +244,7 @@ export async function orderRoutes(app: FastifyInstance) {
 
       const rows: string[] = [header];
       for (const order of orders) {
-        const dateStr = order.orderDate.toLocaleDateString('pt-BR');
+        const dateStr = formatBrDate(order.orderDate);
         const statusStr = STATUS_LABELS[order.orderStatus] ?? order.orderStatus;
         for (const li of order.lineItems) {
           const productName = li.product?.name ?? li.itemName ?? `Item ${li.shopeeItemId ?? '?'}`;

@@ -189,7 +189,7 @@ async function main() {
     },
   });
 
-  for (const route of ['pedidos', 'produtos', 'relatorios', 'etiquetas', 'configuracoes', 'shopee-connected', 'mercadolivre-connected', 'tiktokshop-connected', 'planos', 'admin']) {
+  for (const route of ['pedidos', 'produtos', 'relatorios', 'etiquetas', 'configuracoes', 'shopee-connected', 'mercadolivre-connected', 'tiktokshop-connected', 'planos', 'precificador', 'admin']) {
     app.get(`/${route}`, (_req, reply) => reply.sendFile(`${route}.html`));
   }
 

@@ -10,6 +10,7 @@ import { getValidAccessToken } from '../../lib/shopee-token';
 import { getValidAccessToken as getValidMercadoLivreAccessToken } from '../../lib/mercadolivre-token';
 import { getItemBaseInfo, getItemList, getModelList } from '../../shopee-client';
 import { getItems, searchItems } from '../../mercadolivre-client';
+import { computeLineProfit } from '../sync/order-math';
 
 type UpsertProductBody = {
   shopeeItemId: string;
@@ -21,6 +22,34 @@ type BatchUpsertProductBody = {
   items: UpsertProductBody[];
 };
 
+// Antes só checava costPrice == null: custo negativo passava (inflava o
+// lucro e dava pra usar isso pra "bater" a meta de faturamento/lucro das
+// recompensas físicas) e texto estourava 500 no UPDATE. Teto bem acima de
+// qualquer custo unitário real, mas que ainda cabe no Decimal(12,2) mesmo
+// multiplicado pela quantidade do pedido.
+const MAX_COST_PRICE = 1_000_000;
+// "Selecionar todos" manda o catálogo inteiro de uma vez - folga grande pra
+// loja real, mas sem deixar um único request montar um UPDATE gigante.
+const MAX_BATCH_ITEMS = 2000;
+
+const productItemSchema = {
+  type: 'object',
+  required: ['shopeeItemId', 'name', 'costPrice'],
+  properties: {
+    shopeeItemId: { type: 'string', minLength: 1, maxLength: 100 },
+    name: { type: 'string', minLength: 1, maxLength: 500 },
+    costPrice: { type: 'number', minimum: 0, maximum: MAX_COST_PRICE },
+  },
+} as const;
+
+const batchUpsertSchema = {
+  type: 'object',
+  required: ['items'],
+  properties: {
+    items: { type: 'array', minItems: 1, maxItems: MAX_BATCH_ITEMS, items: productItemSchema },
+  },
+} as const;
+
 async function requireOwnedShop(userId: string, shopId: string) {
   return prisma.shop.findFirst({ where: { id: shopId, userId } });
 }
@@ -31,7 +60,24 @@ type OrderLineItemForRecalc = {
   salePrice: Prisma.Decimal;
   shippingFeeAllocated: Prisma.Decimal;
   shopeeFeeAllocated: Prisma.Decimal;
+  taxAllocated: Prisma.Decimal;
 };
+
+// Mesma conta da sync (computeLineProfit) - antes isso aqui recalculava sem
+// o imposto, então mudar o custo de um produto inflava o lucro de TODOS os
+// pedidos passados dele pela alíquota da loja, e pros pedidos fora da janela
+// de 15 dias da sync isso nunca mais era corrigido.
+function recalcLine(costPrice: number, li: OrderLineItemForRecalc) {
+  const productCostSnapshot = costPrice * li.quantity;
+  const profit = computeLineProfit(
+    Number(li.salePrice),
+    Number(li.shippingFeeAllocated),
+    Number(li.shopeeFeeAllocated),
+    productCostSnapshot,
+    Number(li.taxAllocated)
+  )!;
+  return { productCostSnapshot, profit };
+}
 
 // Recalcula custo/lucro de cada line item afetado por uma mudança de preço
 // de custo e grava tudo num só UPDATE (via VALUES), em vez de um
@@ -47,9 +93,7 @@ async function bulkRecalcLineItems(
   if (lineItems.length === 0) return;
 
   const rows = lineItems.map((li) => {
-    const productCostSnapshot = costPrice * li.quantity;
-    const profit =
-      Number(li.salePrice) - Number(li.shippingFeeAllocated) - Number(li.shopeeFeeAllocated) - productCostSnapshot;
+    const { productCostSnapshot, profit } = recalcLine(costPrice, li);
     return Prisma.sql`(${li.id}::text, ${productCostSnapshot}::numeric, ${profit}::numeric)`;
   });
 
@@ -579,7 +623,7 @@ export async function productRoutes(app: FastifyInstance) {
 
   app.post<{ Params: { shopId: string }; Body: UpsertProductBody }>(
     '/shops/:shopId/products',
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], schema: { body: productItemSchema } },
     async (request, reply) => {
       const shop = await requireOwnedShop(request.user.sub, request.params.shopId);
       if (!shop) return reply.status(404).send({ message: 'Loja não encontrada.' });
@@ -618,7 +662,7 @@ export async function productRoutes(app: FastifyInstance) {
 
   app.post<{ Params: { shopId: string }; Body: BatchUpsertProductBody }>(
     '/shops/:shopId/products/batch',
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], schema: { body: batchUpsertSchema } },
     async (request, reply) => {
       const shop = await requireOwnedShop(request.user.sub, request.params.shopId);
       if (!shop) return reply.status(404).send({ message: 'Loja não encontrada.' });
@@ -712,9 +756,7 @@ export async function productRoutes(app: FastifyInstance) {
             const productId = productIdByItemId.get(item.shopeeItemId);
             if (!productId) continue;
             for (const li of lineItemsByShopeeId.get(item.shopeeItemId) ?? []) {
-              const productCostSnapshot = item.costPrice * li.quantity;
-              const profit =
-                Number(li.salePrice) - Number(li.shippingFeeAllocated) - Number(li.shopeeFeeAllocated) - productCostSnapshot;
+              const { productCostSnapshot, profit } = recalcLine(item.costPrice, li);
               recalcRows.push(
                 Prisma.sql`(${li.id}::text, ${productId}::text, ${productCostSnapshot}::numeric, ${profit}::numeric)`
               );
