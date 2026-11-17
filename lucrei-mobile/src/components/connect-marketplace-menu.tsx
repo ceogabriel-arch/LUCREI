@@ -255,16 +255,33 @@ export function ConnectMarketplaceMenu({
           </Animated.View>
 
           {layout && (
-            <RadialRing
-              layout={layout}
-              hub={hub}
-              orbs={orbs}
-              spin={spin}
-              pulse={pulse}
-              availability={availability}
-              onClose={() => closeMenu()}
-              onSelect={handleSelect}
-            />
+            <>
+              <Animated.Text
+                pointerEvents="none"
+                style={{
+                  position: 'absolute',
+                  top: SCREEN_MARGIN,
+                  left: SCREEN_MARGIN,
+                  right: SCREEN_MARGIN,
+                  textAlign: 'center',
+                  color: '#FFFFFF',
+                  fontSize: 13,
+                  fontWeight: '600',
+                  opacity: hub,
+                }}>
+                {OPTIONS.filter((o) => availability[o.key]).length} de {OPTIONS.length} integrações disponíveis
+              </Animated.Text>
+              <RadialRing
+                layout={layout}
+                hub={hub}
+                orbs={orbs}
+                spin={spin}
+                pulse={pulse}
+                availability={availability}
+                onClose={() => closeMenu()}
+                onSelect={handleSelect}
+              />
+            </>
           )}
         </View>
       </Modal>
