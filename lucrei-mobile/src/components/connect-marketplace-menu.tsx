@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 
 import { MarketplaceBadge } from '@/components/marketplace-badge';
-import { getMarketplaceAvailability, type MarketplaceAvailability } from '@/lib/api';
+import { getMarketplaceAvailability, type MarketplaceAvailability, type Shop } from '@/lib/api';
 import type { Marketplace } from '@/lib/marketplace';
 import { useColors } from '@/lib/theme';
 
@@ -109,11 +109,18 @@ export function ConnectMarketplaceMenu({
   token,
   connecting,
   width,
+  shops,
+  integrationsLimit,
   onSelect,
 }: {
   token: string;
   connecting: Marketplace | null;
   width: DimensionValue;
+  // Pra mostrar "quantas lojas já conectadas / quantas o plano permite" em
+  // cada marketplace - o limite é por marketplace, não no total (ver
+  // checagem em shops/routes.ts, mercadolivre/routes.ts etc).
+  shops: Shop[];
+  integrationsLimit: number | null;
   onSelect: (marketplace: Marketplace) => void;
 }) {
   const Colors = useColors();
@@ -255,33 +262,18 @@ export function ConnectMarketplaceMenu({
           </Animated.View>
 
           {layout && (
-            <>
-              <Animated.Text
-                pointerEvents="none"
-                style={{
-                  position: 'absolute',
-                  top: SCREEN_MARGIN,
-                  left: SCREEN_MARGIN,
-                  right: SCREEN_MARGIN,
-                  textAlign: 'center',
-                  color: '#FFFFFF',
-                  fontSize: 13,
-                  fontWeight: '600',
-                  opacity: hub,
-                }}>
-                {OPTIONS.filter((o) => availability[o.key]).length} de {OPTIONS.length} integrações disponíveis
-              </Animated.Text>
-              <RadialRing
-                layout={layout}
-                hub={hub}
-                orbs={orbs}
-                spin={spin}
-                pulse={pulse}
-                availability={availability}
-                onClose={() => closeMenu()}
-                onSelect={handleSelect}
-              />
-            </>
+            <RadialRing
+              layout={layout}
+              hub={hub}
+              orbs={orbs}
+              spin={spin}
+              pulse={pulse}
+              availability={availability}
+              shops={shops}
+              integrationsLimit={integrationsLimit}
+              onClose={() => closeMenu()}
+              onSelect={handleSelect}
+            />
           )}
         </View>
       </Modal>
@@ -296,6 +288,8 @@ function RadialRing({
   spin,
   pulse,
   availability,
+  shops,
+  integrationsLimit,
   onClose,
   onSelect,
 }: {
@@ -305,6 +299,8 @@ function RadialRing({
   spin: Animated.Value;
   pulse: Animated.Value;
   availability: MarketplaceAvailability;
+  shops: Shop[];
+  integrationsLimit: number | null;
   onClose: () => void;
   onSelect: (marketplace: Marketplace) => void;
 }) {
@@ -376,7 +372,14 @@ function RadialRing({
                 { scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] }) },
               ],
             }}>
-            <Orb option={option} available={availability[option.key]} glow={glow} onPress={() => onSelect(option.key)} />
+            <Orb
+              option={option}
+              available={availability[option.key]}
+              connectedCount={shops.filter((s) => s.provider === option.key && s.status === 'active').length}
+              integrationsLimit={integrationsLimit}
+              glow={glow}
+              onPress={() => onSelect(option.key)}
+            />
           </Animated.View>
         );
       })}
@@ -419,11 +422,15 @@ function RadialRing({
 function Orb({
   option,
   available,
+  connectedCount,
+  integrationsLimit,
   glow,
   onPress,
 }: {
   option: (typeof OPTIONS)[number];
   available: boolean;
+  connectedCount: number;
+  integrationsLimit: number | null;
   glow: string;
   onPress: () => void;
 }) {
@@ -476,6 +483,26 @@ function Orb({
             : null),
         }}>
         <MarketplaceBadge provider={option.key} size={30} />
+        {available && (
+          // Lojas conectadas / limite do plano pra ESTE marketplace - o
+          // limite é por marketplace, não no total (ver integrationsLimit
+          // em shops/routes.ts etc), então cada ícone mostra sua própria
+          // conta. "∞" quando o plano não tem limite (integrationsLimit null).
+          <View
+            pointerEvents="none"
+            className="absolute -right-1 -top-1 items-center justify-center rounded-full border"
+            style={{
+              minWidth: 22,
+              height: 18,
+              paddingHorizontal: 4,
+              backgroundColor: connectedCount > 0 ? Colors.gold : Colors.surface,
+              borderColor: Colors.gold,
+            }}>
+            <Text style={{ fontSize: 9, fontWeight: '700', color: connectedCount > 0 ? Colors.onGold : Colors.gold }}>
+              {connectedCount}/{integrationsLimit ?? '∞'}
+            </Text>
+          </View>
+        )}
       </View>
       <Text
         className="mt-1.5 text-center text-xs font-semibold"

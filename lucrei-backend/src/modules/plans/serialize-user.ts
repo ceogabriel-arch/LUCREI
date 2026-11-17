@@ -46,6 +46,7 @@ export async function serializeUser(user: UserWithPlan) {
           // salesLimitOverride quando preenchido (ver sales-usage.ts).
           salesLimit: user.salesLimitOverride ?? user.plan.salesLimit,
           billingPeriod: user.plan.billingPeriod,
+          integrationsLimit: user.plan.integrationsLimit,
         }
       : null,
   };

@@ -66,9 +66,9 @@ describe('serializeUser', () => {
     expect(result.plan).toBeNull();
   });
 
-  it('exposes key, name, salesLimit, and billingPeriod from the linked plan', async () => {
+  it('exposes key, name, salesLimit, billingPeriod, and integrationsLimit from the linked plan', async () => {
     const result = await serializeUser(buildUser({ planId: 'plan_pro', plan: buildPlan() }));
-    expect(result.plan).toEqual({ key: 'pro', name: 'Pro', salesLimit: 1500, billingPeriod: 'monthly' });
+    expect(result.plan).toEqual({ key: 'pro', name: 'Pro', salesLimit: 1500, billingPeriod: 'monthly', integrationsLimit: 1 });
   });
 
   it('passes through the subscription status as-is', async () => {

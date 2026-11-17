@@ -1093,6 +1093,8 @@ export default function InicioScreen() {
               token={state.token}
               connecting={connecting}
               width={isDesktop ? 440 : '100%'}
+              shops={shops}
+              integrationsLimit={state.user.plan?.integrationsLimit ?? null}
               onSelect={(marketplace) => {
                 if (marketplace === 'shopee') handleConnectShopee();
                 else if (marketplace === 'mercado_livre') handleConnectMercadoLivre();

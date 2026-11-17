@@ -5,7 +5,15 @@ export const API_URL = process.env.EXPO_PUBLIC_API_URL;
 export type Period = 'today' | '7d' | '30d' | '90d' | 'all';
 
 export type SubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'canceled';
-export type UserPlan = { key: string; name: string; salesLimit: number | null; billingPeriod: BillingPeriod };
+export type UserPlan = {
+  key: string;
+  name: string;
+  salesLimit: number | null;
+  billingPeriod: BillingPeriod;
+  // null = sem limite de lojas por marketplace. Contado por marketplace, não
+  // no total (ver checagem em shops/routes.ts, mercadolivre/routes.ts etc).
+  integrationsLimit: number | null;
+};
 export type AuthUser = {
   id: string;
   name: string;
