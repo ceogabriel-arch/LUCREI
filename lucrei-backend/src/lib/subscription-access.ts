@@ -1,12 +1,14 @@
 import type { User } from '@prisma/client';
 
+import { GRACE_DAYS } from './billing-rules';
 import { prisma } from './prisma';
 
 // Mesma carência de 7 dias do limite de vendas (getSalesLimitStatus) - dados
 // borrados assim que o pagamento atrasa, sincronização trava de vez só
 // depois desse prazo, dando tempo real de resolver o pagamento sem perder
-// acesso na hora.
-export const SUBSCRIPTION_GRACE_DAYS = 7;
+// acesso na hora. Valor mora em billing-rules.ts (sem prisma) pra as regras
+// puras de estorno/carência usarem exatamente o mesmo número.
+export const SUBSCRIPTION_GRACE_DAYS = GRACE_DAYS;
 
 export type SubscriptionAccessStatus = {
   // true assim que subscriptionStatus vira 'past_due' - é o que já dispara
@@ -23,7 +25,12 @@ export type SubscriptionAccessStatus = {
 // só é reescrito quando um pagamento novo é confirmado (ver
 // handlePaymentEvent/handlePreapprovalEvent), então continua parado nessa
 // data enquanto a conta estiver em past_due. Usa isso como "desde quando"
-// em vez de guardar uma coluna nova só pra isso.
+// em vez de guardar uma coluna nova só pra isso. Uma assinatura NOVA criada
+// por /plans/select já nasce com o "desde quando" herdado da anterior (ver
+// inheritedGraceSince em billing-rules.ts) - sem isso, trocar de plano caía
+// no createdAt da assinatura nova e reiniciava a carência a cada troca.
+// Estorno/chargeback/reembolso grava aqui uma data já com a carência
+// esgotada (ver revokedAccessPeriodEnd) - bloqueio na hora.
 export async function getSubscriptionAccessStatus(user: User): Promise<SubscriptionAccessStatus> {
   if (user.subscriptionStatus !== 'past_due') {
     return { pastDue: false, blocked: false, graceDaysLeft: null };

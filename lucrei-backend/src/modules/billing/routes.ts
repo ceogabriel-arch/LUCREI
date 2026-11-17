@@ -1,7 +1,9 @@
 import crypto from 'node:crypto';
 
+import type { Prisma } from '@prisma/client';
 import type { FastifyInstance } from 'fastify';
 
+import { pixChargeNeedsActivationRecovery, revokedAccessPeriodEnd, summarizeHypercashWebhook } from '../../lib/billing-rules';
 import { applyPercentOff } from '../../lib/coupons';
 import { sendOpsAlertEmail } from '../../lib/email';
 import { verifyHypercashSignature } from '../../lib/hypercash-webhook';
@@ -68,18 +70,37 @@ async function handlePreapprovalEvent(dataId: string) {
   ]);
 }
 
+// Marca a cobrança Pix como aprovada só se ainda não estava - guarda atômica
+// contra o Mercado Pago reenviar o mesmo webhook (eles avisam que isso
+// acontece): dois eventos quase simultâneos passariam os dois por uma
+// checagem "status === 'approved'" feita antes de qualquer um gravar.
+function claimPixCharge(tx: Prisma.TransactionClient, chargeId: string, extra: Prisma.PixChargeUpdateManyMutationInput = {}) {
+  return tx.pixCharge.updateMany({
+    where: { id: chargeId, status: { not: 'approved' } },
+    data: { status: 'approved', paidAt: new Date(), ...extra },
+  });
+}
+
 async function handleUpgradeChargePaid(app: FastifyInstance, charge: { id: string; subscriptionId: string; amount: unknown; targetPlanId: string }) {
   const subscription = await prisma.subscription.findUniqueOrThrow({ where: { id: charge.subscriptionId } });
   const targetPlan = await prisma.plan.findUnique({ where: { id: charge.targetPlanId } });
   if (!targetPlan) {
     // O dinheiro já foi capturado (a cobrança chegou até aqui como aprovada)
-    // mas não tem mais plano pra aplicar - fica só o log mesmo, precisa de
-    // reconciliação manual. Não tenta de novo sozinho: a Mercado Pago não
-    // reenvia o webhook de pagamento indefinidamente pra ficar re-tentando.
-    app.log.error(
-      { chargeId: charge.id, targetPlanId: charge.targetPlanId },
-      'Cobrança de upgrade aprovada mas o plano de destino não existe mais - upgrade não aplicado.'
-    );
+    // mas não tem mais plano pra aplicar - precisa de reconciliação manual.
+    // Marca como aprovada mesmo assim (o pagamento existiu) e alerta - não
+    // tenta de novo sozinho, reprocessar não faria o plano voltar a existir.
+    const claimed = await prisma.$transaction((tx) => claimPixCharge(tx, charge.id));
+    if (claimed.count > 0) {
+      app.log.error(
+        { chargeId: charge.id, targetPlanId: charge.targetPlanId },
+        'Cobrança de upgrade aprovada mas o plano de destino não existe mais - upgrade não aplicado.'
+      );
+      sendOpsAlertEmail(
+        app,
+        'Upgrade Pix pago sem plano de destino válido',
+        `chargeId: ${charge.id}\ntargetPlanId: ${charge.targetPlanId}`
+      ).catch(() => {});
+    }
     return;
   }
 
@@ -87,20 +108,37 @@ async function handleUpgradeChargePaid(app: FastifyInstance, charge: { id: strin
   // atualizar o valor lá antes de aplicar o plano novo aqui, o cliente ficaria
   // com os recursos do plano caro mas continuaria sendo cobrado o valor do
   // plano antigo pra sempre. Só aplica o plano localmente depois de confirmar
-  // que a Mercado Pago aceitou o novo valor.
+  // que a Mercado Pago aceitou o novo valor. Feito ANTES de marcar a cobrança
+  // como aprovada: antes ela já ficava 'approved' e a falha aqui só virava
+  // log + 200 - o reenvio parava no "já aprovada" e o upgrade pago nunca era
+  // aplicado. Agora a falha sobe como erro: o handler do webhook manda o
+  // alerta de ops e devolve 500, e a Mercado Pago reentrega (atualizar o
+  // valor de novo é idempotente - mesmo valor).
   if (subscription.provider === 'mercado_pago' && subscription.providerSubscriptionId && targetPlan.priceCurrent !== null) {
     try {
       await updatePreapprovalValue(subscription.providerSubscriptionId, Number(targetPlan.priceCurrent));
     } catch (err) {
       app.log.error(
         { err, subscriptionId: subscription.id, targetPlanId: targetPlan.id },
-        'Falha ao atualizar o valor da assinatura no cartão após upgrade pago - plano NÃO aplicado, precisa de retry manual.'
+        'Falha ao atualizar o valor da assinatura no cartão após upgrade pago - plano NÃO aplicado, aguardando reentrega do webhook.'
       );
-      return;
+      throw new Error(
+        `Upgrade pago (chargeId ${charge.id}, subscriptionId ${subscription.id}, plano ${targetPlan.key}) mas falhou ao atualizar o valor da assinatura no cartão - plano NÃO aplicado: ${err instanceof Error ? err.message : String(err)}`
+      );
     }
   }
 
-  const user = await prisma.user.update({ where: { id: subscription.userId }, data: { planId: targetPlan.id } });
+  // Aprovação da cobrança e troca do plano na mesma transação - ou as duas
+  // acontecem, ou nenhuma (e o reenvio do webhook tenta de novo).
+  // previousPlanId guarda o plano de antes, pra desfazer o upgrade se essa
+  // cobrança for estornada depois (ver handleChargeReversed).
+  const user = await prisma.$transaction(async (tx) => {
+    const before = await tx.user.findUniqueOrThrow({ where: { id: subscription.userId } });
+    const claimed = await claimPixCharge(tx, charge.id, { previousPlanId: before.planId });
+    if (claimed.count === 0) return null;
+    return tx.user.update({ where: { id: subscription.userId }, data: { planId: targetPlan.id } });
+  });
+  if (!user) return;
 
   if (user.pushToken) {
     await sendPushNotification(
@@ -116,14 +154,65 @@ async function handleUpgradeChargePaid(app: FastifyInstance, charge: { id: strin
 // handler só olhava pra status "approved" novo, então uma cobrança já
 // aprovada que depois vira "refunded"/"charged_back" ficava intocada pra
 // sempre, com a assinatura continuando "active".
-async function handleChargeReversed(app: FastifyInstance, charge: { id: string; subscriptionId: string }, mpStatus: string) {
-  await prisma.pixCharge.update({ where: { id: charge.id }, data: { status: 'canceled' } });
-  const subscription = await prisma.subscription.findUniqueOrThrow({ where: { id: charge.subscriptionId } });
-  await prisma.$transaction([
-    prisma.subscription.update({ where: { id: subscription.id }, data: { status: 'canceled' } }),
-    prisma.user.update({ where: { id: subscription.userId }, data: { subscriptionStatus: 'canceled' } }),
-  ]);
-  app.log.warn({ chargeId: charge.id, mpStatus }, 'Pagamento Pix estornado/contestado pela Mercado Pago - assinatura cancelada.');
+//
+// Antes isso virava 'canceled', que mantém acesso até currentPeriodEnd + 7
+// dias (é o mesmo status de quem cancelou a renovação com o ciclo pago) -
+// quem pegou o dinheiro de volta seguia usando o ciclo estornado inteiro.
+// Agora vira 'past_due' com a carência já esgotada (revokedAccessPeriodEnd):
+// bloqueio na hora, pelas regras de acesso que já existem.
+async function handleChargeReversed(
+  app: FastifyInstance,
+  charge: { id: string; subscriptionId: string; status: string; targetPlanId: string | null; previousPlanId: string | null },
+  mpStatus: string
+) {
+  const wasApproved = charge.status === 'approved';
+
+  // Estorno de uma cobrança de UPGRADE: o ciclo base continua pago (foi
+  // outra cobrança), só o upgrade é desfeito - volta pro plano de antes.
+  // Antes cancelava a assinatura inteira E deixava o plano caro aplicado.
+  if (charge.targetPlanId) {
+    const reverted = await prisma.$transaction(async (tx) => {
+      const claimed = await tx.pixCharge.updateMany({ where: { id: charge.id, status: { not: 'canceled' } }, data: { status: 'canceled' } });
+      if (claimed.count === 0 || !wasApproved || !charge.previousPlanId) return false;
+      const subscription = await tx.subscription.findUniqueOrThrow({ where: { id: charge.subscriptionId } });
+      const user = await tx.user.findUniqueOrThrow({ where: { id: subscription.userId } });
+      // Só desfaz se a conta ainda está no plano desse upgrade - se já trocou
+      // de plano depois por outro caminho, não sobrescreve.
+      if (user.planId !== charge.targetPlanId) return false;
+      await tx.user.update({ where: { id: user.id }, data: { planId: charge.previousPlanId } });
+      return true;
+    });
+    app.log.warn({ chargeId: charge.id, mpStatus, reverted }, 'Cobrança Pix de upgrade estornada/contestada pela Mercado Pago.');
+    if (wasApproved) {
+      // Sempre alerta: o valor da assinatura no cartão (updatePreapprovalValue)
+      // continua no do plano novo e precisa ser conferido à mão; e cobranças
+      // de upgrade aprovadas antes de previousPlanId existir não têm como ser
+      // desfeitas sozinhas.
+      sendOpsAlertEmail(
+        app,
+        'Upgrade Pix estornado/contestado',
+        `chargeId: ${charge.id}\nsubscriptionId: ${charge.subscriptionId}\nstatus MP: ${mpStatus}\nplano revertido automaticamente: ${reverted ? 'sim' : 'NÃO - revisar à mão'}\nconferir o valor da assinatura no cartão.`
+      ).catch(() => {});
+    }
+    return;
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const claimed = await tx.pixCharge.updateMany({ where: { id: charge.id, status: { not: 'canceled' } }, data: { status: 'canceled' } });
+    // Cobrança que nunca tinha sido aprovada aqui não liberou acesso nenhum
+    // - revogar puniria um ciclo anterior legitimamente pago.
+    if (claimed.count === 0 || !wasApproved) return;
+    const subscription = await tx.subscription.findUniqueOrThrow({ where: { id: charge.subscriptionId } });
+    await tx.subscription.update({
+      where: { id: subscription.id },
+      // Assinatura já cancelada continua 'canceled' (mudar de volta faria
+      // /plans/select tentar reaproveitar uma assinatura morta) - só a data
+      // é recuada, e o usuário é que vira past_due.
+      data: { ...(subscription.status === 'canceled' ? {} : { status: 'past_due' }), currentPeriodEnd: revokedAccessPeriodEnd() },
+    });
+    await tx.user.update({ where: { id: subscription.userId }, data: { subscriptionStatus: 'past_due' } });
+  });
+  app.log.warn({ chargeId: charge.id, mpStatus }, 'Pagamento Pix estornado/contestado pela Mercado Pago - acesso bloqueado (past_due).');
 }
 
 async function handlePaymentEvent(app: FastifyInstance, dataId: string) {
@@ -139,40 +228,46 @@ async function handlePaymentEvent(app: FastifyInstance, dataId: string) {
     return;
   }
 
-  if (charge.status === 'approved') return;
   if (payment.status !== 'approved') return;
 
-  // Guarda atômica contra o Mercado Pago reenviar o mesmo webhook (eles
-  // avisam que isso acontece) - sem isso, dois eventos quase simultâneos
-  // passariam os dois pela checagem "status === 'approved'" lá em cima
-  // antes de qualquer um gravar, e processariam o mesmo pagamento 2x
-  // (notificação duplicada, chamada duplicada pra Mercado Pago no upgrade).
-  const claimed = await prisma.pixCharge.updateMany({
-    where: { id: charge.id, status: { not: 'approved' } },
-    data: { status: 'approved', paidAt: new Date() },
-  });
-  if (claimed.count === 0) return;
-
   if (charge.targetPlanId) {
+    if (charge.status === 'approved') return;
     await handleUpgradeChargePaid(app, { ...charge, targetPlanId: charge.targetPlanId });
     return;
   }
 
-  const existingSubscription = await prisma.subscription.findUniqueOrThrow({ where: { id: charge.subscriptionId } });
+  // Aprovação da cobrança e ativação da assinatura+usuário numa transação
+  // só. Antes a cobrança era marcada 'approved' ANTES da transação que
+  // ativa - uma falha transitória no meio devolvia 500, mas o reenvio do
+  // webhook parava no "já aprovada" e o cliente que pagou ficava preso em
+  // past_due pra sempre. Agora, se qualquer escrita falhar, a aprovação
+  // também é desfeita e a reentrega processa tudo de novo.
+  const user = await prisma.$transaction(async (tx) => {
+    const claimed = await claimPixCharge(tx, charge.id);
+    const subscription = await tx.subscription.findUniqueOrThrow({ where: { id: charge.subscriptionId } });
 
-  // Numa transação: se travar entre as duas escritas, a assinatura não
-  // pode ficar "active" com o usuário ainda preso em "past_due" (ou
-  // vice-versa), travando acesso de quem já pagou.
-  const [, user] = await prisma.$transaction([
-    prisma.subscription.update({
-      where: { id: charge.subscriptionId },
+    if (claimed.count === 0) {
+      // Já aprovada antes: normalmente é só reentrega (no-op). Mas cobranças
+      // que ficaram presas pelo bug acima (aprovadas sem a ativação gravada)
+      // são recuperadas aqui no próximo reenvio.
+      const newerCharge = await tx.pixCharge.findFirst({
+        where: { subscriptionId: charge.subscriptionId, createdAt: { gt: charge.createdAt } },
+        select: { id: true },
+      });
+      if (!pixChargeNeedsActivationRecovery(subscription, charge, Boolean(newerCharge))) return null;
+      app.log.warn({ chargeId: charge.id }, 'Cobrança Pix aprovada sem ativação gravada - reprocessando ativação.');
+    }
+
+    await tx.subscription.update({
+      where: { id: subscription.id },
       data: { status: 'active', currentPeriodEnd: charge.periodEnd },
-    }),
-    prisma.user.update({
-      where: { id: existingSubscription.userId },
+    });
+    return tx.user.update({
+      where: { id: subscription.userId },
       data: { subscriptionStatus: 'active' },
-    }),
-  ]);
+    });
+  });
+  if (!user) return;
 
   if (user.pushToken) {
     await sendPushNotification(
@@ -209,28 +304,72 @@ async function handleHypercashSubscriptionEvent(app: FastifyInstance, data: Hype
   const subscription = await prisma.subscription.findFirst({
     where: { provider: 'hypercash', providerSubscriptionId: subData.paymentLinkId },
   });
+  const status = mapHypercashStatus(subData.status);
+
+  if (!subscription) {
+    // Antes era ignorado em silêncio - mas um link que não conhecemos
+    // recebendo evento pode ser um cliente sendo cobrado sem a gente
+    // registrar nada (ex: link antigo sobrescrito). Alerta pra conferir -
+    // menos quando o evento é de cancelamento/expiração (ex: a assinatura
+    // antiga que o próprio upgrade cancelou), que não cobra ninguém.
+    if (status !== 'canceled') {
+      sendOpsAlertEmail(
+        app,
+        '[HyperCash] Webhook de assinatura para link desconhecido',
+        `paymentLinkId: ${subData.paymentLinkId}\nstatus HyperCash: ${subData.status}`
+      ).catch(() => {});
+    }
+    return true;
+  }
+
   // Já cancelamos essa assinatura por aqui - um webhook atrasado ou
   // reenviado não deve reativar ela sozinho (mesmo princípio do handler da
-  // Mercado Pago).
-  if (!subscription || subscription.status === 'canceled') return true;
+  // Mercado Pago). Mas se a HyperCash diz que ela está ATIVA, o cartão
+  // continua sendo cobrado por algo que consideramos cancelado - alerta.
+  if (subscription.status === 'canceled') {
+    if (status === 'active') {
+      sendOpsAlertEmail(
+        app,
+        '[HyperCash] Assinatura cancelada localmente mas ativa na HyperCash',
+        `subscriptionId: ${subscription.id}\nuserId: ${subscription.userId}\npaymentLinkId: ${subData.paymentLinkId}\nconferir se o cartão continua sendo cobrado.`
+      ).catch(() => {});
+    }
+    return true;
+  }
 
-  const status = mapHypercashStatus(subData.status);
   const nextPeriodEnd = subData.currentPeriodEnd ? new Date(subData.currentPeriodEnd) : undefined;
 
   const statusChanged = status !== subscription.status;
   const periodChanged =
     nextPeriodEnd !== undefined && nextPeriodEnd.getTime() !== (subscription.currentPeriodEnd?.getTime() ?? -1);
+  // Plano escolhido em /plans/select que só vale depois de pago (ver
+  // pendingPlanId no schema) - aplicado aqui, quando a HyperCash confirma.
+  const applyPendingPlan = status === 'active' && subscription.pendingPlanId !== null;
   // Reentrega do mesmo evento (a HyperCash pode reenviar, como a Mercado
   // Pago já faz) vira um no-op aqui - idempotente sem precisar de guarda
   // explícita, já que só grava quando algo de fato mudou.
-  if (!statusChanged && !periodChanged) return true;
+  if (!statusChanged && !periodChanged && !applyPendingPlan) return true;
 
   await prisma.$transaction([
     prisma.subscription.update({
       where: { id: subscription.id },
-      data: { ...(statusChanged ? { status } : {}), ...(periodChanged ? { currentPeriodEnd: nextPeriodEnd } : {}) },
+      data: {
+        ...(statusChanged ? { status } : {}),
+        ...(periodChanged ? { currentPeriodEnd: nextPeriodEnd } : {}),
+        ...(applyPendingPlan ? { pendingPlanId: null } : {}),
+      },
     }),
-    ...(statusChanged ? [prisma.user.update({ where: { id: subscription.userId }, data: { subscriptionStatus: status } })] : []),
+    ...(statusChanged || applyPendingPlan
+      ? [
+          prisma.user.update({
+            where: { id: subscription.userId },
+            data: {
+              ...(statusChanged ? { subscriptionStatus: status } : {}),
+              ...(applyPendingPlan ? { planId: subscription.pendingPlanId } : {}),
+            },
+          }),
+        ]
+      : []),
   ]);
 
   if (statusChanged && status === 'active') {
@@ -322,13 +461,14 @@ async function applyHypercashUpgrade(app: FastifyInstance, charge: { id: string;
   }
 
   await prisma.$transaction([
-    prisma.hypercashUpgradeCharge.update({ where: { id: charge.id }, data: { status: 'paid', paidAt: new Date() } }),
     prisma.subscription.update({
       where: { id: subscription.id },
       data: {
         status: 'past_due',
         providerSubscriptionId: link?.id ?? null,
         lastInvoiceUrl: link?.checkoutUrl ?? null,
+        // Plano já pago (pelo upgrade) - nada mais pendente nessa assinatura.
+        pendingPlanId: null,
       },
     }),
     prisma.user.update({ where: { id: subscription.userId }, data: { planId: targetPlan.id, subscriptionStatus: 'past_due' } }),
@@ -375,7 +515,27 @@ async function handleHypercashUpgradeChargeEvent(app: FastifyInstance, data: Hyp
 
   if (!PAID_UPGRADE_STATUSES.has(txData.status.toLowerCase())) return true; // pendente/falhou - nada a fazer ainda
 
-  await applyHypercashUpgrade(app, charge);
+  // Guarda atômica ANTES de qualquer efeito colateral (mesmo princípio do
+  // caminho da Mercado Pago) - só a checagem "status === 'paid'" acima
+  // deixava dois webhooks simultâneos passarem os dois e aplicarem o upgrade
+  // 2x (2 links de assinatura novos, cancelamento duplicado).
+  const claimed = await prisma.hypercashUpgradeCharge.updateMany({
+    where: { id: charge.id, status: { not: 'paid' } },
+    data: { status: 'paid', paidAt: new Date() },
+  });
+  if (claimed.count === 0) return true;
+
+  try {
+    await applyHypercashUpgrade(app, charge);
+  } catch (err) {
+    // Desfaz a reserva pra reentrega do webhook (500 lá em cima) conseguir
+    // aplicar de novo - sem isso o upgrade pago ficaria marcado 'paid' e
+    // nunca seria aplicado.
+    await prisma.hypercashUpgradeCharge
+      .update({ where: { id: charge.id }, data: { status: charge.status, paidAt: null } })
+      .catch((revertErr) => app.log.error({ err: revertErr, chargeId: charge.id }, 'Falha ao desfazer reserva da cobrança de upgrade HyperCash.'));
+    throw err;
+  }
   return true;
 }
 
@@ -502,10 +662,12 @@ export async function billingRoutes(app: FastifyInstance) {
           // Formato que não reconhecemos (nem "subscription.test", nem
           // assinatura, nem cobrança de upgrade) - alerta em vez de ignorar
           // silenciosamente, igual já fazíamos antes de processar de verdade.
+          // Só ids/status/valor - o corpo bruto tem dados pessoais do pagador
+          // (nome, e-mail, documento) que não devem ir pra e-mail de alerta.
           sendOpsAlertEmail(
             app,
             `[HyperCash] Webhook com formato não reconhecido: ${type}`,
-            `raw body: ${rawBody}`
+            summarizeHypercashWebhook(request.body)
           ).catch(() => {});
         }
       } catch (err) {
@@ -513,7 +675,7 @@ export async function billingRoutes(app: FastifyInstance) {
         sendOpsAlertEmail(
           app,
           `[HyperCash] Falha ao processar webhook: ${type}`,
-          `erro: ${err instanceof Error ? err.message : String(err)}\n\nraw body: ${rawBody}`
+          `erro: ${err instanceof Error ? err.message : String(err)}\n\n${summarizeHypercashWebhook(request.body)}`
         ).catch(() => {});
         // 500 pra HyperCash reentregar depois (mesmo princípio do handler da
         // Mercado Pago) em vez de considerar entregue um evento que não foi

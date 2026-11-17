@@ -8,6 +8,7 @@ import {
   getSubscriptionByPaymentLinkId,
   priceToCents,
 } from '../../hypercash-client';
+import { inheritedGraceSince, planWhilePaymentPending } from '../../lib/billing-rules';
 import { cancelLegacyMercadoPagoSubscription } from '../../lib/cancel-other-provider-subscription';
 import { applyPercentOff, validateCoupon } from '../../lib/coupons';
 import { sendOpsAlertEmail } from '../../lib/email';
@@ -203,12 +204,40 @@ export async function plansRoutes(app: FastifyInstance) {
 
       let trialEndsAt = user.trialEndsAt;
 
-      // Plano diferente do que a assinatura existente cobre - desativa o
-      // link antigo (se já tinha algum gerado) e cancela a assinatura local,
-      // começando do zero pro plano novo. Mesmo plano = reaproveita (retry,
-      // duplo toque, ou voltando a pagar depois de past_due).
-      if (subscription && user.plan?.id !== plan.id) {
+      // Plano que vale (limites) enquanto essa troca não for paga - nunca um
+      // plano mais caro sem pagamento (ver planWhilePaymentPending). Quando
+      // fica diferente do escolhido, o escolhido vai pra
+      // Subscription.pendingPlanId e só é aplicado quando a HyperCash
+      // confirmar o pagamento (handleHypercashSubscriptionEvent /
+      // reconcileHypercashSubscription). Antes o planId trocava na hora:
+      // alternar planos dava os limites do Pro/Master sem pagar nada.
+      const effectivePlan = alreadyMidTrial ? plan : planWhilePaymentPending(user.plan, plan);
+      const pendingPlanId = effectivePlan.id === plan.id ? null : plan.id;
+
+      // Plano diferente do que a assinatura existente cobre (o pendente, se
+      // houver, senão o atual da conta) - cancela a assinatura antiga na
+      // HyperCash (se já tinha sido paga alguma vez), desativa o link e
+      // cancela a assinatura local, começando do zero pro plano novo. Mesmo
+      // plano = reaproveita (retry, duplo toque, ou voltando a pagar depois
+      // de past_due).
+      const subscriptionPlanId = subscription?.pendingPlanId ?? user.planId;
+      if (subscription && subscriptionPlanId !== plan.id) {
         if (subscription.providerSubscriptionId) {
+          try {
+            // Assinatura de cartão viva (ex: past_due por renovação recusada)
+            // continuaria sendo retentada pela HyperCash depois de só
+            // desativar o link - cancela de verdade antes de trocar.
+            const hcSubscription = await getSubscriptionByPaymentLinkId(subscription.providerSubscriptionId);
+            if (hcSubscription) await cancelHypercashSubscription(hcSubscription.id);
+          } catch (err) {
+            app.log.error(err);
+            sendOpsAlertEmail(
+              app,
+              'Falha ao cancelar assinatura HyperCash na troca de plano',
+              `userId: ${user.id}\nsubscriptionId: ${subscription.id}\nerro: ${err instanceof Error ? err.message : String(err)}`
+            ).catch(() => {});
+            return reply.status(502).send({ message: 'Não foi possível cancelar sua assinatura anterior. Tente novamente em instantes.' });
+          }
           try {
             await deactivatePaymentLink(subscription.providerSubscriptionId);
           } catch (err) {
@@ -223,13 +252,24 @@ export async function plansRoutes(app: FastifyInstance) {
         const trial = await resolveTrial(user, plan);
         trialEndsAt = trial.trialEndsAt;
 
+        // Assinatura sem teste grátis nasce past_due ainda não paga - a
+        // carência dela herda o "desde quando" da assinatura anterior da
+        // conta (de qualquer status/provedor), em vez de recomeçar do zero
+        // (ver inheritedGraceSince). Sem isso, trocar de plano ou cancelar e
+        // assinar de novo reiniciava os 7 dias a cada vez.
+        const previousSubscription = trial.eligibleForTrial
+          ? null
+          : await prisma.subscription.findFirst({ where: { userId: user.id }, orderBy: { createdAt: 'desc' } });
+
         subscription = await prisma.subscription.create({
           data: {
             userId: user.id,
             provider: 'hypercash',
             status: trial.eligibleForTrial ? 'trialing' : 'past_due',
-            currentPeriodEnd: trial.eligibleForTrial ? trial.trialEndsAt : null,
+            currentPeriodEnd: trial.eligibleForTrial ? trial.trialEndsAt : inheritedGraceSince(previousSubscription),
             pendingCouponPercentOff: couponPercentOff,
+            // Teste grátis libera o plano escolhido na hora (abaixo) - nada pendente.
+            pendingPlanId: trial.eligibleForTrial ? null : pendingPlanId,
           },
         });
 
@@ -310,9 +350,17 @@ export async function plansRoutes(app: FastifyInstance) {
         }
       }
 
+      // Assinatura reaproveitada (mesmo plano) já tem o pendente certo; só
+      // corrige se divergir (ex: assinatura de antes desta coluna existir).
+      if (subscription.pendingPlanId !== pendingPlanId) {
+        subscription = await prisma.subscription.update({ where: { id: subscription.id }, data: { pendingPlanId } });
+      }
+
       const updated = await prisma.user.update({
         where: { id: user.id },
-        data: { planId: plan.id, subscriptionStatus: alreadyMidTrial ? 'trialing' : 'past_due', trialEndsAt },
+        // effectivePlan, não plan - o plano escolhido mais caro só entra
+        // quando o pagamento confirmar (ver pendingPlanId acima).
+        data: { planId: effectivePlan.id, subscriptionStatus: alreadyMidTrial ? 'trialing' : 'past_due', trialEndsAt },
         include: userWithPlan,
       });
 
@@ -368,11 +416,31 @@ export async function plansRoutes(app: FastifyInstance) {
     }
 
     if (subscription?.providerSubscriptionId) {
+      // Antes, falha ao cancelar na HyperCash só virava log e a assinatura
+      // era marcada 'canceled' aqui mesmo assim - o cartão continuava sendo
+      // cobrado e os webhooks seguintes eram ignorados (assinatura já
+      // "cancelada" localmente). Agora, se não deu pra cancelar a cobrança
+      // recorrente de verdade, não mexe em nada local: devolve 502 pra
+      // pessoa tentar de novo e alerta ops.
       try {
         const hcSubscription = await getSubscriptionByPaymentLinkId(subscription.providerSubscriptionId);
         if (hcSubscription) {
           await cancelHypercashSubscription(hcSubscription.id);
         }
+      } catch (err) {
+        app.log.error(err);
+        sendOpsAlertEmail(
+          app,
+          'Falha ao cancelar assinatura HyperCash (/plans/cancel)',
+          `userId: ${request.user.sub}\nsubscriptionId: ${subscription.id}\nerro: ${err instanceof Error ? err.message : String(err)}`
+        ).catch(() => {});
+        return reply.status(502).send({ message: 'Não foi possível cancelar sua assinatura agora. Tente novamente em instantes.' });
+      }
+      // Desativar o link é só pra ninguém pagar ele de novo - a cobrança
+      // recorrente já foi cancelada acima, então falha aqui não segura o
+      // cancelamento (e se alguém pagar mesmo assim, o webhook de "ativa"
+      // numa assinatura cancelada já alerta ops).
+      try {
         await deactivatePaymentLink(subscription.providerSubscriptionId);
       } catch (err) {
         app.log.error(err);

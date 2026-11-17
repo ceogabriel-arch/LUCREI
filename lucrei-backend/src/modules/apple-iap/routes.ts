@@ -6,16 +6,18 @@ import {
   expiresDateToDate,
   getOrCreateAppleAppAccountToken,
   getSignedDataVerifier,
-  mapAppleStatus,
   planKeyForAppleProduct,
 } from '../../lib/apple-iap';
+import { resolveAppleTransactionStatus, revokedAccessPeriodEnd } from '../../lib/billing-rules';
 import { prisma } from '../../lib/prisma';
 import { sendPushNotification } from '../../lib/push-notifications';
 import { serializeUser, userWithPlan } from '../plans/serialize-user';
 
 const BUNDLE_ID = 'com.lucreiapp.mobile';
 
-type ApplyResult = { applied: true } | { applied: false; reason: string };
+// rejected = transação válida mas que não deve liberar nada (vencida ou
+// reembolsada) - não é falha nossa, não precisa alertar ops.
+type ApplyResult = { applied: true } | { applied: false; reason: string; rejected?: boolean };
 
 /**
  * Aplica uma transação da Apple já verificada (chamada tanto pela compra
@@ -56,8 +58,51 @@ async function applyAppleTransaction(
     userId = user.id;
   }
 
-  const status = explicitStatus !== undefined ? mapAppleStatus(explicitStatus) : 'active';
-  const currentPeriodEnd = expiresDateToDate(transaction.expiresDate);
+  const txPeriodEnd = expiresDateToDate(transaction.expiresDate);
+
+  // Transação mais velha do que o período já gravado (JWS antigo reenviado,
+  // ou notificação atrasada de um ciclo anterior) - não pode fazer o estado
+  // andar pra trás nem reabrir acesso. Ignora sem erro.
+  if (subscription?.currentPeriodEnd && txPeriodEnd && txPeriodEnd.getTime() < subscription.currentPeriodEnd.getTime()) {
+    app.log.warn({ originalTransactionId, subscriptionId: subscription.id }, 'Transação Apple mais antiga que o período já gravado - ignorada.');
+    return { applied: true };
+  }
+
+  // Antes, sem status explícito (compra síncrona do app) a conta virava
+  // 'active' sem olhar expiresDate/revocationDate - reenviar um JWS antigo
+  // (assinado de verdade) de uma assinatura já vencida reabria o acesso pra
+  // sempre. Ver resolveAppleTransactionStatus.
+  const resolved = resolveAppleTransactionStatus({
+    explicitStatus,
+    expiresDate: transaction.expiresDate,
+    revocationDate: transaction.revocationDate,
+  });
+  // Compra síncrona (sem status explícito) de algo já vencido/reembolsado:
+  // recusa sem mexer em nada - não é uma compra nova, e gravar 'canceled'
+  // aqui poderia sobrescrever o status de uma assinatura de outro provedor.
+  if (explicitStatus === undefined && resolved.kind !== 'ok') {
+    return { applied: false, rejected: true, reason: resolved.kind === 'revoked' ? 'transação reembolsada/revogada' : 'assinatura já expirada' };
+  }
+  // O JWS que o app manda é o mesmo de antes de um reembolso (a Apple não
+  // reemite ele com revocationDate pro aparelho) - reenviar ele depois do
+  // webhook de REVOKED/EXPIRED reabriria o acesso. Compra síncrona só pode
+  // reativar uma assinatura local não-ativa com uma transação FEITA DEPOIS
+  // da última mudança de estado registrada (assinou de novo / renovou).
+  if (
+    explicitStatus === undefined &&
+    subscription &&
+    subscription.status !== 'active' &&
+    (transaction.purchaseDate ?? 0) <= subscription.updatedAt.getTime()
+  ) {
+    return { applied: false, rejected: true, reason: 'transação anterior ao último estado registrado da assinatura' };
+  }
+
+  // Reembolso/revogação pela Apple: antes virava 'canceled', que mantém
+  // acesso até currentPeriodEnd + 7 dias. Agora 'past_due' com a carência já
+  // esgotada (revokedAccessPeriodEnd) - bloqueio na hora, mesmo critério do
+  // estorno de Pix (billing/routes.ts).
+  const status = resolved.kind === 'ok' ? resolved.status : 'past_due';
+  const currentPeriodEnd = resolved.kind === 'revoked' ? revokedAccessPeriodEnd() : txPeriodEnd;
 
   if (!subscription) {
     subscription = await prisma.subscription.create({
@@ -141,6 +186,9 @@ export async function appleIapRoutes(app: FastifyInstance) {
       }
 
       const result = await applyAppleTransaction(app, transaction);
+      if (!result.applied && result.rejected) {
+        return reply.status(409).send({ message: 'Essa assinatura da App Store já expirou ou foi reembolsada.' });
+      }
       if (!result.applied) {
         app.log.error({ reason: result.reason, transaction }, 'Falha ao aplicar transação Apple verificada.');
         sendOpsAlertEmail(app, 'Falha ao aplicar compra Apple IAP', `userId: ${request.user.sub}\nmotivo: ${result.reason}`).catch(

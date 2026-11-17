@@ -501,6 +501,12 @@ model Subscription {
   // trialing ou não - garante que o desconto vale só nela, nunca num ciclo
   // seguinte.
   pendingCouponPercentOff Int?
+  // Plano que o link de pagamento dessa assinatura cobra, quando ainda NÃO
+  // foi aplicado em User.planId - trocar de plano sem pagar não pode liberar
+  // os limites do plano novo na hora (dava pra alternar planos e ganhar
+  // limites do Pro/Master de graça). Aplicado (e zerado) quando o pagamento
+  // confirma (webhook/reconciliação da HyperCash). Null = nada pendente.
+  pendingPlanId           String?
 
   user                    User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
   pixCharges              PixCharge[]
@@ -554,6 +560,10 @@ model PixCharge {
   // no meio do ciclo) - ao confirmar o pagamento, aplica esse plano no lugar
   // de só renovar o ciclo atual. Nulo em cobranças normais de renovação.
   targetPlanId         String?
+  // Plano que a conta tinha ANTES de aplicar targetPlanId - gravado quando o
+  // upgrade é aplicado, usado pra desfazer o upgrade se essa cobrança for
+  // estornada/contestada depois (sem isso o plano caro ficava pra sempre).
+  previousPlanId       String?
   createdAt            DateTime        @default(now())
 
   subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
