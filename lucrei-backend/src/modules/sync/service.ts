@@ -1,5 +1,6 @@
 import { mapLimit, withTimeout } from '../../lib/concurrency';
 import { checkDailyGoalReached } from '../../lib/daily-goal-notifications';
+import { isDemoShop } from '../../lib/demo-shop';
 import { notifyOrderCompletedIfNeeded } from '../../lib/order-notifications';
 import { prisma } from '../../lib/prisma';
 import { getValidAccessToken } from '../../lib/shopee-token';
@@ -323,6 +324,18 @@ export async function syncShopOrders(shopId: string) {
 // enquanto o usuário espera é o que mais pesa quando muita gente sincroniza
 // ao mesmo tempo (cada requisição presa até terminar, num único processo).
 export async function runShopSync(shopId: string) {
+  // Loja de demonstração (revisão da Apple) - não tem token real, nunca vai
+  // ter. Os pedidos/produtos já estão pré-cadastrados no banco, então
+  // "sincronizar" aqui é só confirmar sucesso sem bater na Shopee de verdade.
+  const shop = await prisma.shop.findUniqueOrThrow({ where: { id: shopId } });
+  if (isDemoShop(shop)) {
+    await prisma.shop.update({
+      where: { id: shopId },
+      data: { syncStatus: 'done', syncStartedAt: new Date(), syncOrdersSynced: 0, syncError: null, lastSyncedAt: new Date() },
+    });
+    return;
+  }
+
   await prisma.shop.update({
     where: { id: shopId },
     data: { syncStatus: 'running', syncStartedAt: new Date(), syncOrdersSynced: null, syncError: null },
@@ -350,6 +363,24 @@ export async function runShopSync(shopId: string) {
 // devolve na hora) e grava progresso no próprio Shop, que o app consulta por
 // polling em vez de ficar com a requisição HTTP presa esperando.
 export async function runHistoryBackfill(shopId: string, sinceDate: Date) {
+  // Mesmo motivo do guard em runShopSync acima - loja de demonstração nunca
+  // tem token real pra puxar histórico nenhum.
+  const shopBefore = await prisma.shop.findUniqueOrThrow({ where: { id: shopId } });
+  if (isDemoShop(shopBefore)) {
+    await prisma.shop.update({
+      where: { id: shopId },
+      data: {
+        historyBackfillStatus: 'done',
+        historyBackfillStartedAt: new Date(),
+        historyBackfillDoneAt: new Date(),
+        historyBackfillSynced: 0,
+        historyBackfillWindowsDone: 0,
+        historyBackfillError: null,
+      },
+    });
+    return;
+  }
+
   await prisma.shop.update({
     where: { id: shopId },
     data: {

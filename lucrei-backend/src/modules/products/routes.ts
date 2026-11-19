@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { Prisma, type Marketplace, type PrismaClient } from '@prisma/client';
 
 import { mapLimit } from '../../lib/concurrency';
+import { isDemoShop } from '../../lib/demo-shop';
 import { buildOrdersXlsx, STATUS_LABELS } from '../../lib/order-export';
 import { rangeStart, type Period } from '../../lib/period';
 import { listPendingOrdersForProduct } from '../../lib/product-pending-orders';
@@ -144,7 +145,13 @@ function marketplaceName(provider: Marketplace) {
 // "catálogo" é o que já foi criado sob demanda a partir dos pedidos
 // sincronizados (ver tiktokshop-service.ts / ifood-service.ts), sem foto nem
 // preço de vitrine. Antes a iFood caía no caminho da Shopee e falhava.
-async function getLocalCatalog(shopDbId: string, column: 'tiktokShopItemId' | 'ifoodItemId'): Promise<CatalogItem[]> {
+// Mesmo caminho serve a loja de demonstração (revisão da Apple, ver
+// isDemoShop) pra qualquer provider - ela não tem token real pra chamar a
+// API de catálogo de verdade, só os produtos pré-cadastrados no banco.
+async function getLocalCatalog(
+  shopDbId: string,
+  column: 'tiktokShopItemId' | 'ifoodItemId' | 'shopeeItemId' | 'mercadoLivreItemId'
+): Promise<CatalogItem[]> {
   const products = await prisma.product.findMany({
     where: { shopId: shopDbId, [column]: { not: null } },
     orderBy: { name: 'asc' },
@@ -340,8 +347,9 @@ export async function productRoutes(app: FastifyInstance) {
       const column = itemIdColumn(shop.provider);
 
       try {
-        const catalog =
-          shop.provider === 'tiktok_shop'
+        const catalog = isDemoShop(shop)
+          ? await getLocalCatalog(shop.id, column)
+          : shop.provider === 'tiktok_shop'
             ? await getLocalCatalog(shop.id, 'tiktokShopItemId')
             : shop.provider === 'ifood'
               ? await getLocalCatalog(shop.id, 'ifoodItemId')
