@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { useFocusEffect } from 'expo-router';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { BlurredValue } from '@/components/blurred-value';
 import { GlassCard } from '@/components/glass-card';
@@ -95,7 +95,14 @@ const ProductRow = memo(function ProductRow({
       </Pressable>
 
       {product.image ? (
-        <Image source={{ uri: product.image }} style={{ width: 48, height: 48, borderRadius: 10 }} />
+        <Image
+          source={{ uri: product.image }}
+          style={{ width: 48, height: 48, borderRadius: 10 }}
+          cachePolicy="memory-disk"
+          contentFit="cover"
+          transition={150}
+          recyclingKey={product.shopeeItemId}
+        />
       ) : (
         <View className="h-12 w-12 items-center justify-center rounded-[10px] bg-lucrei-surfaceAlt" />
       )}
@@ -725,38 +732,48 @@ export default function ProdutosScreen() {
             </View>
           )}
 
-          <ScrollView
+          <FlatList
+            data={filteredProducts}
+            keyExtractor={(product) => product.shopeeItemId}
+            // Antes era ScrollView + .map() - montava e disparava o download
+            // da imagem de TODOS os produtos do catálogo (até 200, ver
+            // maxItems no backend) de uma vez só na hora de abrir a tela.
+            // FlatList só monta/baixa imagem das linhas perto da área
+            // visível, bem mais rápido pra abrir a tela com catálogo grande.
+            windowSize={7}
+            initialNumToRender={12}
+            maxToRenderPerBatch={12}
+            renderItem={({ item: product }) => {
+              const value = edits[product.shopeeItemId] ?? originalCostText(product);
+              const dirty = value !== originalCostText(product);
+              return (
+                <ProductRow
+                  product={product}
+                  value={value}
+                  dirty={dirty}
+                  selected={selected.has(product.shopeeItemId)}
+                  disabled={saving}
+                  onChangeCost={handleChangeCost}
+                  onToggleSelect={handleToggleSelect}
+                  period={period}
+                  overLimit={isOverLimit}
+                />
+              );
+            }}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={webCapWidth()}
             contentContainerClassName="mt-4 gap-3 pb-4"
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.gold} />
-            }>
-            {products.length === 0 ? (
-              <Text className="text-sm text-lucrei-textMuted">Nenhum produto ativo encontrado na sua loja.</Text>
-            ) : filteredProducts.length === 0 ? (
-              <Text className="text-sm text-lucrei-textMuted">Nenhum produto encontrado pra "{search}".</Text>
-            ) : (
-              filteredProducts.map((product) => {
-                const value = edits[product.shopeeItemId] ?? originalCostText(product);
-                const dirty = value !== originalCostText(product);
-                return (
-                  <ProductRow
-                    key={product.shopeeItemId}
-                    product={product}
-                    value={value}
-                    dirty={dirty}
-                    selected={selected.has(product.shopeeItemId)}
-                    disabled={saving}
-                    onChangeCost={handleChangeCost}
-                    onToggleSelect={handleToggleSelect}
-                    period={period}
-                    overLimit={isOverLimit}
-                  />
-                );
-              })
-            )}
-          </ScrollView>
+            }
+            ListEmptyComponent={
+              products.length === 0 ? (
+                <Text className="text-sm text-lucrei-textMuted">Nenhum produto ativo encontrado na sua loja.</Text>
+              ) : (
+                <Text className="text-sm text-lucrei-textMuted">Nenhum produto encontrado pra "{search}".</Text>
+              )
+            }
+          />
 
           {pendingChanges.length > 0 && (
             <View className="flex-row items-center gap-3 rounded-2xl border border-lucrei-gold bg-lucrei-surface p-3">

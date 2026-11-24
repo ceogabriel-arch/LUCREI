@@ -12,6 +12,7 @@ import { getValidAccessToken as getValidMercadoLivreAccessToken } from '../../li
 import { getItemBaseInfo, getItemList, getModelList } from '../../shopee-client';
 import { getItems, searchItems } from '../../mercadolivre-client';
 import { computeLineProfit } from '../sync/order-math';
+import { toProxiedImageUrl } from './image-proxy';
 
 type UpsertProductBody = {
   shopeeItemId: string;
@@ -388,7 +389,7 @@ export async function productRoutes(app: FastifyInstance) {
           return {
             shopeeItemId: item.shopeeItemId,
             name: item.name,
-            image: item.image,
+            image: toProxiedImageUrl(item.image),
             price: item.price,
             costPrice: existing ? Number(existing.costPrice) : null,
             profit: stat ? stat.profit : null,

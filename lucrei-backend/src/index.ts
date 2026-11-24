@@ -30,6 +30,7 @@ import { orderForecastRoutes } from './modules/order-forecast/routes';
 import { passwordResetRoutes } from './modules/password-reset/routes';
 import { plansRoutes } from './modules/plans/routes';
 import { productRoutes } from './modules/products/routes';
+import { productImageProxyRoutes } from './modules/products/image-proxy';
 import { rewardsRoutes } from './modules/rewards/routes';
 import { shopRoutes } from './modules/shops/routes';
 import { ifoodRoutes } from './modules/ifood/routes';
@@ -201,6 +202,7 @@ async function main() {
   await app.register(marketplacesRoutes);
   await app.register(syncRoutes);
   await app.register(productRoutes);
+  await app.register(productImageProxyRoutes);
   await app.register(summaryRoutes);
   await app.register(orderRoutes);
   await app.register(orderForecastRoutes);
