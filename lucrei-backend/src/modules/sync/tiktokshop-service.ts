@@ -1,5 +1,6 @@
 import { mapLimit, withTimeout } from '../../lib/concurrency';
 import { checkDailyGoalReached } from '../../lib/daily-goal-notifications';
+import { isDemoShop } from '../../lib/demo-shop';
 import { notifyOrderCompletedIfNeeded } from '../../lib/order-notifications';
 import { prisma } from '../../lib/prisma';
 import { trackRecentTiktokShopOrderEvent } from '../../lib/recent-order-events';
@@ -221,6 +222,17 @@ export function syncShopOrders(shopId: string) {
 }
 
 export async function runShopSync(shopId: string) {
+  // Loja de demonstração (revisão de app store/marketplace) - não tem token
+  // real, nunca vai ter. Mesmo guard de sync/service.ts (Shopee).
+  const shop = await prisma.shop.findUniqueOrThrow({ where: { id: shopId } });
+  if (isDemoShop(shop)) {
+    await prisma.shop.update({
+      where: { id: shopId },
+      data: { syncStatus: 'done', syncStartedAt: new Date(), syncOrdersSynced: 0, syncError: null, lastSyncedAt: new Date() },
+    });
+    return;
+  }
+
   await prisma.shop.update({
     where: { id: shopId },
     data: { syncStatus: 'running', syncStartedAt: new Date(), syncOrdersSynced: null, syncError: null },
@@ -243,6 +255,22 @@ export async function runShopSync(shopId: string) {
 // Igual ao Mercado Livre: backfill varre TODO o histórico, sem janela nem
 // teto de tempo - acionado manualmente, uma vez.
 export async function runHistoryBackfill(shopId: string) {
+  const shopBefore = await prisma.shop.findUniqueOrThrow({ where: { id: shopId } });
+  if (isDemoShop(shopBefore)) {
+    await prisma.shop.update({
+      where: { id: shopId },
+      data: {
+        historyBackfillStatus: 'done',
+        historyBackfillStartedAt: new Date(),
+        historyBackfillDoneAt: new Date(),
+        historyBackfillSynced: 0,
+        historyBackfillWindowsDone: 0,
+        historyBackfillError: null,
+      },
+    });
+    return;
+  }
+
   await prisma.shop.update({
     where: { id: shopId },
     data: {
