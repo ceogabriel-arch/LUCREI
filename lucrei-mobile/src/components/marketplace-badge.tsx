@@ -8,6 +8,7 @@ import { useColors } from '@/lib/theme';
 
 const SHOPEE_ICON = require('../../assets/images/shopee-icon.png');
 const MERCADOLIVRE_ICON = require('../../assets/images/mercadolivre-icon.png');
+const FOOD99_ICON = require('../../assets/images/food99-icon.png');
 
 // Ícone isolado de cada marketplace (fundo transparente de verdade, não só
 // aparência de branco) - usado como badge pequeno ao lado do nome da loja
@@ -31,13 +32,7 @@ export function MarketplaceBadge({ provider, size = 22 }: { provider: Marketplac
   }
 
   if (provider === 'food99') {
-    // Mesmo esquema do TikTok Shop: sem food99-icon.png ainda, usa um ícone
-    // genérico do Ionicons até existir um isolado em assets/images.
-    return (
-      <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-        <Ionicons name="fast-food-outline" size={size * 0.82} color={Colors.text} />
-      </View>
-    );
+    return <Image source={FOOD99_ICON} style={{ width: size, height: size }} contentFit="contain" />;
   }
 
   const source = provider === 'mercado_livre' ? MERCADOLIVRE_ICON : SHOPEE_ICON;

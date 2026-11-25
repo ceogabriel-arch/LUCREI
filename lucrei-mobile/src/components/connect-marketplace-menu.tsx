@@ -27,15 +27,16 @@ const OPTIONS: { key: Marketplace; name: string }[] = [
   { key: 'food99', name: '99Food' },
 ];
 
-// Antes de o servidor responder (ou se a consulta falhar), TikTok Shop e
-// 99Food ficam cinza - são os que ainda dependem de credencial que pode não
-// estar configurada; os outros três já funcionam em produção.
+// Usado só até o servidor responder (ou se a consulta falhar) - os 5 já
+// funcionam em produção hoje, então o padrão é "disponível" pra não mostrar
+// "Em breve" por causa de um instante de carregamento ou uma falha
+// passageira de rede.
 const DEFAULT_AVAILABILITY: MarketplaceAvailability = {
   shopee: true,
   mercado_livre: true,
   ifood: true,
-  tiktok_shop: false,
-  food99: false,
+  tiktok_shop: true,
+  food99: true,
 };
 
 const SCREEN_MARGIN = 16;
