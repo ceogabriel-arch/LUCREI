@@ -101,7 +101,26 @@ export type Food99AuthorizedShop = {
   shop_name: string;
   app_shop_id?: string;
   bound_flag: number;
+  // Formato inconsistente entre páginas da documentação (type/phone como
+  // string ou número) - normalizePhone abaixo lida com isso.
+  shop_phone?: { phone: string | number }[];
 };
+
+// Só dígitos, e só os últimos 8 (sem DDD/código de país) - normaliza
+// variações de formatação (com/sem +55, com/sem DDD, 8 ou 9 dígitos) tanto
+// do valor que a 99Food devolve quanto do que o lojista digita no Lucrei.
+export function normalizePhone(phone: string | number): string {
+  const digits = String(phone).replace(/\D/g, '');
+  return digits.slice(-8);
+}
+
+// Mostra só os 2 últimos dígitos pro lojista reconhecer a loja dele na
+// lista, sem expor o telefone inteiro pra quem só está de olho nos nomes.
+export function maskPhone(phone: string | number): string {
+  const digits = String(phone).replace(/\D/g, '');
+  if (digits.length <= 2) return '**';
+  return `${'*'.repeat(digits.length - 2)}${digits.slice(-2)}`;
+}
 
 // Lista as lojas autorizadas pro app (em todas as contas Lucrei - a 99Food
 // não separa por usuário), paginada. Usado pra descobrir qual loja o lojista

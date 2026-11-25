@@ -316,16 +316,18 @@ export function getFood99AuthorizeUrl(token: string) {
 }
 
 export function discoverFood99Shops(token: string) {
-  return request<{ shops: { shopId: string; shopName: string }[] }>('/food99/discover', {
+  return request<{ shops: { shopId: string; shopName: string; phoneHint: string | null }[] }>('/food99/discover', {
     headers: { Authorization: `Bearer ${token}` },
   });
 }
 
-export function connectFood99Shop(token: string, food99ShopId: string, shopName: string) {
+// phone precisa bater com o telefone cadastrado dessa loja na 99Food - trava
+// contra vincular a loja errada (ver comentário em food99/routes.ts).
+export function connectFood99Shop(token: string, food99ShopId: string, shopName: string, phone: string) {
   return request<{ status: string; shopId: string; shopName: string }>('/food99/connect', {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ food99ShopId, shopName }),
+    body: JSON.stringify({ food99ShopId, shopName, phone }),
   });
 }
 

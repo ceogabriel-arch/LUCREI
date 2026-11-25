@@ -6,13 +6,29 @@ import {
   bindShop,
   getAuthorizationUrl,
   listAuthorizedShops,
+  maskPhone,
+  normalizePhone,
   parseBigSafe,
   verifyWebhookSignature,
+  type Food99AuthorizedShop,
 } from '../../food99-client';
 import { prisma } from '../../lib/prisma';
 import { handleOrderCancel, handleOrderNew } from '../sync/food99-service';
 
-type ConnectBody = { food99ShopId?: string; shopName?: string };
+type ConnectBody = { food99ShopId?: string; shopName?: string; phone?: string };
+
+// Usado por /discover (listar) e /connect (confirmar telefone antes de
+// vincular) - centraliza a varredura paginada num só lugar.
+async function findAuthorizedShop(food99ShopId: string): Promise<Food99AuthorizedShop | null> {
+  let pageNo = 1;
+  while (true) {
+    const { shops, totalPages } = await listAuthorizedShops(pageNo, 50);
+    const found = shops.find((s) => s.shop_id === food99ShopId);
+    if (found) return found;
+    if (pageNo >= totalPages || pageNo > 10) return null;
+    pageNo++;
+  }
+}
 
 // Espelha ifoodRoutes/tiktokshopRoutes - mesmo limite de plano por
 // marketplace, mesma proteção "shop_taken" e consumo de trial. Diferente das
@@ -41,12 +57,22 @@ export async function food99Routes(app: FastifyInstance) {
   // autorização.
   app.get('/food99/discover', { onRequest: [app.authenticate] }, async (_request, reply) => {
     try {
-      const unbound: { shopId: string; shopName: string }[] = [];
+      const unbound: { shopId: string; shopName: string; phoneHint: string | null }[] = [];
       let pageNo = 1;
       while (true) {
         const { shops, totalPages } = await listAuthorizedShops(pageNo, 50);
         for (const s of shops) {
-          if (s.bound_flag === 0) unbound.push({ shopId: s.shop_id, shopName: s.shop_name });
+          if (s.bound_flag === 0) {
+            unbound.push({
+              shopId: s.shop_id,
+              shopName: s.shop_name,
+              // Só os 2 últimos dígitos - ajuda o lojista a reconhecer a
+              // loja dele na lista sem expor o telefone inteiro pra quem só
+              // está vendo o nome (a lista é compartilhada entre todas as
+              // contas Lucrei, ver findAuthorizedShop acima).
+              phoneHint: s.shop_phone?.[0] ? maskPhone(s.shop_phone[0].phone) : null,
+            });
+          }
         }
         if (pageNo >= totalPages || pageNo > 10) break;
         pageNo++;
@@ -68,7 +94,23 @@ export async function food99Routes(app: FastifyInstance) {
     const userId = request.user.sub;
     const food99ShopId = request.body?.food99ShopId;
     const shopName = request.body?.shopName?.trim() || 'Loja 99Food';
+    const phone = request.body?.phone?.trim();
     if (!food99ShopId) return reply.status(400).send({ message: 'Escolha a loja autorizada na 99Food.' });
+    if (!phone) return reply.status(400).send({ message: 'Digite o telefone cadastrado dessa loja na 99Food.' });
+
+    // Trava contra o risco de alguém ver o NOME de uma loja de outro cliente
+    // na lista compartilhada (ver /discover) e vincular ela sem ser o dono de
+    // verdade: confere contra o telefone de cadastro real na 99Food, que só
+    // quem tem acesso à conta da loja conhece. Refeito aqui (não confia no
+    // que veio do /discover) porque o cliente podia mandar qualquer coisa.
+    const authorizedShop = await findAuthorizedShop(food99ShopId);
+    const registeredPhones = authorizedShop?.shop_phone?.map((p) => normalizePhone(p.phone)) ?? [];
+    if (registeredPhones.length === 0 || !registeredPhones.includes(normalizePhone(phone))) {
+      return reply.status(403).send({
+        message: 'Esse telefone não confere com o cadastrado nessa loja na 99Food. Confira e tente de novo.',
+        code: 'phone_mismatch',
+      });
+    }
 
     const user = await prisma.user.findUnique({ where: { id: userId }, include: { plan: true } });
     const integrationsLimit = user?.plan?.integrationsLimit ?? null;
