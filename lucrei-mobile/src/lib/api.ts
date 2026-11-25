@@ -256,7 +256,7 @@ export function getShops(token: string) {
 
 // Quais marketplaces o servidor consegue conectar agora (credenciais
 // configuradas) - o que vier false aparece cinza "Em breve" no menu.
-export type MarketplaceAvailability = Record<'shopee' | 'mercado_livre' | 'ifood' | 'tiktok_shop', boolean>;
+export type MarketplaceAvailability = Record<'shopee' | 'mercado_livre' | 'ifood' | 'tiktok_shop' | 'food99', boolean>;
 
 export function getMarketplaceAvailability(token: string) {
   return request<MarketplaceAvailability>('/marketplaces/availability', {
@@ -301,6 +301,31 @@ export function updateShopIfoodDeliveryBySeller(token: string, shopId: string, i
     method: 'PATCH',
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify({ ifoodDeliveryBySeller }),
+  });
+}
+
+// 99Food não tem OAuth por redirecionamento (diferente de Shopee/ML/TikTok) -
+// são 3 passos: pega o link de autorização (genérico, vale 7 dias), o
+// lojista autoriza no site da 99Food e volta pro app sozinho (não há
+// deep-link de retorno), aí busca as lojas autorizadas ainda não vinculadas
+// (discover) pra ele escolher a dele pelo nome, e só então conecta de fato.
+export function getFood99AuthorizeUrl(token: string) {
+  return request<{ url: string }>('/food99/authorize-url', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function discoverFood99Shops(token: string) {
+  return request<{ shops: { shopId: string; shopName: string }[] }>('/food99/discover', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function connectFood99Shop(token: string, food99ShopId: string, shopName: string) {
+  return request<{ status: string; shopId: string; shopName: string }>('/food99/connect', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ food99ShopId, shopName }),
   });
 }
 

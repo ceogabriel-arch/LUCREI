@@ -13,5 +13,6 @@ export async function marketplacesRoutes(app: FastifyInstance) {
     tiktok_shop: Boolean(
       process.env.TIKTOKSHOP_APP_KEY && process.env.TIKTOKSHOP_APP_SECRET && process.env.TIKTOKSHOP_SERVICE_ID
     ),
+    food99: Boolean(process.env.FOOD99_APP_ID && process.env.FOOD99_APP_SECRET),
   }));
 }

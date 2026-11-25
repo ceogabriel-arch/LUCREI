@@ -30,6 +30,16 @@ export function MarketplaceBadge({ provider, size = 22 }: { provider: Marketplac
     );
   }
 
+  if (provider === 'food99') {
+    // Mesmo esquema do TikTok Shop: sem food99-icon.png ainda, usa um ícone
+    // genérico do Ionicons até existir um isolado em assets/images.
+    return (
+      <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+        <Ionicons name="fast-food-outline" size={size * 0.82} color={Colors.text} />
+      </View>
+    );
+  }
+
   const source = provider === 'mercado_livre' ? MERCADOLIVRE_ICON : SHOPEE_ICON;
   return <Image source={source} style={{ width: size, height: size }} contentFit="contain" />;
 }

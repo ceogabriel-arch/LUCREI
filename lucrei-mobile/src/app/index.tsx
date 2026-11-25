@@ -11,6 +11,7 @@ import { ConnectMarketplaceMenu } from '@/components/connect-marketplace-menu';
 import { GlassCard } from '@/components/glass-card';
 import { HistoryBackfillCard, supportsHistoryBackfill } from '@/components/history-backfill-card';
 import { IfoodConnectModal } from '@/components/ifood-connect-modal';
+import { Food99ConnectModal } from '@/components/food99-connect-modal';
 import { MarketplaceBadge } from '@/components/marketplace-badge';
 import { MissingCostList } from '@/components/missing-cost-list';
 import { PastDueBanner } from '@/components/past-due-banner';
@@ -71,6 +72,7 @@ export default function InicioScreen() {
   const [backendStatus, setBackendStatus] = useState<BackendStatus>('checking');
   const [connecting, setConnecting] = useState<'shopee' | 'mercado_livre' | 'ifood' | 'tiktok_shop' | null>(null);
   const [ifoodModalVisible, setIfoodModalVisible] = useState(false);
+  const [food99ModalVisible, setFood99ModalVisible] = useState(false);
   const [summary, setSummary] = useState<Summary | null>(null);
   // Qual período o "summary" guardado acima pertence de verdade - achado ao
   // vivo: trocar de "Hoje" pra "30 dias" pintava o botão novo na hora, mas
@@ -252,6 +254,20 @@ export default function InicioScreen() {
   async function handleIfoodConnected(shopName: string) {
     setIfoodModalVisible(false);
     showAlert('Loja conectada!', `Sua loja iFood "${shopName}" foi conectada com sucesso.`);
+    await refreshShops();
+  }
+
+  // A 99Food também não tem redirecionamento de volta pro app (ver
+  // Food99ConnectModal) - autoriza no site deles e volta sozinho pro Lucrei
+  // pra escolher a loja.
+  function handleConnectFood99() {
+    if (state.status !== 'authenticated') return;
+    setFood99ModalVisible(true);
+  }
+
+  async function handleFood99Connected(shopName: string) {
+    setFood99ModalVisible(false);
+    showAlert('Loja conectada!', `Sua loja 99Food "${shopName}" foi conectada com sucesso.`);
     await refreshShops();
   }
 
@@ -1099,6 +1115,7 @@ export default function InicioScreen() {
                 if (marketplace === 'shopee') handleConnectShopee();
                 else if (marketplace === 'mercado_livre') handleConnectMercadoLivre();
                 else if (marketplace === 'ifood') handleConnectIfood();
+                else if (marketplace === 'food99') handleConnectFood99();
                 else handleConnectTiktokShop();
               }}
             />
@@ -1112,6 +1129,13 @@ export default function InicioScreen() {
             token={state.token}
             onClose={() => setIfoodModalVisible(false)}
             onConnected={handleIfoodConnected}
+          />
+        )}
+        {state.status === 'authenticated' && food99ModalVisible && (
+          <Food99ConnectModal
+            token={state.token}
+            onClose={() => setFood99ModalVisible(false)}
+            onConnected={handleFood99Connected}
           />
         )}
         {!stillLoading && (hasShop || showingRealData) && (

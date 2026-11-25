@@ -28,5 +28,11 @@ export function pendingWhereForShop(shop: Shop) {
   if (shop.provider === 'tiktok_shop') {
     return { shopId: shop.id, tiktokShopOrderId: { not: null }, orderStatus: { in: [...TIKTOKSHOP_PENDING_STATUSES] } };
   }
+  if (shop.provider === 'food99') {
+    // A 99Food só gera Order já resolvido (orderNew traz o pedido completo,
+    // ver food99-service.ts) - não existe fase "pendente" a prever aqui,
+    // igual Shopee/ML/TikTok têm pra pedido ainda não pago/confirmado.
+    return { shopId: shop.id, id: 'never-matches' };
+  }
   return { shopId: shop.id, shopeeOrderSn: { not: null }, orderStatus: { in: [...SHOPEE_PENDING_STATUSES] } };
 }

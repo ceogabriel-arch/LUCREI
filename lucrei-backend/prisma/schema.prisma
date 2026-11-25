@@ -42,6 +42,7 @@ enum Marketplace {
   mercado_livre
   ifood
   tiktok_shop
+  food99
 }
 
 // Tipo de cadastro do vendedor - muda a tabela de taxas da Shopee no
@@ -171,6 +172,13 @@ model Shop {
   // Id da loja no TikTok Shop (o "id" de /authorization/202309/shops) -
   // mesmo papel de shopeeShopId/mercadoLivreShopId.
   tiktokShopId       String?     @unique
+  // shop_id da PRÓPRIA 99Food (achado via listAuthorizedShops, confirmado no
+  // bindShop) - mesmo papel de shopeeShopId/ifoodShopId, usado pra detectar
+  // loja já conectada noutra conta. Diferente dos outros: o Lucrei NÃO usa
+  // esse valor nas chamadas de API - usa o próprio Shop.id como app_shop_id
+  // (ver food99-client/index.ts), que é o identificador que o webhook e a
+  // reconciliação financeira recebem de volta.
+  food99ShopId       String?     @unique
   provider           Marketplace @default(shopee)
   shopName           String
   region             String      @default("BR")
@@ -226,6 +234,7 @@ model Shop {
   mercadoLivreOAuthToken MercadoLivreOAuthToken?
   ifoodOAuthToken        IfoodOAuthToken?
   tiktokShopOAuthToken   TiktokShopOAuthToken?
+  food99OAuthToken       Food99OAuthToken?
   products               Product[]
   orders                 Order[]
   importBatches          CostImportBatch[]
@@ -296,6 +305,22 @@ model TiktokShopOAuthToken {
   shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
 }
 
+// Auth da 99Food não é OAuth tradicional: não há client id/secret por
+// requisição de usuário, e sim um auth_token por loja, obtido via
+// app_id+app_secret+app_shop_id (ver food99-client/index.ts). O endpoint de
+// refresh da 99Food só confirma a renovação (não devolve o token novo) - é
+// preciso chamar o Get Authtoken de novo depois pra pegar o valor atual, por
+// isso não há refreshToken aqui (diferente de IfoodOAuthToken).
+model Food99OAuthToken {
+  id             String   @id @default(cuid())
+  shopId         String   @unique
+  authToken      String
+  authTokenExpiresAt DateTime
+  updatedAt      DateTime @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+}
+
 model Product {
   id                 String            @id @default(cuid())
   shopId             String
@@ -310,6 +335,9 @@ model Product {
   // Id do produto no TikTok Shop - criado sob demanda a partir do próprio
   // pedido (mesmo esquema da iFood), custo manual até o vendedor preencher.
   tiktokShopItemId   String?
+  // Id do item (app_item_id) na 99Food - mesmo esquema da iFood/TikTok Shop:
+  // criado sob demanda a partir do próprio pedido, custo manual.
+  food99ItemId       String?
   sku                String?
   name               String
   costPrice          Decimal           @db.Decimal(12, 2)
@@ -325,6 +353,7 @@ model Product {
   @@index([mercadoLivreItemId])
   @@index([ifoodItemId])
   @@index([tiktokShopItemId])
+  @@index([food99ItemId])
 }
 
 model Order {
@@ -336,6 +365,7 @@ model Order {
   mercadoLivreOrderId  String?   @unique
   ifoodOrderId         String?   @unique
   tiktokShopOrderId    String?   @unique
+  food99OrderId        String?   @unique
   orderStatus          String
   orderDate            DateTime
   // Quando o pedido entrou em COMPLETED na Shopee (update_time do
@@ -379,6 +409,7 @@ model OrderLineItem {
   mercadoLivreItemId   String?
   ifoodItemId          String?
   tiktokShopItemId     String?
+  food99ItemId         String?
   // Nome do item no momento do pedido (vem do get_escrow_detail) - a Shopee
   // não devolve mais isso se o produto for excluído do catálogo depois. Sem
   // guardar aqui, um item descontinuado vira um "custo não informado" sem
@@ -406,6 +437,7 @@ model OrderLineItem {
   @@index([mercadoLivreItemId])
   @@index([ifoodItemId])
   @@index([tiktokShopItemId])
+  @@index([food99ItemId])
 }
 
 // Rastro leve de "pedido comprado, ainda não sabemos o lucro" - alimenta só

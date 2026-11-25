@@ -24,16 +24,18 @@ const OPTIONS: { key: Marketplace; name: string }[] = [
   { key: 'mercado_livre', name: 'Mercado Livre' },
   { key: 'ifood', name: 'iFood' },
   { key: 'tiktok_shop', name: 'TikTok Shop' },
+  { key: 'food99', name: '99Food' },
 ];
 
-// Antes de o servidor responder (ou se a consulta falhar), só o TikTok Shop
-// fica cinza - é o único que ainda depende de credencial que pode não estar
-// configurada; os outros três já funcionam em produção.
+// Antes de o servidor responder (ou se a consulta falhar), TikTok Shop e
+// 99Food ficam cinza - são os que ainda dependem de credencial que pode não
+// estar configurada; os outros três já funcionam em produção.
 const DEFAULT_AVAILABILITY: MarketplaceAvailability = {
   shopee: true,
   mercado_livre: true,
   ifood: true,
   tiktok_shop: false,
+  food99: false,
 };
 
 const SCREEN_MARGIN = 16;
@@ -46,10 +48,22 @@ const MIN_RADIUS = 92;
 const STAGGER_MS = 40;
 const USE_NATIVE = Platform.OS !== 'web';
 
-// Ângulos em graus, 0 = direita, negativo = pra cima.
-const ANGLES_FULL = [-135, -45, 45, 135];
-const ANGLES_UP = [-165, -115, -65, -15];
-const ANGLES_DOWN = [15, 65, 115, 165];
+// Ângulos em graus, 0 = direita, negativo = pra cima. Gerados a partir da
+// quantidade de opções (em vez de array fixo) pra não descompassar o número
+// de ícones do número de ângulos sempre que um marketplace for adicionado -
+// já aconteceu de esquecer de atualizar um array fixo desses.
+function evenAngles(start: number, end: number, count: number): number[] {
+  if (count <= 1) return [(start + end) / 2];
+  const step = (end - start) / (count - 1);
+  return Array.from({ length: count }, (_, i) => start + i * step);
+}
+// Começa em -90 - 180/N e dá uma volta completa (passo 360/N) - escolhido
+// porque com N=4 (o total antes da 99Food) reproduz exatamente os ângulos
+// fixos de antes, [-135,-45,45,135] (um "X"): a fórmula só generaliza o
+// padrão que já existia, não muda o visual de quem já via 4 ícones.
+const ANGLES_FULL = evenAngles(-90 - 180 / OPTIONS.length, -90 - 180 / OPTIONS.length + (360 * (OPTIONS.length - 1)) / OPTIONS.length, OPTIONS.length);
+const ANGLES_UP = evenAngles(-165, -15, OPTIONS.length);
+const ANGLES_DOWN = evenAngles(15, 165, OPTIONS.length);
 
 type Layout = { cx: number; cy: number; radius: number; angles: number[] };
 

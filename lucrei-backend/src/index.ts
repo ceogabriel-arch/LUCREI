@@ -15,6 +15,7 @@ import { prisma } from './lib/prisma';
 import { startCanceledSubscriptionExpiryWatchdog } from './lib/canceled-subscription-expiry-watchdog';
 import { startHypercashExpiryWatchdog } from './lib/hypercash-expiry-watchdog';
 import { startIfoodPollWatchdog } from './lib/ifood-poll-watchdog';
+import { startFood99FinancialWatchdog } from './lib/food99-financial-watchdog';
 import { startShopSyncWatchdog } from './lib/shop-sync-watchdog';
 import { startSyncWatchdog } from './lib/sync-watchdog';
 import { startTrialExpiryWatchdog } from './lib/trial-expiry-watchdog';
@@ -34,6 +35,7 @@ import { productImageProxyRoutes } from './modules/products/image-proxy';
 import { rewardsRoutes } from './modules/rewards/routes';
 import { shopRoutes } from './modules/shops/routes';
 import { ifoodRoutes } from './modules/ifood/routes';
+import { food99Routes } from './modules/food99/routes';
 import { marketplacesRoutes } from './modules/marketplaces/routes';
 import { mercadolivreRoutes } from './modules/mercadolivre/routes';
 import { tiktokshopRoutes } from './modules/tiktokshop/routes';
@@ -199,6 +201,7 @@ async function main() {
   await app.register(mercadolivreRoutes);
   await app.register(ifoodRoutes);
   await app.register(tiktokshopRoutes);
+  await app.register(food99Routes);
   await app.register(marketplacesRoutes);
   await app.register(syncRoutes);
   await app.register(productRoutes);
@@ -234,6 +237,12 @@ async function main() {
   // A iFood não tem push/webhook de pedido - sem isso, nenhuma loja iFood
   // jamais saberia de pedido novo. Ver ifood-poll-watchdog.ts.
   startIfoodPollWatchdog(app.log);
+
+  // A 99Food empurra pedido por webhook (diferente de iFood), mas não manda
+  // a comissão/repasse real junto - só por uma consulta financeira separada,
+  // por período. Esse watchdog busca e aplica essa comissão nos pedidos já
+  // recebidos pelo webhook. Ver food99-financial-watchdog.ts.
+  startFood99FinancialWatchdog(app.log);
 
   // Expira sozinho link de pagamento da HyperCash pendente havia mais de
   // 24h - evita um link abandonado continuar valendo pra sempre com o
