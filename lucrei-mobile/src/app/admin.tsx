@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-nati
 
 import { Screen } from '@/components/screen';
 import { TextField } from '@/components/text-field';
+import { marketplaceLabel } from '@/lib/marketplace';
 import {
   ApiError,
   createAdminAnnouncement,
@@ -346,7 +347,7 @@ export default function AdminScreen() {
                   className="rounded-xl border p-3.5"
                   style={{ borderColor: Colors.danger, backgroundColor: Colors.surface }}>
                   <Text className="text-sm font-medium text-lucrei-text">
-                    {i.shopName} ({i.provider === 'mercado_livre' ? 'ML' : i.provider === 'ifood' ? 'iFood' : i.provider === 'tiktok_shop' ? 'TikTok' : 'Shopee'}) · {i.userEmail}
+                    {i.shopName} ({marketplaceLabel(i.provider)}) · {i.userEmail}
                   </Text>
                   <Text className="mt-1 text-xs text-lucrei-textMuted">
                     sync: {i.syncStatus ?? '—'}

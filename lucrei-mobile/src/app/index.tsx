@@ -1086,7 +1086,7 @@ export default function InicioScreen() {
           <GlassCard className="mt-6 items-center px-6 py-12">
             <Ionicons name="storefront-outline" size={32} color={Colors.textMuted} />
             <Text className="mt-3 text-center text-base font-semibold text-lucrei-text">
-              Conecte sua loja Shopee, Mercado Livre, iFood ou TikTok Shop pra ver seu lucro real aqui
+              Conecte sua loja Shopee, Mercado Livre, iFood, TikTok Shop ou 99Food pra ver seu lucro real aqui
             </Text>
             <Text className="mt-1 max-w-xs text-center text-sm text-lucrei-textMuted">
               Faturamento, custos e lucro de cada venda aparecem automaticamente assim que você conectar.

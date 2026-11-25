@@ -1010,7 +1010,7 @@ export default function RelatoriosScreen() {
 
       {loadState === 'no-shop' && (
         <Text className="mt-8 text-sm text-lucrei-textMuted">
-          Conecte uma loja Shopee, Mercado Livre, iFood ou TikTok Shop na tela Início pra ver seus relatórios aqui.
+          Conecte uma loja Shopee, Mercado Livre, iFood, TikTok Shop ou 99Food na tela Início pra ver seus relatórios aqui.
         </Text>
       )}
 
