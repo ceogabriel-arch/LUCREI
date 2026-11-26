@@ -7,7 +7,10 @@ import {
   Environment,
   SignedDataVerifier,
   Status,
+  VerificationException,
+  VerificationStatus,
   type JWSTransactionDecodedPayload,
+  type ResponseBodyV2DecodedPayload,
 } from '@apple/app-store-server-library';
 
 import { prisma } from './prisma';
@@ -38,19 +41,61 @@ function getAppAppleId(): number | undefined {
   return raw ? Number(raw) : undefined;
 }
 
-let verifierPromise: Promise<SignedDataVerifier> | null = null;
+const verifierPromises = new Map<Environment, Promise<SignedDataVerifier>>();
 
 // A Apple não publica as raízes num JWKS consultável (diferente do Sign in
 // with Apple, ver auth/routes.ts) - são certificados baixados uma vez de
 // apple.com/certificateauthority e guardados no repo (ver apple-certs/).
+function getVerifierFor(environment: Environment): Promise<SignedDataVerifier> {
+  let promise = verifierPromises.get(environment);
+  if (!promise) {
+    promise = (async () => {
+      const certPath = path.join(__dirname, 'apple-certs', 'AppleRootCA-G3.cer');
+      const rootCert = fs.readFileSync(certPath);
+      return new SignedDataVerifier([rootCert], environment === Environment.PRODUCTION, environment, BUNDLE_ID, getAppAppleId());
+    })();
+    verifierPromises.set(environment, promise);
+  }
+  return promise;
+}
+
 export function getSignedDataVerifier(): Promise<SignedDataVerifier> {
-  verifierPromise ??= (async () => {
-    const certPath = path.join(__dirname, 'apple-certs', 'AppleRootCA-G3.cer');
-    const rootCert = fs.readFileSync(certPath);
-    const environment = getEnvironment();
-    return new SignedDataVerifier([rootCert], environment === Environment.PRODUCTION, environment, BUNDLE_ID, getAppAppleId());
-  })();
-  return verifierPromise;
+  return getVerifierFor(getEnvironment());
+}
+
+// TestFlight e a App Review da Apple SEMPRE compram no Sandbox, mesmo num
+// build/app configurado como Production (é assim que a própria Apple testa
+// apps "de verdade" antes de aprovar) - um verifier configurado só pra
+// Production rejeita essa transação com INVALID_ENVIRONMENT. Por isso toda
+// verificação tenta primeiro no ambiente configurado e, só nesse erro
+// específico, tenta de novo no outro ambiente, em vez de falhar na hora
+// (foi exatamente isso que reprovou o app na App Review - guideline 2.1(b)).
+function otherEnvironment(environment: Environment): Environment {
+  return environment === Environment.PRODUCTION ? Environment.SANDBOX : Environment.PRODUCTION;
+}
+
+function isInvalidEnvironment(err: unknown): boolean {
+  return err instanceof VerificationException && err.status === VerificationStatus.INVALID_ENVIRONMENT;
+}
+
+export async function verifyAppleTransaction(signedTransactionInfo: string): Promise<JWSTransactionDecodedPayload> {
+  const primary = getEnvironment();
+  try {
+    return await (await getVerifierFor(primary)).verifyAndDecodeTransaction(signedTransactionInfo);
+  } catch (err) {
+    if (!isInvalidEnvironment(err)) throw err;
+    return (await getVerifierFor(otherEnvironment(primary))).verifyAndDecodeTransaction(signedTransactionInfo);
+  }
+}
+
+export async function verifyAppleNotification(signedPayload: string): Promise<ResponseBodyV2DecodedPayload> {
+  const primary = getEnvironment();
+  try {
+    return await (await getVerifierFor(primary)).verifyAndDecodeNotification(signedPayload);
+  } catch (err) {
+    if (!isInvalidEnvironment(err)) throw err;
+    return (await getVerifierFor(otherEnvironment(primary))).verifyAndDecodeNotification(signedPayload);
+  }
 }
 
 let apiClient: AppStoreServerAPIClient | null = null;

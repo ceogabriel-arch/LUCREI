@@ -416,6 +416,13 @@ export default function PlanosScreen() {
   const pendingCouponPercentOff = authState.status === 'authenticated' ? authState.user.pendingCouponPercentOff : null;
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [plans, setPlans] = useState<Plan[]>([]);
+  // O teste grátis é um mecanismo próprio do Lucrei (não um trial da Apple/
+  // StoreKit) e só é oferecido a quem ainda não tem plano - quem já tem (ou
+  // já usou) só vê "Fazer upgrade"/"Assinar agora", cobrança imediata. Citar
+  // o teste grátis na tela mesmo nesse caso prometeria algo que a compra não
+  // cumpre (motivo real da reprovação da App Review: guideline 3.1.2(c)).
+  const hasPlan = authState.status === 'authenticated' ? Boolean(authState.user.plan) : false;
+  const anyTrialEligiblePlan = !hasPlan && plans.some((p) => p.trialEligible);
   // Valor proporcional do upgrade por plano (key -> R$) - só preenchido pra
   // quem já tem plano pago com ciclo em andamento, calculado uma vez ao
   // carregar a tela (não recalcula a cada render, o valor só muda mesmo com
@@ -531,7 +538,9 @@ export default function PlanosScreen() {
         <Text className="text-2xl font-bold text-lucrei-text">Planos</Text>
       </View>
       <Text className="mt-2 text-base text-lucrei-textMuted">
-        O plano Start inclui 15 dias grátis para testar. Escolha o plano ideal para o volume de vendas da sua loja.
+        {anyTrialEligiblePlan
+          ? 'O plano Start inclui 15 dias grátis para testar. Escolha o plano ideal para o volume de vendas da sua loja.'
+          : 'Escolha o plano ideal para o volume de vendas da sua loja.'}
       </Text>
       {Platform.OS === 'ios' ? (
         <Pressable onPress={handleRestorePurchases} disabled={restoringPurchases} className="mt-2 flex-row items-center gap-1.5 self-start">

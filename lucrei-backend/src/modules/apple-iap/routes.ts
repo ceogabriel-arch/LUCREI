@@ -5,8 +5,9 @@ import { sendOpsAlertEmail } from '../../lib/email';
 import {
   expiresDateToDate,
   getOrCreateAppleAppAccountToken,
-  getSignedDataVerifier,
   planKeyForAppleProduct,
+  verifyAppleNotification,
+  verifyAppleTransaction,
 } from '../../lib/apple-iap';
 import { resolveAppleTransactionStatus, revokedAccessPeriodEnd } from '../../lib/billing-rules';
 import { prisma } from '../../lib/prisma';
@@ -160,8 +161,7 @@ export async function appleIapRoutes(app: FastifyInstance) {
 
       let transaction: JWSTransactionDecodedPayload;
       try {
-        const verifier = await getSignedDataVerifier();
-        transaction = await verifier.verifyAndDecodeTransaction(signedTransactionInfo);
+        transaction = await verifyAppleTransaction(signedTransactionInfo);
       } catch (err) {
         app.log.error(err);
         return reply.status(401).send({ message: 'Não foi possível verificar a compra com a Apple.' });
@@ -212,11 +212,9 @@ export async function appleIapRoutes(app: FastifyInstance) {
       return reply.send({ received: true });
     }
 
-    const verifier = await getSignedDataVerifier();
-
     let notification;
     try {
-      notification = await verifier.verifyAndDecodeNotification(signedPayload);
+      notification = await verifyAppleNotification(signedPayload);
     } catch (err) {
       if (err instanceof VerificationException) {
         return reply.status(401).send({ message: 'Assinatura inválida.' });
@@ -237,7 +235,7 @@ export async function appleIapRoutes(app: FastifyInstance) {
     }
 
     try {
-      const transaction = await verifier.verifyAndDecodeTransaction(data.signedTransactionInfo);
+      const transaction = await verifyAppleTransaction(data.signedTransactionInfo);
       const result = await applyAppleTransaction(app, transaction, data.status);
       if (!result.applied) {
         // Reentrega (retry da própria Apple) de um evento que já falhou antes
